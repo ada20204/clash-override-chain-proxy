@@ -24,10 +24,8 @@
 
 ## 文件说明
 
-| 文件                  | 用途                             |
-| --------------------- | -------------------------------- |
-| `src/家宽IP-链式代理.js`  | 主脚本，全部逻辑都在这里         |
-| `src/MiyaIP 凭证_样本.js` | 凭证模板，复制后填入你自己的信息 |
+- **`src/家宽IP-链式代理.js`**——主脚本，全部逻辑都在这里
+- **`src/MiyaIP 凭证_样本.js`**——凭证模板，复制后填入你自己的信息
 
 ---
 
@@ -35,12 +33,10 @@
 
 四样东西先备齐：
 
-| 准备项      | 来源                                                                                                      |
-| ----------- | --------------------------------------------------------------------------------------------------------- |
-| Clash Party | [GitHub 下载](https://github.com/mihomo-party-org/clash-party)                                            |
-| 机场订阅    | 推荐 [办公娱乐好帮手](https://xn--9kq10e0y7h.site/index.html?register=twb6RIec)                           |
-| 静态家宽 IP | [注册 MiyaIP](https://www.miyaip.com/?invitecode=7670643)，购买静态住宅代理，拿到用户名、密码、服务器地址 |
-| 本仓库文件  | `src/MiyaIP 凭证_样本.js` + `src/家宽IP-链式代理.js`                                                              |
+1. **Clash Party**——[GitHub 下载](https://github.com/mihomo-party-org/clash-party)
+2. **机场订阅**——推荐 [办公娱乐好帮手](https://xn--9kq10e0y7h.site/index.html?register=twb6RIec)
+3. **静态家宽 IP**——[注册 MiyaIP](https://www.miyaip.com/?invitecode=7670643)，购买静态住宅代理，拿到用户名、密码、服务器地址
+4. **本仓库文件**——`src/MiyaIP 凭证_样本.js` + `src/家宽IP-链式代理.js`
 
 ### 1. 导入机场订阅
 
@@ -76,10 +72,8 @@ function main(config) {
 
 进入 Clash Party →「覆写」，把两个 `.js` 文件加进去，**拖拽成这个顺序**：
 
-| 顺序 | 脚本                 | 作用                                        |
-| :--: | -------------------- | ------------------------------------------- |
-|  ①   | `MiyaIP 凭证.js`     | 把凭证注入 `config._miya`                   |
-|  ②   | `家宽IP-链式代理.js` | 读取凭证，注入代理节点、DNS、规则等全部配置 |
+① **`MiyaIP 凭证.js`**——把凭证注入 `config._miya`
+② **`家宽IP-链式代理.js`**——读取凭证，注入代理节点、DNS、规则等全部配置
 
 顺序反了会报错——主脚本启动时需要读取 `config._miya`，凭证没注入自然读不到。
 
@@ -97,11 +91,9 @@ var USER_OPTIONS = {
 };
 ```
 
-| 参数          | 可选值              | 作用                                             |
-| ------------- | ------------------- | ------------------------------------------------ |
-| `chainRegion` | `US` `JP` `HK` `SG` | 域外 AI 服务（Claude、ChatGPT 等）从哪个地区出去 |
-| `mediaRegion` | `US` `JP` `HK` `SG` | YouTube、Netflix 等锁定到哪个区域                |
-| `manualNode`  | 节点名 / 留空       | 指定跳板节点；留空则自动选该地区延迟最低的线路   |
+- **`chainRegion`**（可选值：`US` `JP` `HK` `SG`）——域外 AI 服务（Claude、ChatGPT 等）从哪个地区出去
+- **`mediaRegion`**（可选值：`US` `JP` `HK` `SG`）——YouTube、Netflix 等锁定到哪个区域
+- **`manualNode`**（节点名 / 留空）——指定跳板节点；留空则自动选该地区延迟最低的线路
 
 ### 5. 启用并验证
 
@@ -111,12 +103,10 @@ var USER_OPTIONS = {
 
 ![Clash Party 代理组页面](img/Clash%20Party%20代理组.png)
 
-| 序号 | 示例代理组                     | 说明                                                                 |
-| :--: | ------------------------------ | -------------------------------------------------------------------- |
-|  ①   | 节点选择                       | 默认「自动选择」，优先分配延迟最低的节点（如 HK），用于常规域外流量  |
-|  ②   | 🇸🇬\|新加坡线路-链式代理-跳板   | 从新加坡节点中自动选延迟最低的一个，作为链式代理的第一跳             |
-|  ③   | 🇸🇬\|新加坡-链式代理-家宽IP出口 | 静态家宽 IP 出口，链式代理的第二跳——域外 AI 服务的流量最终从这里出去 |
-|  ④   | 🇺🇸\|美国线路-流媒体            | 从美区节点中自动选延迟最低的一个，社交媒体和流媒体锁定在这个区域     |
+① **节点选择**——默认「自动选择」，优先分配延迟最低的节点（如 HK），用于常规域外流量
+② **🇸🇬|新加坡线路-链式代理-跳板**——从新加坡节点中自动选延迟最低的一个，作为链式代理的第一跳
+③ **🇸🇬|新加坡-链式代理-家宽IP出口**——静态家宽 IP 出口，链式代理的第二跳——域外 AI 服务的流量最终从这里出去
+④ **🇺🇸|美国线路-流媒体**——从美区节点中自动选延迟最低的一个，社交媒体和流媒体锁定在这个区域
 
 4. 验证是否生效：
    - [ping0.cc](https://ping0.cc/) 或 [ipinfo.io](https://ipinfo.io/)——应显示家宽住宅 IP，不是机房 IP
@@ -126,12 +116,10 @@ var USER_OPTIONS = {
 
 ## 域名分流一览
 
-| 分流类型           | 走向                   | 涵盖服务                                                                                  |
-| ------------------ | ---------------------- | ----------------------------------------------------------------------------------------- |
-| 域外 AI + 开发工具 | 链式代理（家宽IP出口） | Claude、ChatGPT、Gemini、Antigravity、Perplexity、OpenRouter、GitHub、VS Code、Office 365 |
-| 社交媒体与流媒体   | 锁区节点               | YouTube、Netflix、Google、X / Twitter、Facebook / Instagram、Telegram、Discord            |
-| 域内 AI            | 直连                   | 通义千问、Kimi、智谱、MiniMax 等                                                          |
-| 出口测试           | 链式代理（家宽IP出口） | ping0.cc、ipinfo.io                                                                       |
+- **域外 AI + 开发工具** → 链式代理（家宽IP出口）：Claude、ChatGPT、Gemini、Antigravity、Perplexity、OpenRouter、GitHub、VS Code、Office 365
+- **社交媒体与流媒体** → 锁区节点：YouTube、Netflix、Google、X / Twitter、Facebook / Instagram、Telegram、Discord
+- **域内 AI** → 直连：通义千问、Kimi、智谱、MiniMax 等
+- **出口测试** → 链式代理（家宽IP出口）：ping0.cc、ipinfo.io
 
 > 微软域名（Office 365、VS Code 等）走链式代理，是为了确保 Claude in Excel / PowerPoint 等插件在同一 IP 出口下正常工作。
 
@@ -139,12 +127,17 @@ var USER_OPTIONS = {
 
 ## 常见问题
 
-| 现象                       | 原因与解法                                                        |
-| -------------------------- | ----------------------------------------------------------------- |
-| 报错「缺少 config.\_miya」 | 覆写顺序反了——`MiyaIP 凭证.js` 必须排在 `家宽IP-链式代理.js` 前面 |
-| 出口 IP 不是住宅 IP        | MiyaIP 凭证填错了，或者账户余额不足                               |
-| 流媒体没解锁到目标地区     | 检查 `mediaRegion` 参数，同时确认机场有对应地区的节点             |
-| 想手动指定跳板节点         | 把 `manualNode` 设为节点全名，要和 Clash Party 里显示的一字不差   |
+**报错「缺少 config._miya」**
+覆写顺序反了——`MiyaIP 凭证.js` 必须排在 `家宽IP-链式代理.js` 前面
+
+**出口 IP 不是住宅 IP**
+MiyaIP 凭证填错了，或者账户余额不足
+
+**流媒体没解锁到目标地区**
+检查 `mediaRegion` 参数，同时确认机场有对应地区的节点
+
+**想手动指定跳板节点**
+把 `manualNode` 设为节点全名，要和 Clash Party 里显示的一字不差
 
 ---
 
