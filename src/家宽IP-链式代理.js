@@ -29,7 +29,7 @@ var USER_OPTIONS = {
   // 流媒体与域外社交锁区，可选 US / JP / HK / SG。
   mediaRegion: "US",
   // 手动指定跳板节点名，留空则按 chainRegion 自动匹配。
-  manualNode: ""
+  manualNode: "",
 };
 
 // ---------------------------------------------------------------------------
@@ -41,13 +41,13 @@ var REGION_MAP = {
   US: { regex: /🇺🇸|美国|^US[\|丨\- ]/i, label: "美国", flag: "🇺🇸" },
   JP: { regex: /🇯🇵|日本|^JP[\|丨\- ]/i, label: "日本", flag: "🇯🇵" },
   HK: { regex: /🇭🇰|香港|^HK[\|丨\- ]/i, label: "香港", flag: "🇭🇰" },
-  SG: { regex: /🇸🇬|新加坡|^SG[\|丨\- ]/i, label: "新加坡", flag: "🇸🇬" }
+  SG: { regex: /🇸🇬|新加坡|^SG[\|丨\- ]/i, label: "新加坡", flag: "🇸🇬" },
 };
 
 // 脚本注入的两个 MiyaIP 节点名称。
 var NODE_NAMES = {
   relay: "自选节点 + 家宽IP",
-  transit: "MiyaIP（官方中转）"
+  transit: "MiyaIP（官方中转）",
 };
 
 // 自动匹配地区组时需要跳过的汇总代理组。
@@ -69,7 +69,7 @@ var MIYA_PROXY_NAME_KEYWORD = "MiyaIP";
 var GROUP_NAME_SUFFIXES = {
   relay: "线路-链式代理-跳板",
   media: "线路-流媒体",
-  chain: "-链式代理-家宽IP出口"
+  chain: "-链式代理-家宽IP出口",
 };
 
 // ---------------------------------------------------------------------------
@@ -79,13 +79,13 @@ var GROUP_NAME_SUFFIXES = {
 // 域外服务优先使用的 DoH 服务器列表。
 var DOH_OVERSEAS = [
   "https://dns.google/dns-query",
-  "https://cloudflare-dns.com/dns-query"
+  "https://cloudflare-dns.com/dns-query",
 ];
 
 // 域内服务优先使用的 DoH 服务器列表。
 var DOH_DOMESTIC = [
   "https://dns.alidns.com/dns-query",
-  "https://doh.pub/dns-query"
+  "https://doh.pub/dns-query",
 ];
 
 // 主解析失败或命中过滤条件时使用的后备 DoH 列表。
@@ -93,115 +93,129 @@ var DOH_FALLBACK = DOH_OVERSEAS.concat(["https://dns.quad9.net/dns-query"]);
 
 // Apple 生态相关域名分类。
 var DOMAINS_APPLE = {
-  core: [
-    "+.apple.com", "+.icloud.com"
-  ],
+  core: ["+.apple.com", "+.icloud.com"],
   content: [
-    "+.icloud-content.com", "+.mzstatic.com", "+.cdn-apple.com", "+.aaplimg.com"
+    "+.icloud-content.com",
+    "+.mzstatic.com",
+    "+.cdn-apple.com",
+    "+.aaplimg.com",
   ],
-  services: [
-    "+.apple-cloudkit.com"
-  ]
+  services: ["+.apple-cloudkit.com"],
 };
 
 // 收窄后的 Microsoft 办公、鉴权和开发工具域名。
 var DOMAINS_MICROSOFT = {
-  office: [
-    "+.office.com", "+.office.net", "+.office365.com"
-  ],
+  office: ["+.office.com", "+.office.net", "+.office365.com"],
   auth: [
     "+.microsoftonline.com",
-    "+.msftauth.net", "+.msauth.net", "+.msecnd.net"
+    "+.msftauth.net",
+    "+.msauth.net",
+    "+.msecnd.net",
   ],
-  vscode: [
-    "+.visualstudio.com", "+.vsassets.io", "+.vsmarketplacebadges.dev"
-  ]
+  vscode: ["+.visualstudio.com", "+.vsassets.io", "+.vsmarketplacebadges.dev"],
 };
 
 // 需要走域外策略的核心 AI 产品域名。
 var DOMAINS_AI_OVERSEAS = {
   anthropic: [
-    "+.claude.ai", "+.claude.com", "+.anthropic.com",
-    "+.claudeusercontent.com", "+.claudemcpclient.com",
-    "+.servd-anthropic-website.b-cdn.net"
+    "+.claude.ai",
+    "+.claude.com",
+    "+.anthropic.com",
+    "+.claudeusercontent.com",
+    "+.claudemcpclient.com",
+    "+.servd-anthropic-website.b-cdn.net",
+    "+.clau.de",
   ],
 
   openai: [
-    "+.openai.com", "+.chatgpt.com",
-    "+.oaiusercontent.com", "+.oaistatic.com"
+    "+.openai.com",
+    "+.chatgpt.com",
+    "+.oaiusercontent.com",
+    "+.oaistatic.com",
   ],
 
   google_ai: [
-    "+.gemini.google.com", "+.aistudio.google.com",
-    "+.ai.google.dev", "+.generativelanguage.googleapis.com",
-    "+.ai.google", "+.makersuite.google.com",
-    "+.deepmind.google", "+.labs.google",
-    "+.antigravity.google", "+.antigravity-ide.com"
+    "+.gemini.google.com",
+    "+.aistudio.google.com",
+    "+.ai.google.dev",
+    "+.generativelanguage.googleapis.com",
+    "+.ai.google",
+    "+.makersuite.google.com",
+    "+.deepmind.google",
+    "+.labs.google",
+    "+.antigravity.google",
+    "+.antigravity-ide.com",
   ],
 
-  perplexity: [
-    "+.perplexity.ai", "+.perplexitycdn.com"
-  ],
+  perplexity: ["+.perplexity.ai", "+.perplexitycdn.com"],
 
   router_and_tools: [
-    "+.openrouter.ai", "+.siliconflow.com", "+.aicodemirror.com"
+    "+.openrouter.ai",
+    "+.siliconflow.com",
+    "+.aicodemirror.com",
   ],
 
-  xai: [
-    "+.x.ai", "+.console.x.ai", "+.api.x.ai"
-  ]
+  xai: ["+.x.ai", "+.console.x.ai", "+.api.x.ai"],
 };
-
 
 // 需要按地区锁区处理的流媒体和域外社交域名。
 var DOMAINS_MEDIA = {
   youtube: [
-    "+.youtube.com", "+.googlevideo.com", "+.ytimg.com",
-    "+.youtube-nocookie.com", "+.yt.be"
+    "+.youtube.com",
+    "+.googlevideo.com",
+    "+.ytimg.com",
+    "+.youtube-nocookie.com",
+    "+.yt.be",
   ],
   netflix: [
-    "+.netflix.com", "+.netflix.net", "+.nflxvideo.net",
-    "+.nflxso.net", "+.nflximg.net", "+.nflximg.com",
-    "+.nflxext.com"
+    "+.netflix.com",
+    "+.netflix.net",
+    "+.nflxvideo.net",
+    "+.nflxso.net",
+    "+.nflximg.net",
+    "+.nflximg.com",
+    "+.nflxext.com",
   ],
-  twitter: [
-    "+.twitter.com", "+.x.com", "+.twimg.com",
-    "+.t.co"
-  ],
+  twitter: ["+.twitter.com", "+.x.com", "+.twimg.com", "+.t.co"],
   facebook: [
-    "+.facebook.com", "+.fbcdn.net", "+.fb.com",
-    "+.facebook.net", "+.instagram.com", "+.cdninstagram.com"
+    "+.facebook.com",
+    "+.fbcdn.net",
+    "+.fb.com",
+    "+.facebook.net",
+    "+.instagram.com",
+    "+.cdninstagram.com",
   ],
-  telegram: [
-    "+.telegram.org", "+.t.me", "+.telegra.ph",
-    "+.telesco.pe"
-  ],
+  telegram: ["+.telegram.org", "+.t.me", "+.telegra.ph", "+.telesco.pe"],
   discord: [
-    "+.discord.com", "+.discord.gg", "+.discordapp.com",
-    "+.discordapp.net", "+.discord.media"
-  ]
+    "+.discord.com",
+    "+.discord.gg",
+    "+.discordapp.com",
+    "+.discordapp.net",
+    "+.discord.media",
+  ],
 };
 
 // 网络边界相对明确、适合稳定直连的域内 AI 域名。
 var DOMAINS_AI_DOMESTIC = {
   tongyi: [
-    "+.tongyi.aliyun.com", "+.qianwen.aliyun.com", "+.dashscope.aliyuncs.com"
+    "+.tongyi.aliyun.com",
+    "+.qianwen.aliyun.com",
+    "+.dashscope.aliyuncs.com",
   ],
-  moonshot: [
-    "+.moonshot.cn"
-  ],
-  zhipu: [
-    "+.chatglm.cn", "+.zhipuai.cn", "+.bigmodel.cn"
-  ],
-  siliconflow: [
-    "+.siliconflow.cn"
-  ]
+  moonshot: ["+.moonshot.cn"],
+  zhipu: ["+.chatglm.cn", "+.zhipuai.cn", "+.bigmodel.cn"],
+  siliconflow: ["+.siliconflow.cn"],
+};
+
+// 需要直连的其他域名（VPN、内网工具等）。
+var DOMAINS_DIRECT_EXTRA = {
+  tailscale: ["+.tailscale.com", "+.tailscale.io"],
 };
 
 // 把按类别分组的域名对象展平成单个数组。
 function flattenGroupedDomains(groupedDomains) {
   var flattenedDomains = [];
-  Object.keys(groupedDomains).forEach(function(groupName) {
+  Object.keys(groupedDomains).forEach(function (groupName) {
     flattenedDomains.push.apply(flattenedDomains, groupedDomains[groupName]);
   });
   return flattenedDomains;
@@ -222,10 +236,13 @@ var ALL_MEDIA_DOMAINS = flattenGroupedDomains(DOMAINS_MEDIA);
 // 展平后的域内 AI 域名列表，供 DNS 和规则注入复用。
 var ALL_AI_DOMESTIC_DOMAINS = flattenGroupedDomains(DOMAINS_AI_DOMESTIC);
 
+// 展平后的额外直连域名列表，供规则注入复用。
+var ALL_DIRECT_EXTRA_DOMAINS = flattenGroupedDomains(DOMAINS_DIRECT_EXTRA);
+
 // 需要统一生成链式代理规则的主域名分组。
 var CHAIN_PROXY_SUFFIX_GROUPS = [
   ALL_AI_OVERSEAS_DOMAINS,
-  ALL_MICROSOFT_DOMAINS
+  ALL_MICROSOFT_DOMAINS,
 ];
 
 // 额外补充到链式代理规则里的独立域名后缀。
@@ -233,7 +250,7 @@ var CHAIN_PROXY_EXTRA_SUFFIXES = [
   "cdn.cloudflare.net",
   "github.com",
   "ping0.cc",
-  "ipinfo.io"
+  "ipinfo.io",
 ];
 
 // ---------------------------------------------------------------------------
@@ -241,7 +258,9 @@ var CHAIN_PROXY_EXTRA_SUFFIXES = [
 // ---------------------------------------------------------------------------
 
 // 把带通配前缀的域名模式转换成规则使用的裸域名后缀。
-function toSuffix(domainPattern) { return domainPattern.replace(DOMAIN_WILDCARD_PREFIX, ""); }
+function toSuffix(domainPattern) {
+  return domainPattern.replace(DOMAIN_WILDCARD_PREFIX, "");
+}
 
 // 按固定顺序执行凭证读取、DNS/Sniffer 注入、代理链路注入和规则注入。
 function main(config) {
@@ -251,7 +270,11 @@ function main(config) {
   ensureProxyContainers(config);
   injectMiyaProxies(config, miyaCredentials);
 
-  var relayTarget = resolveRelayTarget(config, USER_OPTIONS.chainRegion, USER_OPTIONS.manualNode);
+  var relayTarget = resolveRelayTarget(
+    config,
+    USER_OPTIONS.chainRegion,
+    USER_OPTIONS.manualNode,
+  );
   bindDialerProxy(config, relayTarget);
 
   var chainGroupName = ensureChainGroup(config, USER_OPTIONS.chainRegion);
@@ -268,7 +291,9 @@ function main(config) {
 // 读取并移除注入到 `config._miya` 的 MiyaIP 凭证。
 function takeMiyaCredentials(config) {
   if (!config._miya) {
-    throw new Error("[家宽IP-链式代理] 缺少 config._miya，请确保 MiyaIP 凭证.js 已启用且排序在本脚本之前");
+    throw new Error(
+      "[家宽IP-链式代理] 缺少 config._miya，请确保 MiyaIP 凭证.js 已启用且排序在本脚本之前",
+    );
   }
   var miyaCredentials = config._miya;
   delete config._miya; // 防止凭证输出到最终配置
@@ -296,7 +321,7 @@ function assignNameserverPolicyDomains(policy, domains, dohServers) {
 function buildNameserverPolicy() {
   var policy = {
     "geosite:openai": DOH_OVERSEAS,
-    "+.cloud.google.com": DOH_OVERSEAS
+    "+.cloud.google.com": DOH_OVERSEAS,
   };
 
   // 微软走域外 DoH，Apple 走域内 DoH。
@@ -316,28 +341,51 @@ function buildNameserverPolicy() {
 // 构建需要绕过 `fake-ip` 的域名白名单。
 function buildDnsFakeIpFilter() {
   var localNetworkDomains = [
-    "*.lan", "*.local", "*.localhost", "localhost.ptlogin2.qq.com"
+    "*.lan",
+    "*.local",
+    "*.localhost",
+    "localhost.ptlogin2.qq.com",
   ];
   var timeSyncDomains = [
-    "time.*.com", "time.*.gov", "time.*.edu.cn", "time.*.apple.com",
-    "time-ios.apple.com", "time-macos.apple.com", "ntp.*.com",
-    "ntp1.aliyun.com", "pool.ntp.org", "*.pool.ntp.org"
+    "time.*.com",
+    "time.*.gov",
+    "time.*.edu.cn",
+    "time.*.apple.com",
+    "time-ios.apple.com",
+    "time-macos.apple.com",
+    "ntp.*.com",
+    "ntp1.aliyun.com",
+    "pool.ntp.org",
+    "*.pool.ntp.org",
   ];
   var connectivityTestDomains = [
-    "www.msftconnecttest.com", "www.msftncsi.com",
-    "*.msftconnecttest.com", "*.msftncsi.com"
+    "www.msftconnecttest.com",
+    "www.msftncsi.com",
+    "*.msftconnecttest.com",
+    "*.msftncsi.com",
   ];
   // Apple 生态对真实 IP 更敏感，统一排除 `fake-ip`。
   var appleDomains = ALL_APPLE_DOMAINS.slice();
   var realtimeDomains = [
-    "+.srv.nintendo.net", "+.stun.playstation.net",
-    "xbox.*.microsoft.com", "+.xboxlive.com",
-    "*.battlenet.com.cn", "*.blzstatic.cn",
-    "stun.*.*", "stun.*.*.*", "+.stun.*.*", "+.stun.*.*.*"
+    "+.srv.nintendo.net",
+    "+.stun.playstation.net",
+    "xbox.*.microsoft.com",
+    "+.xboxlive.com",
+    "*.battlenet.com.cn",
+    "*.blzstatic.cn",
+    "stun.*.*",
+    "stun.*.*.*",
+    "+.stun.*.*",
+    "+.stun.*.*.*",
   ];
   var homeNetworkDomains = [
-    "*.mcdn.bilivideo.cn", "+.music.163.com", "+.126.net",
-    "+.router.asus.com", "+.linksys.com", "+.tplinkwifi.net", "*.xiaoqiang.net"
+    "*.mcdn.bilivideo.cn",
+    "+.music.163.com",
+    "+.126.net",
+    "+.router.asus.com",
+    "+.linksys.com",
+    "+.tplinkwifi.net",
+    "*.xiaoqiang.net",
   ];
 
   return localNetworkDomains
@@ -345,14 +393,13 @@ function buildDnsFakeIpFilter() {
     .concat(connectivityTestDomains)
     .concat(appleDomains)
     .concat(realtimeDomains)
-    .concat(homeNetworkDomains);
+    .concat(homeNetworkDomains)
+    .concat(ALL_DIRECT_EXTRA_DOMAINS);
 }
 
 // 构建 `fallback-filter` 使用的域名匹配列表。
 function buildDnsFallbackFilterDomains() {
-  var fallbackDomains = ALL_MEDIA_DOMAINS.concat([
-    "+.github.com"
-  ]);
+  var fallbackDomains = ALL_MEDIA_DOMAINS.concat(["+.github.com"]);
   return fallbackDomains.concat(ALL_MICROSOFT_DOMAINS);
 }
 
@@ -363,7 +410,7 @@ function buildDnsFallbackFilter() {
     "geoip-code": "CN",
     geosite: ["gfw"],
     ipcidr: ["240.0.0.0/4", "0.0.0.0/32"],
-    domain: buildDnsFallbackFilterDomains()
+    domain: buildDnsFallbackFilterDomains(),
   };
 }
 
@@ -381,7 +428,7 @@ function buildDnsBaseConfig() {
     "proxy-server-nameserver": DOH_DOMESTIC,
     "direct-nameserver": DOH_DOMESTIC.slice(),
     "direct-nameserver-follow-policy": true,
-    fallback: DOH_FALLBACK
+    fallback: DOH_FALLBACK,
   };
 }
 
@@ -403,15 +450,16 @@ function buildSnifferConfig() {
     sniff: {
       TLS: { ports: [443, 8443] },
       HTTP: { ports: [80, 8080, 8880], "override-destination": true },
-      QUIC: { ports: [443] }
+      QUIC: { ports: [443] },
     },
-    "force-domain": [
-      "+.cloudflare.com", "+.cdn.cloudflare.net"
-    ],
+    "force-domain": ["+.cloudflare.com", "+.cdn.cloudflare.net"],
     "skip-domain": [
-      "+.push.apple.com", "+.apple.com", "+.lan",
-      "+.local", "+.localhost"
-    ]
+      "+.push.apple.com",
+      "+.apple.com",
+      "+.lan",
+      "+.local",
+      "+.localhost",
+    ],
   };
 }
 
@@ -453,7 +501,7 @@ function buildMiyaProxy(miyaCredentials, proxyName, endpoint) {
     port: endpoint.port,
     username: miyaCredentials.username,
     password: miyaCredentials.password,
-    udp: true
+    udp: true,
   };
 }
 
@@ -477,7 +525,10 @@ function findProxyGroupByName(proxyGroups, groupName) {
 function findReusableRegionGroupName(proxyGroups, regionRegex) {
   for (var i = 0; i < proxyGroups.length; i++) {
     var proxyGroup = proxyGroups[i];
-    if (regionRegex.test(proxyGroup.name) && EXCLUDED_GROUPS.indexOf(proxyGroup.name) < 0) {
+    if (
+      regionRegex.test(proxyGroup.name) &&
+      EXCLUDED_GROUPS.indexOf(proxyGroup.name) < 0
+    ) {
       return proxyGroup.name;
     }
   }
@@ -489,7 +540,10 @@ function collectRegionNodeNames(proxies, regionRegex) {
   var regionNodeNames = [];
   for (var i = 0; i < proxies.length; i++) {
     var proxy = proxies[i];
-    if (regionRegex.test(proxy.name) && proxy.name.indexOf(MIYA_PROXY_NAME_KEYWORD) < 0) {
+    if (
+      regionRegex.test(proxy.name) &&
+      proxy.name.indexOf(MIYA_PROXY_NAME_KEYWORD) < 0
+    ) {
       regionNodeNames.push(proxy.name);
     }
   }
@@ -504,7 +558,7 @@ function addRegionUrlTestGroup(proxyGroups, groupName, regionNodeNames) {
     proxies: regionNodeNames,
     url: URL_TEST_PROBE_URL,
     interval: 300,
-    tolerance: 50
+    tolerance: 50,
   });
 }
 
@@ -512,7 +566,11 @@ function addRegionUrlTestGroup(proxyGroups, groupName, regionNodeNames) {
 function injectMiyaProxies(config, miyaCredentials) {
   var miyaProxies = [
     buildMiyaProxy(miyaCredentials, NODE_NAMES.relay, miyaCredentials.relay),
-    buildMiyaProxy(miyaCredentials, NODE_NAMES.transit, miyaCredentials.transit)
+    buildMiyaProxy(
+      miyaCredentials,
+      NODE_NAMES.transit,
+      miyaCredentials.transit,
+    ),
   ];
 
   for (var i = 0; i < miyaProxies.length; i++) {
@@ -534,7 +592,10 @@ function ensureRegionGroup(config, region, groupNameSuffix, reuseExisting) {
 
   // 优先复用订阅里已有的地区代理组。
   if (reuseExisting) {
-    var reusableGroupName = findReusableRegionGroupName(proxyGroups, regionRegex);
+    var reusableGroupName = findReusableRegionGroupName(
+      proxyGroups,
+      regionRegex,
+    );
     if (reusableGroupName) return reusableGroupName;
   }
 
@@ -558,7 +619,12 @@ function resolveRelayTarget(config, region, manualNode) {
 
 // 解析流媒体锁区应使用的地区组。
 function resolveMediaTarget(config, mediaRegion) {
-  return ensureRegionGroup(config, mediaRegion, GROUP_NAME_SUFFIXES.media, true);
+  return ensureRegionGroup(
+    config,
+    mediaRegion,
+    GROUP_NAME_SUFFIXES.media,
+    true,
+  );
 }
 
 // 给家宽出口节点绑定拨号前置代理，并清理官方中转节点的拨号代理。
@@ -577,13 +643,16 @@ function bindDialerProxy(config, relayTarget) {
 // 确保存在一个承载 MiyaIP 官方中转与家宽出口的链式代理组。
 function ensureChainGroup(config, region) {
   var regionMeta = resolveRegionMeta(region, true);
-  var chainGroupName = buildRegionGroupName(regionMeta, GROUP_NAME_SUFFIXES.chain);
+  var chainGroupName = buildRegionGroupName(
+    regionMeta,
+    GROUP_NAME_SUFFIXES.chain,
+  );
 
   if (!findProxyGroupByName(config["proxy-groups"], chainGroupName)) {
     config["proxy-groups"].push({
       name: chainGroupName,
       type: "select",
-      proxies: [NODE_NAMES.transit, NODE_NAMES.relay]
+      proxies: [NODE_NAMES.transit, NODE_NAMES.relay],
     });
   }
 
@@ -651,7 +720,13 @@ function injectManagedRules(config, chainGroupName, mediaGroupName) {
 }
 
 // 按规则标识去重后追加单条管理规则。
-function addRuleIfNotExists(ruleLines, seenRuleIdentities, type, value, target) {
+function addRuleIfNotExists(
+  ruleLines,
+  seenRuleIdentities,
+  type,
+  value,
+  target,
+) {
   var ruleIdentity = type + "," + value;
   if (seenRuleIdentities[ruleIdentity]) return;
   seenRuleIdentities[ruleIdentity] = true;
@@ -659,9 +734,20 @@ function addRuleIfNotExists(ruleLines, seenRuleIdentities, type, value, target) 
 }
 
 // 批量生成 `DOMAIN-SUFFIX` 规则并完成批内去重。
-function addSuffixRulesIfNotExists(ruleLines, seenRuleIdentities, domains, target) {
+function addSuffixRulesIfNotExists(
+  ruleLines,
+  seenRuleIdentities,
+  domains,
+  target,
+) {
   for (var i = 0; i < domains.length; i++) {
-    addRuleIfNotExists(ruleLines, seenRuleIdentities, "DOMAIN-SUFFIX", toSuffix(domains[i]), target);
+    addRuleIfNotExists(
+      ruleLines,
+      seenRuleIdentities,
+      "DOMAIN-SUFFIX",
+      toSuffix(domains[i]),
+      target,
+    );
   }
 }
 
@@ -673,17 +759,38 @@ function buildChainProxyRules(chainGroupName) {
 
   // 域外 AI 域名加微软与开发工具。
   for (i = 0; i < CHAIN_PROXY_SUFFIX_GROUPS.length; i++) {
-    addSuffixRulesIfNotExists(ruleLines, seenRuleIdentities, CHAIN_PROXY_SUFFIX_GROUPS[i], chainGroupName);
+    addSuffixRulesIfNotExists(
+      ruleLines,
+      seenRuleIdentities,
+      CHAIN_PROXY_SUFFIX_GROUPS[i],
+      chainGroupName,
+    );
   }
-  addSuffixRulesIfNotExists(ruleLines, seenRuleIdentities, CHAIN_PROXY_EXTRA_SUFFIXES, chainGroupName);
+  addSuffixRulesIfNotExists(
+    ruleLines,
+    seenRuleIdentities,
+    CHAIN_PROXY_EXTRA_SUFFIXES,
+    chainGroupName,
+  );
   return ruleLines;
 }
 
-// 生成域内 AI 域名的直连规则。
+// 生成域内 AI 域名及额外直连域名的直连规则。
 function buildDirectAiRules() {
   var ruleLines = [];
   var seenRuleIdentities = {};
-  addSuffixRulesIfNotExists(ruleLines, seenRuleIdentities, ALL_AI_DOMESTIC_DOMAINS, RULE_TARGET_DIRECT);
+  addSuffixRulesIfNotExists(
+    ruleLines,
+    seenRuleIdentities,
+    ALL_AI_DOMESTIC_DOMAINS,
+    RULE_TARGET_DIRECT,
+  );
+  addSuffixRulesIfNotExists(
+    ruleLines,
+    seenRuleIdentities,
+    ALL_DIRECT_EXTRA_DOMAINS,
+    RULE_TARGET_DIRECT,
+  );
   return ruleLines;
 }
 
@@ -692,6 +799,11 @@ function buildMediaRules(mediaGroupName) {
   if (!mediaGroupName) return [];
   var ruleLines = [];
   var seenRuleIdentities = {};
-  addSuffixRulesIfNotExists(ruleLines, seenRuleIdentities, ALL_MEDIA_DOMAINS, mediaGroupName);
+  addSuffixRulesIfNotExists(
+    ruleLines,
+    seenRuleIdentities,
+    ALL_MEDIA_DOMAINS,
+    mediaGroupName,
+  );
   return ruleLines;
 }
