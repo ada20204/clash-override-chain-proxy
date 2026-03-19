@@ -22,7 +22,7 @@
 3. **覆写域名嗅探（Sniffer）**——TLS（443/8443）、HTTP（80/8080/8880）、QUIC（443）三协议嗅探，并与 DNS / 规则分类保持一致；直连保留项（如 Tailscale、Apple、本地域名）继续跳过嗅探
 4. **统一注入链式代理规则**——AI 服务、浏览器、基础平台、社交与流媒体，以及指定的 macOS App / 进程，统一走现有链式代理逻辑，也就是「自选节点 + 自选家庭宽带静态IP」
 5. **统一去重并消除冲突**——同一目标的域名 / 进程规则合并成单一链式代理规则集，避免重复注入和分类间的优先级冲突
-6. **强隔离 Tailscale**——`tailscale.com/io` 控制面域名直连，Tailnet 地址段和常见 macOS Tailscale 进程置顶直连，避免远程访问链路误入家宽出口
+6. **强隔离 Tailscale**——`tailscale.com/io` 控制面域名直连，Tailnet 地址段和常见 macOS Tailscale 进程置顶直连，并单独指定域外 DoH，避免远程访问链路误入家宽出口
 
 ## 文件说明
 
@@ -89,11 +89,15 @@ function main(config) {
 var USER_OPTIONS = {
   chainRegion: "SG", // 链式代理地区（自选节点 + 家宽IP 出口）
   manualNode: "", // 手动指定跳板节点名（留空 = 自动选最快的）
+  enableBrowserProcessProxy: true, // 是否把浏览器进程整体送入链式代理
 };
 ```
 
 - **`chainRegion`**（可选值：`US` `JP` `HK` `SG`）——链式代理流量从哪个地区出去；AI 服务、浏览器、基础平台、社交与流媒体都统一跟随这个参数
 - **`manualNode`**（节点名 / 留空）——指定跳板节点；留空则自动选该地区延迟最低的线路
+- **`enableBrowserProcessProxy`**（`true` / `false`）——默认 `true`，会把 `Arc`、`Comet`、`Dia`、`Atlas`、`Chrome`、`Edge` 整个进程带入链式代理；如果你希望这些浏览器里的普通网站继续按域名规则分流，把它改成 `false`
+
+> 如果 `chainRegion` 找不到可用的地区节点 / 代理组，或者 `manualNode` 名称写错，脚本现在会直接报错，不再静默退化成未绑定跳板的家宽出口。
 
 ### 5. 启用并验证
 
@@ -115,18 +119,40 @@ var USER_OPTIONS = {
 
 ## 分流一览
 
-- **AI 服务** → 链式代理（跟随 `chainRegion` 的家宽IP出口）：Claude、ChatGPT、Gemini、Antigravity、Perplexity、OpenRouter、xAI，以及 Claude / ChatGPT / Perplexity / Cursor / Windsurf / Codeium 等 macOS AI App
-- **浏览器** → 链式代理（跟随 `chainRegion` 的家宽IP出口）：Arc、Comet、Dia、ChatGPT Atlas、Google Chrome、Microsoft Edge 及其 helper 进程
-- **基础平台** → 链式代理（跟随 `chainRegion`）：`google.com`、`googleapis.com`、`gstatic.com`、`microsoft.com`、`live.com`、`office.com`、`sharepoint.com`、GitHub，以及 Google Drive、Teams、Outlook、Word、Excel、PowerPoint、OneDrive、VS Code
+- **AI 服务** → 链式代理（跟随 `chainRegion` 的家宽IP出口）：Claude、ChatGPT、Sora、Gemini、NotebookLM、Antigravity、Perplexity、OpenRouter、Grok / xAI，以及 Claude / ChatGPT / Perplexity / Cursor / Windsurf / Codeium 等 macOS AI App
+- **浏览器** → 链式代理（跟随 `chainRegion` 的家宽IP出口）：Arc、Comet、Dia、Atlas、Google Chrome、Microsoft Edge；其中 helper 进程名按 Chromium 命名模式推断
+- **基础平台** → 链式代理（跟随 `chainRegion`）：`google.com`、`googleapis.com`、`gstatic.com`、`microsoft.com`、`live.com`、`office.com`、`m365.cloud.microsoft`、`sharepoint.com`、GitHub，以及 Google Drive、Teams、Outlook、Word、Excel、PowerPoint、OneDrive、VS Code
 - **社交与流媒体** → 链式代理（跟随 `chainRegion`）：YouTube、Netflix、X / Twitter、Facebook / Instagram、Telegram、Discord
 - **直连保留项** → 直连：域内 AI、`tailscale.com` / `tailscale.io`、`100.64.0.0/10`、`100.100.100.100/32`、`fd7a:115c:a1e0::/48`
 - **出口测试** → 链式代理（跟随 `chainRegion` 的家宽IP出口）：ping0.cc、ipinfo.io
 
 > 浏览器单独成类，是为了明确暴露它们的副作用：你在这些浏览器里访问的普通网站，默认也会跟着走链式代理。
 >
+> `Atlas` 的实际 macOS App / 主进程名按官方资料使用 `Atlas`；不再使用 `ChatGPT Atlas` 这种品牌化命名。
+>
+> 域名清单按联网核验收敛过一轮：已移除证据不足或明显第三方的默认项，例如 `googleworkspace.com`、`aicodemirror.com`。
+>
+> 少量旧入口或经验域名仍保留，但在脚本里已单独加注释，例如 `makersuite.google.com`、`claudemcpclient.com`、`servd-anthropic-website.b-cdn.net`。
+>
 > `mediaRegion` 已并入链式代理，YouTube / Netflix / X / Telegram / Discord 等不再单独锁区，统一跟随 `chainRegion` 出口。
 >
 > 当前实现会先把所有指向同一链式代理组的规则统一去重，再整体置顶；DNS `nameserver-policy`、`fallback-filter` 和 Sniffer 的 `force-domain` / `skip-domain` 也与同一套分类同步。
+
+### 本地校验
+
+仓库内置了一个最小化校验脚本，可在修改规则后本地跑一遍：
+
+```bash
+node tests/validate.js
+```
+
+它会检查：
+
+- 管理规则不重复
+- `DIRECT` 保护规则优先置顶
+- `chainRegion` 缺少可用跳板时会显式报错
+- 关闭浏览器进程代理开关后，不再注入浏览器 `PROCESS-NAME` 规则
+- DNS `nameserver-policy`、`fallback-filter` 和 Sniffer 是否覆盖关键域名
 
 ---
 

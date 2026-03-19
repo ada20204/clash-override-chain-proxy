@@ -15,7 +15,7 @@
  * - 使用 ES5 语法，不依赖箭头函数、解构赋值、模板字符串、
  *   展开语法、`Object.values()`、`Object.fromEntries()` 等 ES6+ 特性。
  *
- * @version 8.1
+ * @version 8.2
  */
 
 // ---------------------------------------------------------------------------
@@ -28,6 +28,8 @@ var USER_OPTIONS = {
   chainRegion: "SG",
   // 手动指定跳板节点名，留空则按 chainRegion 自动匹配。
   manualNode: "",
+  // 是否将浏览器主进程和 helper 进程一并纳入链式代理。
+  enableBrowserProcessProxy: true,
 };
 
 // ---------------------------------------------------------------------------
@@ -104,13 +106,16 @@ var DOMAINS_APPLE = {
 var DOMAINS_CHAIN_PLATFORM = {
   google_core: ["+.google.com", "+.googleapis.com", "+.googleusercontent.com"],
   google_static: ["+.gstatic.com", "+.ggpht.com", "+.gvt1.com", "+.gvt2.com"],
-  google_workspace: ["+.withgoogle.com", "+.googleworkspace.com"],
+  // `withgoogle.com` 为 Google 官方活动与推广站点；`googleworkspace.com`
+  // 公开一方证据不足，避免作为默认规则注入。
+  google_workspace: ["+.withgoogle.com"],
   google_cloud: ["+.cloud.google.com"],
   microsoft_core: ["+.microsoft.com", "+.live.com", "+.windows.net"],
   microsoft_productivity: [
     "+.office.com",
     "+.office.net",
     "+.office365.com",
+    "+.m365.cloud.microsoft",
     "+.sharepoint.com",
     "+.onenote.com",
     "+.onedrive.com",
@@ -136,14 +141,18 @@ var DOMAINS_CHAIN_AI = {
     "+.claude.com",
     "+.anthropic.com",
     "+.claudeusercontent.com",
+    // 公开一方文档证据较弱，但在实际规则集中较常见，先作为经验域名保留。
     "+.claudemcpclient.com",
+    // Anthropic 站点静态资源经验域名，优先级低于主域名理解。
     "+.servd-anthropic-website.b-cdn.net",
+    // Anthropic 官方场景使用过的短链。
     "+.clau.de",
   ],
 
   openai: [
     "+.openai.com",
     "+.chatgpt.com",
+    "+.sora.com",
     "+.oaiusercontent.com",
     "+.oaistatic.com",
   ],
@@ -154,6 +163,8 @@ var DOMAINS_CHAIN_AI = {
     "+.ai.google.dev",
     "+.generativelanguage.googleapis.com",
     "+.ai.google",
+    "+.notebooklm.google",
+    // 历史兼容入口，Google 已迁移到 AI Studio。
     "+.makersuite.google.com",
     "+.deepmind.google",
     "+.labs.google",
@@ -163,12 +174,9 @@ var DOMAINS_CHAIN_AI = {
 
   perplexity: ["+.perplexity.ai", "+.perplexitycdn.com"],
 
-  router_and_tools: [
-    "+.openrouter.ai",
-    "+.aicodemirror.com",
-  ],
+  router_and_tools: ["+.openrouter.ai"],
 
-  xai: ["+.x.ai", "+.console.x.ai", "+.api.x.ai"],
+  xai: ["+.x.ai", "+.grok.com", "+.console.x.ai", "+.api.x.ai"],
 };
 
 // 需要统一走链式代理的 macOS AI 服务 App / 进程名。
@@ -187,41 +195,49 @@ var PROCESS_NAMES_CHAIN_AI_MACOS = [
   "Codeium Helper",
 ];
 
-// 需要统一走链式代理的 macOS 浏览器 App / 进程名。
-var PROCESS_NAMES_CHAIN_BROWSER_MACOS = [
+// 官方资料可直接确认的 macOS 浏览器主进程名。
+var PROCESS_NAMES_CHAIN_BROWSER_MACOS_CONFIRMED = [
   "Arc",
+  "Comet",
+  "Dia",
+  "Atlas",
+  "Google Chrome",
+  "Microsoft Edge",
+];
+
+// 基于 Chromium 进程命名模式推断的浏览器 helper 进程名。
+var PROCESS_NAMES_CHAIN_BROWSER_MACOS_CHROMIUM_INFERRED = [
   "Arc Helper",
   "Arc Helper (GPU)",
   "Arc Helper (Plugin)",
   "Arc Helper (Renderer)",
-  "Comet",
   "Comet Helper",
   "Comet Helper (GPU)",
   "Comet Helper (Plugin)",
   "Comet Helper (Renderer)",
-  "Dia",
   "Dia Helper",
   "Dia Helper (GPU)",
   "Dia Helper (Plugin)",
   "Dia Helper (Renderer)",
-  "Google Chrome",
   "Google Chrome Helper",
   "Google Chrome Helper (GPU)",
   "Google Chrome Helper (Plugin)",
   "Google Chrome Helper (Renderer)",
-  "Google Drive",
-  "Google Drive Helper",
-  "Google Chrome for Testing",
-  "Atlas",
   "Atlas Helper",
-  "ChatGPT Atlas",
-  "ChatGPT Atlas Helper",
-  "Microsoft Edge",
+  "Atlas Helper (GPU)",
+  "Atlas Helper (Plugin)",
+  "Atlas Helper (Renderer)",
   "Microsoft Edge Helper",
   "Microsoft Edge Helper (GPU)",
   "Microsoft Edge Helper (Plugin)",
   "Microsoft Edge Helper (Renderer)",
 ];
+
+// 需要统一走链式代理的 macOS 浏览器 App / 进程名。
+var PROCESS_NAMES_CHAIN_BROWSER_MACOS = mergeStringGroups([
+  PROCESS_NAMES_CHAIN_BROWSER_MACOS_CONFIRMED,
+  PROCESS_NAMES_CHAIN_BROWSER_MACOS_CHROMIUM_INFERRED,
+]);
 
 // 需要统一走链式代理的 macOS 基础平台 App / 进程名。
 var PROCESS_NAMES_CHAIN_PLATFORM_MACOS = [
@@ -406,13 +422,6 @@ var CHAIN_PROXY_DOMAIN_GROUPS = [
   ALL_CHAIN_PLATFORM_DOMAINS,
 ];
 
-// 需要统一生成链式代理规则的 macOS 进程分组，按用途排序。
-var CHAIN_PROXY_PROCESS_GROUPS = [
-  PROCESS_NAMES_CHAIN_AI_MACOS,
-  PROCESS_NAMES_CHAIN_BROWSER_MACOS,
-  PROCESS_NAMES_CHAIN_PLATFORM_MACOS,
-];
-
 // ---------------------------------------------------------------------------
 // 主入口
 // ---------------------------------------------------------------------------
@@ -485,6 +494,8 @@ function buildNameserverPolicy() {
   // 基础平台走域外 DoH，Apple 走域内 DoH。
   assignNameserverPolicyDomains(policy, ALL_CHAIN_PLATFORM_DOMAINS, DOH_OVERSEAS);
   assignNameserverPolicyDomains(policy, ALL_APPLE_DOMAINS, DOH_DOMESTIC);
+  // Tailscale 控制面属于域外直连域名，单独指定域外 DoH。
+  assignNameserverPolicyDomains(policy, ALL_DIRECT_EXTRA_DOMAINS, DOH_OVERSEAS);
 
   // AI 服务走域外 DoH。
   assignNameserverPolicyDomains(policy, ALL_CHAIN_AI_DOMAINS, DOH_OVERSEAS);
@@ -672,6 +683,14 @@ function findProxyGroupByName(proxyGroups, groupName) {
   return null;
 }
 
+// 判断给定名称是否在节点或代理组中存在。
+function hasProxyOrGroup(config, targetName) {
+  return !!(
+    findProxyByName(config.proxies || [], targetName) ||
+    findProxyGroupByName(config["proxy-groups"] || [], targetName)
+  );
+}
+
 // 查找可直接复用的订阅地区组名称。
 function findReusableRegionGroupName(proxyGroups, regionRegex) {
   for (var i = 0; i < proxyGroups.length; i++) {
@@ -764,8 +783,26 @@ function ensureRegionGroup(config, region, groupNameSuffix, reuseExisting) {
 
 // 解析家宽链式代理前一跳应使用的跳板节点或地区组。
 function resolveRelayTarget(config, region, manualNode) {
-  if (manualNode) return manualNode;
-  return ensureRegionGroup(config, region, GROUP_NAME_SUFFIXES.relay, true);
+  var relayTarget = null;
+  if (manualNode) {
+    relayTarget = manualNode;
+    if (!hasProxyOrGroup(config, relayTarget)) {
+      throw new Error(
+        "[家宽IP-链式代理] manualNode 未命中现有节点或代理组: " + relayTarget,
+      );
+    }
+    return relayTarget;
+  }
+
+  relayTarget = ensureRegionGroup(config, region, GROUP_NAME_SUFFIXES.relay, true);
+  if (!relayTarget) {
+    throw new Error(
+      "[家宽IP-链式代理] 未找到可用的 " +
+        region +
+        " 跳板节点或代理组，请检查 chainRegion 或改用 manualNode",
+    );
+  }
+  return relayTarget;
 }
 
 // 给家宽出口节点绑定拨号前置代理，并清理官方中转节点的拨号代理。
@@ -925,17 +962,28 @@ function addProcessRulesIfNotExists(
   }
 }
 
+// 按当前用户选项返回应纳入链式代理的进程分组。
+function buildChainProxyProcessGroups() {
+  var processGroups = [PROCESS_NAMES_CHAIN_AI_MACOS];
+  if (USER_OPTIONS.enableBrowserProcessProxy) {
+    processGroups.push(PROCESS_NAMES_CHAIN_BROWSER_MACOS);
+  }
+  processGroups.push(PROCESS_NAMES_CHAIN_PLATFORM_MACOS);
+  return processGroups;
+}
+
 // 统一生成链式代理规则，按用途分类收拢输入，避免重复或冲突。
 function buildChainProxyRules(chainGroupName) {
   var ruleLines = [];
   var seenRuleIdentities = {};
+  var processGroups = buildChainProxyProcessGroups();
   var i;
 
-  for (i = 0; i < CHAIN_PROXY_PROCESS_GROUPS.length; i++) {
+  for (i = 0; i < processGroups.length; i++) {
     addProcessRulesIfNotExists(
       ruleLines,
       seenRuleIdentities,
-      CHAIN_PROXY_PROCESS_GROUPS[i],
+      processGroups[i],
       chainGroupName,
     );
   }
