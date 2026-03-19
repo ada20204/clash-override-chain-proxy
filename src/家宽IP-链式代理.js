@@ -4,8 +4,8 @@
  * 功能：
  * 1. 注入 MiyaIP 链式代理节点。
  * 2. 覆写 DNS 与域名嗅探配置。
- * 3. 注入美国 AI、开发工具和流媒体规则。
- * 4. 生成链式代理与媒体锁区所需代理组。
+ * 3. 注入 AI 服务、浏览器、基础平台和社交与流媒体规则。
+ * 4. 生成链式代理所需代理组。
  *
  * 依赖：
  * - 需先执行 `MiyaIP 凭证.js`，向 `config._miya` 注入凭证。
@@ -15,19 +15,17 @@
  * - 使用 ES5 语法，不依赖箭头函数、解构赋值、模板字符串、
  *   展开语法、`Object.values()`、`Object.fromEntries()` 等 ES6+ 特性。
  *
- * @version 7.9
+ * @version 8.1
  */
 
 // ---------------------------------------------------------------------------
 // 用户可调参数
 // ---------------------------------------------------------------------------
 
-// 控制通用链式代理地区、流媒体锁区和手动跳板节点。
+// 控制通用链式代理地区和手动跳板节点。
 var USER_OPTIONS = {
-  // 通用链式代理中转地区，可选 US / JP / HK / SG，主要用于微软 / GitHub。
+  // 通用链式代理中转地区，可选 US / JP / HK / SG，统一影响链式代理流量。
   chainRegion: "SG",
-  // 流媒体与域外社交锁区，可选 US / JP / HK / SG。
-  mediaRegion: "US",
   // 手动指定跳板节点名，留空则按 chainRegion 自动匹配。
   manualNode: "",
 };
@@ -68,7 +66,6 @@ var MIYA_PROXY_NAME_KEYWORD = "MiyaIP";
 // 脚本生成的各类代理组名称后缀。
 var GROUP_NAME_SUFFIXES = {
   relay: "线路-链式代理-跳板",
-  media: "线路-流媒体",
   chain: "-链式代理-家宽IP出口",
 };
 
@@ -103,30 +100,37 @@ var DOMAINS_APPLE = {
   services: ["+.apple-cloudkit.com"],
 };
 
-// 需要统一走链式代理的 Google 家族域名。
-var DOMAINS_GOOGLE = {
-  core: ["+.google.com", "+.googleapis.com", "+.googleusercontent.com"],
-  static: ["+.gstatic.com", "+.ggpht.com", "+.gvt1.com", "+.gvt2.com"],
-  workspace: ["+.withgoogle.com", "+.googleworkspace.com"],
-  cloud: ["+.cloud.google.com"],
-};
-
-// 需要统一走链式代理的 Microsoft 家族域名。
-var DOMAINS_MICROSOFT = {
-  core: ["+.microsoft.com", "+.live.com", "+.windows.net"],
-  office: ["+.office.com", "+.office.net", "+.office365.com"],
-  workspace: ["+.sharepoint.com", "+.onenote.com", "+.onedrive.com"],
-  auth: [
+// 需要统一走链式代理的基础平台域名。
+var DOMAINS_CHAIN_PLATFORM = {
+  google_core: ["+.google.com", "+.googleapis.com", "+.googleusercontent.com"],
+  google_static: ["+.gstatic.com", "+.ggpht.com", "+.gvt1.com", "+.gvt2.com"],
+  google_workspace: ["+.withgoogle.com", "+.googleworkspace.com"],
+  google_cloud: ["+.cloud.google.com"],
+  microsoft_core: ["+.microsoft.com", "+.live.com", "+.windows.net"],
+  microsoft_productivity: [
+    "+.office.com",
+    "+.office.net",
+    "+.office365.com",
+    "+.sharepoint.com",
+    "+.onenote.com",
+    "+.onedrive.com",
+  ],
+  microsoft_auth: [
     "+.microsoftonline.com",
     "+.msftauth.net",
     "+.msauth.net",
     "+.msecnd.net",
   ],
-  vscode: ["+.visualstudio.com", "+.vsassets.io", "+.vsmarketplacebadges.dev"],
+  microsoft_developer: [
+    "+.visualstudio.com",
+    "+.vsassets.io",
+    "+.vsmarketplacebadges.dev",
+  ],
+  developer: ["+.github.com"],
 };
 
-// 需要强制走美国链式代理的美国 AI 产品域名。
-var DOMAINS_AI_US = {
+// 需要统一走链式代理的 AI 服务域名。
+var DOMAINS_CHAIN_AI = {
   anthropic: [
     "+.claude.ai",
     "+.claude.com",
@@ -167,8 +171,8 @@ var DOMAINS_AI_US = {
   xai: ["+.x.ai", "+.console.x.ai", "+.api.x.ai"],
 };
 
-// 需要强制走美国链式代理的 macOS AI 专用 App / 进程名。
-var US_AI_PROCESS_NAMES_MACOS = [
+// 需要统一走链式代理的 macOS AI 服务 App / 进程名。
+var PROCESS_NAMES_CHAIN_AI_MACOS = [
   "Claude",
   "Claude Helper",
   "ChatGPT",
@@ -183,8 +187,23 @@ var US_AI_PROCESS_NAMES_MACOS = [
   "Codeium Helper",
 ];
 
-// 需要统一走链式代理的 macOS Google / Microsoft App / 进程名。
-var CHAIN_PROXY_PROCESS_NAMES_MACOS = [
+// 需要统一走链式代理的 macOS 浏览器 App / 进程名。
+var PROCESS_NAMES_CHAIN_BROWSER_MACOS = [
+  "Arc",
+  "Arc Helper",
+  "Arc Helper (GPU)",
+  "Arc Helper (Plugin)",
+  "Arc Helper (Renderer)",
+  "Comet",
+  "Comet Helper",
+  "Comet Helper (GPU)",
+  "Comet Helper (Plugin)",
+  "Comet Helper (Renderer)",
+  "Dia",
+  "Dia Helper",
+  "Dia Helper (GPU)",
+  "Dia Helper (Plugin)",
+  "Dia Helper (Renderer)",
   "Google Chrome",
   "Google Chrome Helper",
   "Google Chrome Helper (GPU)",
@@ -193,11 +212,21 @@ var CHAIN_PROXY_PROCESS_NAMES_MACOS = [
   "Google Drive",
   "Google Drive Helper",
   "Google Chrome for Testing",
+  "Atlas",
+  "Atlas Helper",
+  "ChatGPT Atlas",
+  "ChatGPT Atlas Helper",
   "Microsoft Edge",
   "Microsoft Edge Helper",
   "Microsoft Edge Helper (GPU)",
   "Microsoft Edge Helper (Plugin)",
   "Microsoft Edge Helper (Renderer)",
+];
+
+// 需要统一走链式代理的 macOS 基础平台 App / 进程名。
+var PROCESS_NAMES_CHAIN_PLATFORM_MACOS = [
+  "Google Drive",
+  "Google Drive Helper",
   "Microsoft Teams",
   "Microsoft Teams Helper",
   "Microsoft Outlook",
@@ -210,8 +239,8 @@ var CHAIN_PROXY_PROCESS_NAMES_MACOS = [
   "Code Helper",
 ];
 
-// 需要按地区锁区处理的流媒体和域外社交域名。
-var DOMAINS_MEDIA = {
+// 需要统一走链式代理的流媒体和域外社交域名。
+var DOMAINS_CHAIN_MEDIA = {
   youtube: [
     "+.youtube.com",
     "+.googlevideo.com",
@@ -283,29 +312,55 @@ var DIRECT_PROCESS_RULES = [
   },
 ];
 
-// 把按类别分组的域名对象展平成单个数组。
+// 对字符串列表做稳定去重，保留首次出现的顺序。
+function uniqueStrings(values) {
+  var uniqueValues = [];
+  var seen = {};
+  for (var i = 0; i < values.length; i++) {
+    var value = values[i];
+    if (seen[value]) continue;
+    seen[value] = true;
+    uniqueValues.push(value);
+  }
+  return uniqueValues;
+}
+
+// 合并多组字符串列表并保持稳定去重。
+function mergeStringGroups(groups) {
+  var mergedValues = [];
+  for (var i = 0; i < groups.length; i++) {
+    mergedValues.push.apply(mergedValues, groups[i]);
+  }
+  return uniqueStrings(mergedValues);
+}
+
+// 把按类别分组的域名对象展平成单个数组并去重。
 function flattenGroupedDomains(groupedDomains) {
   var flattenedDomains = [];
   Object.keys(groupedDomains).forEach(function (groupName) {
     flattenedDomains.push.apply(flattenedDomains, groupedDomains[groupName]);
   });
-  return flattenedDomains;
+  return uniqueStrings(flattenedDomains);
 }
 
 // 展平后的 Apple 域名列表，供 DNS 和规则注入复用。
 var ALL_APPLE_DOMAINS = flattenGroupedDomains(DOMAINS_APPLE);
 
-// 展平后的 Google 家族域名列表，供 DNS 和规则注入复用。
-var ALL_GOOGLE_DOMAINS = flattenGroupedDomains(DOMAINS_GOOGLE);
+// 展平后的链式代理基础平台域名列表，供 DNS 和规则注入复用。
+var ALL_CHAIN_PLATFORM_DOMAINS = flattenGroupedDomains(DOMAINS_CHAIN_PLATFORM);
 
-// 展平后的 Microsoft 域名列表，供 DNS 和规则注入复用。
-var ALL_MICROSOFT_DOMAINS = flattenGroupedDomains(DOMAINS_MICROSOFT);
+// 展平后的链式代理 AI 服务域名列表，供 DNS 和规则注入复用。
+var ALL_CHAIN_AI_DOMAINS = flattenGroupedDomains(DOMAINS_CHAIN_AI);
 
-// 展平后的美国 AI 域名列表，供 DNS 和规则注入复用。
-var ALL_AI_US_DOMAINS = flattenGroupedDomains(DOMAINS_AI_US);
+// 展平后的链式代理媒体和社交域名列表，供 DNS 和规则注入复用。
+var ALL_CHAIN_MEDIA_DOMAINS = flattenGroupedDomains(DOMAINS_CHAIN_MEDIA);
 
-// 展平后的媒体和社交域名列表，供 DNS 和规则注入复用。
-var ALL_MEDIA_DOMAINS = flattenGroupedDomains(DOMAINS_MEDIA);
+// 展平后的全部链式代理域名列表，供 DNS 覆写和嗅探配置复用。
+var ALL_CHAIN_DOMAINS = mergeStringGroups([
+  ALL_CHAIN_AI_DOMAINS,
+  ALL_CHAIN_PLATFORM_DOMAINS,
+  ALL_CHAIN_MEDIA_DOMAINS,
+]);
 
 // 展平后的域内 AI 域名列表，供 DNS 和规则注入复用。
 var ALL_AI_DOMESTIC_DOMAINS = flattenGroupedDomains(DOMAINS_AI_DOMESTIC);
@@ -313,15 +368,50 @@ var ALL_AI_DOMESTIC_DOMAINS = flattenGroupedDomains(DOMAINS_AI_DOMESTIC);
 // 展平后的额外直连域名列表，供规则注入复用。
 var ALL_DIRECT_EXTRA_DOMAINS = flattenGroupedDomains(DOMAINS_DIRECT_EXTRA);
 
-// 需要补充到 AI 链式代理规则里的额外测试与静态资源域名。
-var AI_CHAIN_EXTRA_SUFFIXES = [
+// 链式代理出口测试与通用静态资源域名。
+var CHAIN_PROXY_SUPPORT_SUFFIXES = uniqueStrings([
   "cdn.cloudflare.net",
   "ping0.cc",
   "ipinfo.io",
+]);
+
+// DNS `fallback-filter` 额外补充的域名模式。
+var DNS_FALLBACK_EXTRA_DOMAINS = uniqueStrings([
+  "+.cdn.cloudflare.net",
+  "ping0.cc",
+  "ipinfo.io",
+]);
+
+// Sniffer 强制保留域名语义的域名模式。
+var SNIFFER_FORCE_DOMAINS = uniqueStrings([
+  "+.cloudflare.com",
+  "+.cdn.cloudflare.net",
+]);
+
+// Sniffer 应跳过的直连和本地域名模式。
+var SNIFFER_SKIP_DOMAINS = uniqueStrings(
+  [
+    "+.push.apple.com",
+    "+.apple.com",
+    "+.lan",
+    "+.local",
+    "+.localhost",
+  ].concat(ALL_DIRECT_EXTRA_DOMAINS),
+);
+
+// 需要统一生成链式代理规则的主域名分组，按用途排序。
+var CHAIN_PROXY_DOMAIN_GROUPS = [
+  ALL_CHAIN_AI_DOMAINS,
+  ALL_CHAIN_MEDIA_DOMAINS,
+  ALL_CHAIN_PLATFORM_DOMAINS,
 ];
 
-// 额外补充到通用链式代理规则里的独立域名后缀。
-var GENERAL_CHAIN_EXTRA_SUFFIXES = ["github.com"];
+// 需要统一生成链式代理规则的 macOS 进程分组，按用途排序。
+var CHAIN_PROXY_PROCESS_GROUPS = [
+  PROCESS_NAMES_CHAIN_AI_MACOS,
+  PROCESS_NAMES_CHAIN_BROWSER_MACOS,
+  PROCESS_NAMES_CHAIN_PLATFORM_MACOS,
+];
 
 // ---------------------------------------------------------------------------
 // 主入口
@@ -348,8 +438,7 @@ function main(config) {
   bindDialerProxy(config, relayTarget);
 
   var chainGroupName = ensureChainGroup(config, USER_OPTIONS.chainRegion);
-  var mediaGroupName = resolveMediaTarget(config, USER_OPTIONS.mediaRegion);
-  injectManagedRules(config, chainGroupName, mediaGroupName);
+  injectManagedRules(config, chainGroupName);
 
   return config;
 }
@@ -393,17 +482,16 @@ function buildNameserverPolicy() {
     "geosite:openai": DOH_OVERSEAS,
   };
 
-  // Google / Microsoft 走域外 DoH，Apple 走域内 DoH。
-  assignNameserverPolicyDomains(policy, ALL_GOOGLE_DOMAINS, DOH_OVERSEAS);
-  assignNameserverPolicyDomains(policy, ALL_MICROSOFT_DOMAINS, DOH_OVERSEAS);
+  // 基础平台走域外 DoH，Apple 走域内 DoH。
+  assignNameserverPolicyDomains(policy, ALL_CHAIN_PLATFORM_DOMAINS, DOH_OVERSEAS);
   assignNameserverPolicyDomains(policy, ALL_APPLE_DOMAINS, DOH_DOMESTIC);
 
-  // 美国 AI 走域外 DoH。
-  assignNameserverPolicyDomains(policy, ALL_AI_US_DOMAINS, DOH_OVERSEAS);
+  // AI 服务走域外 DoH。
+  assignNameserverPolicyDomains(policy, ALL_CHAIN_AI_DOMAINS, DOH_OVERSEAS);
   // 域内 AI 走域内 DoH。
   assignNameserverPolicyDomains(policy, ALL_AI_DOMESTIC_DOMAINS, DOH_DOMESTIC);
   // 流媒体与域外社交走域外 DoH。
-  assignNameserverPolicyDomains(policy, ALL_MEDIA_DOMAINS, DOH_OVERSEAS);
+  assignNameserverPolicyDomains(policy, ALL_CHAIN_MEDIA_DOMAINS, DOH_OVERSEAS);
 
   return policy;
 }
@@ -469,8 +557,7 @@ function buildDnsFakeIpFilter() {
 
 // 构建 `fallback-filter` 使用的域名匹配列表。
 function buildDnsFallbackFilterDomains() {
-  var fallbackDomains = ALL_MEDIA_DOMAINS.concat(["+.github.com"]);
-  return fallbackDomains.concat(ALL_MICROSOFT_DOMAINS);
+  return mergeStringGroups([ALL_CHAIN_DOMAINS, DNS_FALLBACK_EXTRA_DOMAINS]);
 }
 
 // 构建 Clash DNS 的 `fallback-filter` 配置对象。
@@ -522,16 +609,8 @@ function buildSnifferConfig() {
       HTTP: { ports: [80, 8080, 8880], "override-destination": true },
       QUIC: { ports: [443] },
     },
-    "force-domain": ["+.cloudflare.com", "+.cdn.cloudflare.net"],
-    "skip-domain": [
-      "+.tailscale.com",
-      "+.tailscale.io",
-      "+.push.apple.com",
-      "+.apple.com",
-      "+.lan",
-      "+.local",
-      "+.localhost",
-    ],
+    "force-domain": SNIFFER_FORCE_DOMAINS,
+    "skip-domain": SNIFFER_SKIP_DOMAINS,
   };
 }
 
@@ -689,16 +768,6 @@ function resolveRelayTarget(config, region, manualNode) {
   return ensureRegionGroup(config, region, GROUP_NAME_SUFFIXES.relay, true);
 }
 
-// 解析流媒体锁区应使用的地区组。
-function resolveMediaTarget(config, mediaRegion) {
-  return ensureRegionGroup(
-    config,
-    mediaRegion,
-    GROUP_NAME_SUFFIXES.media,
-    true,
-  );
-}
-
 // 给家宽出口节点绑定拨号前置代理，并清理官方中转节点的拨号代理。
 function bindDialerProxy(config, relayTarget) {
   var relayProxy = findProxyByName(config.proxies, NODE_NAMES.relay);
@@ -745,13 +814,10 @@ function getRuleIdentity(ruleLine) {
   return ruleLine.substring(0, secondCommaIndex);
 }
 
-// 按固定优先级拼出直连、美国 AI、媒体和通用链式代理四类管理规则。
-function buildManagedRules(chainGroupName, mediaGroupName) {
+// 按固定优先级拼出直连保留项和链式代理两类管理规则。
+function buildManagedRules(chainGroupName) {
   return buildDirectAiRules()
-    .concat(buildUsAiProcessRules(chainGroupName))
-    .concat(buildUsAiDomainRules(chainGroupName))
-    .concat(buildMediaRules(mediaGroupName))
-    .concat(buildGeneralChainProxyRules(chainGroupName));
+    .concat(buildChainProxyRules(chainGroupName));
 }
 
 // 把规则数组转换成便于查询的规则标识表。
@@ -787,9 +853,8 @@ function prependRules(targetRules, rulesToPrepend) {
 function injectManagedRules(
   config,
   chainGroupName,
-  mediaGroupName,
 ) {
-  var managedRules = buildManagedRules(chainGroupName, mediaGroupName);
+  var managedRules = buildManagedRules(chainGroupName);
   var managedRuleIdentities = buildRuleIdentityLookup(managedRules);
 
   config.rules = filterConflictingRules(config.rules, managedRuleIdentities);
@@ -860,64 +925,34 @@ function addProcessRulesIfNotExists(
   }
 }
 
-// 生成美国 AI 网站的链式代理规则。
-function buildUsAiDomainRules(chainGroupName) {
+// 统一生成链式代理规则，按用途分类收拢输入，避免重复或冲突。
+function buildChainProxyRules(chainGroupName) {
   var ruleLines = [];
   var seenRuleIdentities = {};
-  addSuffixRulesIfNotExists(
-    ruleLines,
-    seenRuleIdentities,
-    ALL_AI_US_DOMAINS,
-    chainGroupName,
-  );
-  addSuffixRulesIfNotExists(
-    ruleLines,
-    seenRuleIdentities,
-    AI_CHAIN_EXTRA_SUFFIXES,
-    chainGroupName,
-  );
-  return ruleLines;
-}
+  var i;
 
-// 生成 macOS AI 专用 App / 进程的链式代理规则。
-function buildUsAiProcessRules(chainGroupName) {
-  var ruleLines = [];
-  var seenRuleIdentities = {};
-  addProcessRulesIfNotExists(
-    ruleLines,
-    seenRuleIdentities,
-    US_AI_PROCESS_NAMES_MACOS,
-    chainGroupName,
-  );
-  return ruleLines;
-}
+  for (i = 0; i < CHAIN_PROXY_PROCESS_GROUPS.length; i++) {
+    addProcessRulesIfNotExists(
+      ruleLines,
+      seenRuleIdentities,
+      CHAIN_PROXY_PROCESS_GROUPS[i],
+      chainGroupName,
+    );
+  }
 
-// 生成 Google / Microsoft 家族与开发工具的通用链式代理规则。
-function buildGeneralChainProxyRules(chainGroupName) {
-  var ruleLines = [];
-  var seenRuleIdentities = {};
-  addProcessRulesIfNotExists(
-    ruleLines,
-    seenRuleIdentities,
-    CHAIN_PROXY_PROCESS_NAMES_MACOS,
-    chainGroupName,
-  );
+  for (i = 0; i < CHAIN_PROXY_DOMAIN_GROUPS.length; i++) {
+    addSuffixRulesIfNotExists(
+      ruleLines,
+      seenRuleIdentities,
+      CHAIN_PROXY_DOMAIN_GROUPS[i],
+      chainGroupName,
+    );
+  }
+
   addSuffixRulesIfNotExists(
     ruleLines,
     seenRuleIdentities,
-    ALL_GOOGLE_DOMAINS,
-    chainGroupName,
-  );
-  addSuffixRulesIfNotExists(
-    ruleLines,
-    seenRuleIdentities,
-    ALL_MICROSOFT_DOMAINS,
-    chainGroupName,
-  );
-  addSuffixRulesIfNotExists(
-    ruleLines,
-    seenRuleIdentities,
-    GENERAL_CHAIN_EXTRA_SUFFIXES,
+    CHAIN_PROXY_SUPPORT_SUFFIXES,
     chainGroupName,
   );
   return ruleLines;
@@ -955,20 +990,6 @@ function buildDirectAiRules() {
     seenRuleIdentities,
     ALL_DIRECT_EXTRA_DOMAINS,
     RULE_TARGET_DIRECT,
-  );
-  return ruleLines;
-}
-
-// 生成流媒体和域外社交域名的锁区规则。
-function buildMediaRules(mediaGroupName) {
-  if (!mediaGroupName) return [];
-  var ruleLines = [];
-  var seenRuleIdentities = {};
-  addSuffixRulesIfNotExists(
-    ruleLines,
-    seenRuleIdentities,
-    ALL_MEDIA_DOMAINS,
-    mediaGroupName,
   );
   return ruleLines;
 }
