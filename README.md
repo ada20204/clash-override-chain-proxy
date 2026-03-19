@@ -7,6 +7,8 @@
 > 开源仓库：[github.com/andrew-zyf/clash-override-chain-proxy](https://github.com/andrew-zyf/clash-override-chain-proxy)
 >
 > 当前 README 与进程分流规则明确按 **macOS / MacBook** 环境编写；Tailscale 和 AI App 的进程名也只维护 macOS 常见命名。
+>
+> 当前主脚本版本：`v8.3`
 
 ## 工作原理
 
@@ -28,6 +30,7 @@
 
 - **`src/家宽IP-链式代理.js`**——主脚本，全部逻辑都在这里
 - **`src/MiyaIP 凭证_样本.js`**——凭证模板，复制后填入你自己的信息
+- **`tests/validate.js`**——最小化本地校验脚本，用来检查规则、DNS、Sniffer 和错误处理是否仍符合预期
 
 ---
 
@@ -83,7 +86,7 @@ function main(config) {
 
 ### 4. 调整参数
 
-打开 `家宽IP-链式代理.js`，顶部现在有两个参数可以改：
+打开 `家宽IP-链式代理.js`，顶部现在有三个参数可以改：
 
 ```javascript
 var USER_OPTIONS = {
