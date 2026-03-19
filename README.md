@@ -40,7 +40,7 @@
 
 1. **Clash Party**——[GitHub 下载](https://github.com/mihomo-party-org/clash-party)
 2. **机场订阅**——推荐 [办公娱乐好帮手](https://xn--9kq10e0y7h.site/index.html?register=twb6RIec)
-3. **静态家宽 IP**——[推荐 MiyaIP](https://www.miyaip.com/?invitecode=7670643)，购买静态住宅代理，拿到用户名、密码、服务器地址
+3. **静态家宽 IP**——推荐 [MiyaIP](https://www.miyaip.com/?invitecode=7670643)，购买静态住宅代理，拿到用户名、密码、服务器地址
 4. **本仓库文件**——`src/MiyaIP 凭证_样本.js` + `src/家宽IP-链式代理.js`
 
 ### 1. 导入机场订阅
