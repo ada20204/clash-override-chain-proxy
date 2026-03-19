@@ -31,7 +31,7 @@ var USER_OPTIONS = {
   // 是否将浏览器主进程和 helper 进程一并纳入链式代理。
   enableBrowserProcessProxy: true,
   // 是否将常见 AI CLI 可执行文件纳入链式代理。
-  enableAiCliProcessProxy: false,
+  enableAiCliProcessProxy: true,
 };
 
 // ---------------------------------------------------------------------------
@@ -540,17 +540,19 @@ function buildDnsFakeIpFilter() {
   ];
   // Apple 生态对真实 IP 更敏感，统一排除 `fake-ip`。
   var appleDomains = ALL_APPLE_DOMAINS.slice();
-  var realtimeDomains = [
+  // 游戏主机联机和游戏平台入口通常依赖真实 IP。
+  var gamingRealtimeDomains = [
     "+.srv.nintendo.net",
     "+.stun.playstation.net",
     "xbox.*.microsoft.com",
     "+.xboxlive.com",
     "*.battlenet.com.cn",
     "*.blzstatic.cn",
+  ];
+  // 通用 STUN 域名常见于 WebRTC、语音和点对点实时连接。
+  var stunRealtimeDomains = [
     "stun.*.*",
     "stun.*.*.*",
-    "+.stun.*.*",
-    "+.stun.*.*.*",
   ];
   // 本地路由器和家庭网络设备入口应直接返回真实 IP。
   var homeRouterDomains = [
@@ -564,7 +566,8 @@ function buildDnsFakeIpFilter() {
     .concat(timeSyncDomains)
     .concat(connectivityTestDomains)
     .concat(appleDomains)
-    .concat(realtimeDomains)
+    .concat(gamingRealtimeDomains)
+    .concat(stunRealtimeDomains)
     .concat(homeRouterDomains)
     .concat(ALL_DIRECT_EXTRA_DOMAINS);
 }
