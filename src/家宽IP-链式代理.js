@@ -5,7 +5,7 @@
  * 1. 注入 MiyaIP 链式代理节点。
  * 2. 覆写 DNS 与域名嗅探配置。
  * 3. 注入美国 AI、开发工具和流媒体规则。
- * 4. 生成链式代理、美国 AI 专用链路与媒体锁区所需代理组。
+ * 4. 生成链式代理与媒体锁区所需代理组。
  *
  * 依赖：
  * - 需先执行 `MiyaIP 凭证.js`，向 `config._miya` 注入凭证。
@@ -15,7 +15,7 @@
  * - 使用 ES5 语法，不依赖箭头函数、解构赋值、模板字符串、
  *   展开语法、`Object.values()`、`Object.fromEntries()` 等 ES6+ 特性。
  *
- * @version 7.8
+ * @version 7.9
  */
 
 // ---------------------------------------------------------------------------
@@ -44,10 +44,9 @@ var REGION_MAP = {
   SG: { regex: /🇸🇬|新加坡|^SG[\|丨\- ]/i, label: "新加坡", flag: "🇸🇬" },
 };
 
-// 脚本注入的三个 MiyaIP 节点名称。
+// 脚本注入的两个 MiyaIP 节点名称。
 var NODE_NAMES = {
   relay: "自选节点 + 家宽IP",
-  relayUsAi: "美国AI专用 + 家宽IP",
   transit: "MiyaIP（官方中转）",
 };
 
@@ -71,7 +70,6 @@ var GROUP_NAME_SUFFIXES = {
   relay: "线路-链式代理-跳板",
   media: "线路-流媒体",
   chain: "-链式代理-家宽IP出口",
-  usAiChain: "AI-链式代理-家宽IP出口",
 };
 
 // ---------------------------------------------------------------------------
@@ -275,8 +273,8 @@ var ALL_AI_DOMESTIC_DOMAINS = flattenGroupedDomains(DOMAINS_AI_DOMESTIC);
 // 展平后的额外直连域名列表，供规则注入复用。
 var ALL_DIRECT_EXTRA_DOMAINS = flattenGroupedDomains(DOMAINS_DIRECT_EXTRA);
 
-// 需要强制走美国 AI 专用链式代理的额外测试与静态资源域名。
-var US_AI_CHAIN_EXTRA_SUFFIXES = [
+// 需要补充到 AI 链式代理规则里的额外测试与静态资源域名。
+var AI_CHAIN_EXTRA_SUFFIXES = [
   "cdn.cloudflare.net",
   "ping0.cc",
   "ipinfo.io",
@@ -307,13 +305,11 @@ function main(config) {
     USER_OPTIONS.chainRegion,
     USER_OPTIONS.manualNode,
   );
-  var usAiRelayTarget = resolveUsAiRelayTarget(config);
-  bindDialerProxies(config, relayTarget, usAiRelayTarget);
+  bindDialerProxy(config, relayTarget);
 
   var chainGroupName = ensureChainGroup(config, USER_OPTIONS.chainRegion);
-  var usAiChainGroupName = ensureUsAiChainGroup(config);
   var mediaGroupName = resolveMediaTarget(config, USER_OPTIONS.mediaRegion);
-  injectManagedRules(config, chainGroupName, usAiChainGroupName, mediaGroupName);
+  injectManagedRules(config, chainGroupName, mediaGroupName);
 
   return config;
 }
@@ -598,15 +594,10 @@ function addRegionUrlTestGroup(proxyGroups, groupName, regionNodeNames) {
   });
 }
 
-// 向主配置注入通用家宽出口、美国 AI 专用出口和官方中转三个 MiyaIP 节点。
+// 向主配置注入家宽出口和官方中转两个 MiyaIP 节点。
 function injectMiyaProxies(config, miyaCredentials) {
   var miyaProxies = [
     buildMiyaProxy(miyaCredentials, NODE_NAMES.relay, miyaCredentials.relay),
-    buildMiyaProxy(
-      miyaCredentials,
-      NODE_NAMES.relayUsAi,
-      miyaCredentials.relay,
-    ),
     buildMiyaProxy(
       miyaCredentials,
       NODE_NAMES.transit,
@@ -658,11 +649,6 @@ function resolveRelayTarget(config, region, manualNode) {
   return ensureRegionGroup(config, region, GROUP_NAME_SUFFIXES.relay, true);
 }
 
-// 美国 AI 专用家宽出口固定挂美国跳板，不跟随用户的 chainRegion。
-function resolveUsAiRelayTarget(config) {
-  return ensureRegionGroup(config, "US", GROUP_NAME_SUFFIXES.relay, true);
-}
-
 // 解析流媒体锁区应使用的地区组。
 function resolveMediaTarget(config, mediaRegion) {
   return ensureRegionGroup(
@@ -673,18 +659,12 @@ function resolveMediaTarget(config, mediaRegion) {
   );
 }
 
-// 给通用链路和美国 AI 专用链路绑定拨号前置代理，并清理官方中转节点。
-function bindDialerProxies(config, relayTarget, usAiRelayTarget) {
+// 给家宽出口节点绑定拨号前置代理，并清理官方中转节点的拨号代理。
+function bindDialerProxy(config, relayTarget) {
   var relayProxy = findProxyByName(config.proxies, NODE_NAMES.relay);
   if (relayProxy) {
     if (relayTarget) relayProxy["dialer-proxy"] = relayTarget;
     else delete relayProxy["dialer-proxy"];
-  }
-
-  var usAiRelayProxy = findProxyByName(config.proxies, NODE_NAMES.relayUsAi);
-  if (usAiRelayProxy) {
-    if (usAiRelayTarget) usAiRelayProxy["dialer-proxy"] = usAiRelayTarget;
-    else delete usAiRelayProxy["dialer-proxy"];
   }
 
   // 官方中转节点不挂 `dialer-proxy`。
@@ -710,26 +690,6 @@ function ensureChainGroup(config, region) {
 
   return chainGroupName;
 }
-
-// 确保美国 AI 专用家宽链式代理组固定使用美国跳板链路。
-function ensureUsAiChainGroup(config) {
-  var usMeta = resolveRegionMeta("US", true);
-  var usAiChainGroupName = buildRegionGroupName(
-    usMeta,
-    GROUP_NAME_SUFFIXES.usAiChain,
-  );
-
-  if (!findProxyGroupByName(config["proxy-groups"], usAiChainGroupName)) {
-    config["proxy-groups"].push({
-      name: usAiChainGroupName,
-      type: "select",
-      proxies: [NODE_NAMES.relayUsAi],
-    });
-  }
-
-  return usAiChainGroupName;
-}
-
 // ---------------------------------------------------------------------------
 // 规则注入（去重 + 置顶）
 // ---------------------------------------------------------------------------
@@ -746,10 +706,10 @@ function getRuleIdentity(ruleLine) {
 }
 
 // 按固定优先级拼出直连、美国 AI、媒体和通用链式代理四类管理规则。
-function buildManagedRules(chainGroupName, usAiChainGroupName, mediaGroupName) {
+function buildManagedRules(chainGroupName, mediaGroupName) {
   return buildDirectAiRules()
-    .concat(buildUsAiProcessRules(usAiChainGroupName))
-    .concat(buildUsAiDomainRules(usAiChainGroupName))
+    .concat(buildUsAiProcessRules(chainGroupName))
+    .concat(buildUsAiDomainRules(chainGroupName))
     .concat(buildMediaRules(mediaGroupName))
     .concat(buildGeneralChainProxyRules(chainGroupName));
 }
@@ -787,14 +747,9 @@ function prependRules(targetRules, rulesToPrepend) {
 function injectManagedRules(
   config,
   chainGroupName,
-  usAiChainGroupName,
   mediaGroupName,
 ) {
-  var managedRules = buildManagedRules(
-    chainGroupName,
-    usAiChainGroupName,
-    mediaGroupName,
-  );
+  var managedRules = buildManagedRules(chainGroupName, mediaGroupName);
   var managedRuleIdentities = buildRuleIdentityLookup(managedRules);
 
   config.rules = filterConflictingRules(config.rules, managedRuleIdentities);
@@ -865,34 +820,34 @@ function addProcessRulesIfNotExists(
   }
 }
 
-// 生成美国 AI 网站的美国链式代理规则。
-function buildUsAiDomainRules(usAiChainGroupName) {
+// 生成美国 AI 网站的链式代理规则。
+function buildUsAiDomainRules(chainGroupName) {
   var ruleLines = [];
   var seenRuleIdentities = {};
   addSuffixRulesIfNotExists(
     ruleLines,
     seenRuleIdentities,
     ALL_AI_US_DOMAINS,
-    usAiChainGroupName,
+    chainGroupName,
   );
   addSuffixRulesIfNotExists(
     ruleLines,
     seenRuleIdentities,
-    US_AI_CHAIN_EXTRA_SUFFIXES,
-    usAiChainGroupName,
+    AI_CHAIN_EXTRA_SUFFIXES,
+    chainGroupName,
   );
   return ruleLines;
 }
 
-// 生成 macOS AI 专用 App / 进程的美国链式代理规则。
-function buildUsAiProcessRules(usAiChainGroupName) {
+// 生成 macOS AI 专用 App / 进程的链式代理规则。
+function buildUsAiProcessRules(chainGroupName) {
   var ruleLines = [];
   var seenRuleIdentities = {};
   addProcessRulesIfNotExists(
     ruleLines,
     seenRuleIdentities,
     US_AI_PROCESS_NAMES_MACOS,
-    usAiChainGroupName,
+    chainGroupName,
   );
   return ruleLines;
 }

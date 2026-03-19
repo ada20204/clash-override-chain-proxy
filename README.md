@@ -20,8 +20,8 @@
 1. **注入家宽IP代理节点**——自选跳板（机场线路中转）和官方中转，两种模式可选
 2. **覆写 DNS**——fake-ip 模式，域外 AI / Office 相关域名 / 流媒体走域外 DoH（Google、Cloudflare），Apple / 域内 AI 走域内 DoH（阿里、腾讯）
 3. **覆写域名嗅探（Sniffer）**——TLS（443/8443）、HTTP（80/8080/8880）、QUIC（443）三协议嗅探，还原 fake-ip 下的真实域名，让规则精确命中
-4. **美国 AI 网站固定走美国链式代理**——Claude、ChatGPT、Gemini、Perplexity、xAI、OpenRouter 等美国系 AI 服务不再跟随 `chainRegion`，固定走美国静态家宽出口
-5. **macOS AI App / 进程固定走美国链式代理**——Claude、ChatGPT、Perplexity、Cursor、Windsurf 等专用客户端按进程名强制命中美国链式代理
+4. **美国 AI 网站强制走链式代理**——Claude、ChatGPT、Gemini、Perplexity、xAI、OpenRouter 等美国系 AI 服务统一走现有链式代理逻辑，也就是「自选节点 + 自选家庭宽带静态IP」
+5. **macOS AI App / 进程强制走链式代理**——Claude、ChatGPT、Perplexity、Cursor、Windsurf 等专用客户端按进程名强制命中现有链式代理
 6. **强隔离 Tailscale**——`tailscale.com/io` 控制面域名直连，Tailnet 地址段和常见 macOS Tailscale 进程置顶直连，避免远程访问链路误入家宽出口
 
 ## 文件说明
@@ -87,13 +87,13 @@ function main(config) {
 
 ```javascript
 var USER_OPTIONS = {
-  chainRegion: "SG", // 通用链式代理地区（微软 / GitHub 等）
+  chainRegion: "SG", // 链式代理地区（自选节点 + 家宽IP 出口）
   mediaRegion: "US", // 社交媒体与流媒体锁区地区
   manualNode: "", // 手动指定跳板节点名（留空 = 自动选最快的）
 };
 ```
 
-- **`chainRegion`**（可选值：`US` `JP` `HK` `SG`）——通用链式代理流量从哪个地区出去，主要影响微软开发工具、GitHub 等；美国 AI 不再跟随这个参数
+- **`chainRegion`**（可选值：`US` `JP` `HK` `SG`）——链式代理流量从哪个地区出去；美国 AI 网站、macOS AI App、微软开发工具、GitHub 都统一跟随这个参数
 - **`mediaRegion`**（可选值：`US` `JP` `HK` `SG`）——YouTube、Netflix 等锁定到哪个区域
 - **`manualNode`**（节点名 / 留空）——指定跳板节点；留空则自动选该地区延迟最低的线路
 
@@ -107,21 +107,20 @@ var USER_OPTIONS = {
 
 ① **节点选择**——默认「自动选择」，优先分配延迟最低的节点（如 HK），用于常规域外流量
 ② **新加坡跳板组**——如果订阅里已有可复用的新加坡地区代理组，脚本会直接复用；否则会生成 **`🇸🇬|新加坡线路-链式代理-跳板`**
-③ **🇸🇬|新加坡-链式代理-家宽IP出口**——通用链式代理出口，给微软 / GitHub 等非美国 AI 链式流量使用
-④ **🇺🇸|美国AI-链式代理-家宽IP出口**——美国 AI 网站和 macOS AI App 的专用静态家宽 IP 出口
-⑤ **美国流媒体组**——如果订阅里已有可复用的美国地区代理组，脚本会直接复用；否则会生成 **`🇺🇸|美国线路-流媒体`**
+③ **🇸🇬|新加坡-链式代理-家宽IP出口**——统一链式代理出口；美国 AI 网站、macOS AI App、微软 / GitHub 等都会通过这里出网
+④ **美国流媒体组**——如果订阅里已有可复用的美国地区代理组，脚本会直接复用；否则会生成 **`🇺🇸|美国线路-流媒体`**
 
 4. 验证是否生效：
-   - [ping0.cc](https://ping0.cc/) 或 [ipinfo.io](https://ipinfo.io/)——应显示 **美国家宽住宅 IP**，不是机房 IP
-   - [claude.ai](https://claude.ai/) / ChatGPT macOS App——应命中 **`🇺🇸|美国AI-链式代理-家宽IP出口`**
+   - [ping0.cc](https://ping0.cc/) 或 [ipinfo.io](https://ipinfo.io/)——应显示当前链式代理对应的住宅 IP，不是机房 IP
+   - [claude.ai](https://claude.ai/) / ChatGPT macOS App——应命中你当前 `chainRegion` 对应的 **`*-链式代理-家宽IP出口`**
 
 ---
 
 ## 分流一览
 
-- **美国 AI 网站** → 固定美国链式代理（美国静态家宽IP出口）：Claude、ChatGPT、Gemini、Antigravity、Perplexity、OpenRouter、xAI
-- **macOS AI App / 进程** → 固定美国链式代理（美国静态家宽IP出口）：Claude、ChatGPT、Perplexity、Cursor、Windsurf、Codeium
-- **微软开发工具 / GitHub** → 通用链式代理（跟随 `chainRegion`）：GitHub、VS Code、Office 365
+- **美国 AI 网站** → 强制链式代理（跟随 `chainRegion` 的家宽IP出口）：Claude、ChatGPT、Gemini、Antigravity、Perplexity、OpenRouter、xAI
+- **macOS AI App / 进程** → 强制链式代理（跟随 `chainRegion` 的家宽IP出口）：Claude、ChatGPT、Perplexity、Cursor、Windsurf、Codeium
+- **微软开发工具 / GitHub** → 链式代理（跟随 `chainRegion`）：GitHub、VS Code、Office 365
 - **社交媒体与流媒体** → 锁区节点：YouTube、Netflix、X / Twitter、Facebook / Instagram、Telegram、Discord
 - **域内 AI** → 直连：通义千问、智谱、ChatGLM、SiliconFlow 等网络边界较明确的域名
 - **Tailscale 控制面 / 数据面** → 强制直连：`tailscale.com` / `tailscale.io`、`100.64.0.0/10`、`100.100.100.100/32`、`fd7a:115c:a1e0::/48`
@@ -129,7 +128,7 @@ var USER_OPTIONS = {
 
 > 微软域名只覆盖 Office / VS Code / 鉴权相关范围，不再把整棵 Microsoft / Live 家族全部纳入链式代理。
 >
-> 浏览器进程（Chrome / Safari / Arc / Edge）不会被加入进程规则，避免你在浏览器里打开普通网站时也被一并带进美国 AI 链式代理。
+> 浏览器进程（Chrome / Safari / Arc / Edge）不会被加入进程规则，避免你在浏览器里打开普通网站时也被一并带进链式代理。
 
 ---
 
@@ -147,8 +146,8 @@ MiyaIP 凭证填错了，或者账户余额不足
 **想手动指定跳板节点**
 把 `manualNode` 设为节点全名，要和 Clash Party 里显示的一字不差
 
-**为什么美国 AI 不跟随 `chainRegion`？**
-脚本会额外注入一个 **`🇺🇸|美国AI-链式代理-家宽IP出口`** 专用组，给美国 AI 网站和 macOS AI App 单独使用；这样即使 `chainRegion` 设成新加坡，Claude / ChatGPT 仍然固定走美国静态家宽出口。
+**美国 AI 现在走哪条链路？**
+不再额外注入美国 AI 专用组。美国 AI 网站和 macOS AI App 会直接并入你原先的链式代理逻辑，也就是统一走 **`自选节点 + 家宽IP`**；最终出口跟随 `chainRegion` 和 `manualNode`。
 
 **担心 Tailscale 远程浏览把家宽出口污染了**
 当前脚本已额外把 Tailscale 控制面域名、Tailnet 常见地址段，以及 macOS 上常见的 Tailscale 进程名置顶直连。只要远程浏览器本身运行在远端主机、并由远端主机直接出网，通常不会把网页流量混进 MiyaIP 家宽出口。
