@@ -106,12 +106,15 @@ var DOMAINS_APPLE = {
 
 // 需要统一走链式代理的基础平台域名。
 var DOMAINS_CHAIN_PLATFORM = {
+  // Google 官方主域与官方 API / 内容分发基础设施。
   google_core: ["+.google.com", "+.googleapis.com", "+.googleusercontent.com"],
+  // Google 官方静态资源与下载分发基础设施。
   google_static: ["+.gstatic.com", "+.ggpht.com", "+.gvt1.com", "+.gvt2.com"],
   // `withgoogle.com` 为 Google 官方活动与推广站点；`googleworkspace.com`
   // 公开一方证据不足，避免作为默认规则注入。
   google_workspace: ["+.withgoogle.com"],
   google_cloud: ["+.cloud.google.com"],
+  // Microsoft 官方主域与官方基础设施入口；`windows.net` 属于官方基础设施宽域名。
   microsoft_core: ["+.microsoft.com", "+.live.com", "+.windows.net"],
   microsoft_productivity: [
     "+.office.com",
@@ -128,6 +131,7 @@ var DOMAINS_CHAIN_PLATFORM = {
     "+.msauth.net",
     "+.msecnd.net",
   ],
+  // Microsoft 开发者与 VS Code 生态基础设施。
   microsoft_developer: [
     "+.visualstudio.com",
     "+.vsassets.io",
@@ -155,6 +159,7 @@ var DOMAINS_CHAIN_AI = {
     "+.openai.com",
     "+.chatgpt.com",
     "+.sora.com",
+    // OpenAI 官方静态资源与内容分发基础设施。
     "+.oaiusercontent.com",
     "+.oaistatic.com",
   ],
@@ -174,6 +179,7 @@ var DOMAINS_CHAIN_AI = {
     "+.antigravity-ide.com",
   ],
 
+  // `perplexitycdn.com` 为 Perplexity 资源分发域名。
   perplexity: ["+.perplexity.ai", "+.perplexitycdn.com"],
 
   router_and_tools: ["+.openrouter.ai"],
@@ -309,26 +315,35 @@ var DOMAINS_AI_DOMESTIC = {
   siliconflow: ["+.siliconflow.cn"],
 };
 
+// Tailscale 控制面域名与 MagicDNS Tailnet 域名，固定保持 DIRECT。
+var TAILSCALE_DIRECT_DOMAINS = ["+.tailscale.com", "+.tailscale.io", "+.ts.net"];
+
 // 需要直连的其他域名（VPN、内网工具等）。
 var DOMAINS_DIRECT_EXTRA = {
-  tailscale: ["+.tailscale.com", "+.tailscale.io"],
+  tailscale: TAILSCALE_DIRECT_DOMAINS.slice(),
 };
 
-// 需要强制直连的 Tailnet 地址段，避免 Tailscale 数据面进入家宽链式代理。
-var DIRECT_IP_CIDR_RULES = [
+// Tailnet 地址段必须保持 DIRECT，避免 Tailscale 数据面进入家宽链式代理。
+var TAILSCALE_DIRECT_CIDR_RULES = [
   { type: "IP-CIDR", value: "100.64.0.0/10", target: RULE_TARGET_DIRECT },
   { type: "IP-CIDR", value: "100.100.100.100/32", target: RULE_TARGET_DIRECT },
   { type: "IP-CIDR6", value: "fd7a:115c:a1e0::/48", target: RULE_TARGET_DIRECT },
 ];
 
-// macOS 上常见的 Tailscale 相关进程名，置顶直连以减少被 TUN 接管的概率。
-var DIRECT_PROCESS_RULES = [
+// macOS 上常见的 Tailscale 相关进程名，覆盖 App Store、Standalone 和 CLI 变体。
+var TAILSCALE_DIRECT_PROCESS_RULES = [
   { type: "PROCESS-NAME", value: "Tailscale", target: RULE_TARGET_DIRECT },
+  { type: "PROCESS-NAME", value: "tailscale", target: RULE_TARGET_DIRECT },
   { type: "PROCESS-NAME", value: "tailscaled", target: RULE_TARGET_DIRECT },
   { type: "PROCESS-NAME", value: "IPNExtension", target: RULE_TARGET_DIRECT },
   {
     type: "PROCESS-NAME",
     value: "io.tailscale.ipn.macos.network-extension",
+    target: RULE_TARGET_DIRECT,
+  },
+  {
+    type: "PROCESS-NAME",
+    value: "io.tailscale.ipn.macsys.network-extension",
     target: RULE_TARGET_DIRECT,
   },
 ];
@@ -388,6 +403,9 @@ var ALL_AI_DOMESTIC_DOMAINS = flattenGroupedDomains(DOMAINS_AI_DOMESTIC);
 
 // 展平后的额外直连域名列表，供规则注入复用。
 var ALL_DIRECT_EXTRA_DOMAINS = flattenGroupedDomains(DOMAINS_DIRECT_EXTRA);
+
+// Tailscale 控制面与 MagicDNS 域名，固定使用域外 DoH 解析。
+var ALL_TAILSCALE_DIRECT_DOMAINS = uniqueStrings(TAILSCALE_DIRECT_DOMAINS.slice());
 
 // 链式代理出口测试与通用静态资源域名。
 var CHAIN_PROXY_SUPPORT_SUFFIXES = uniqueStrings([
@@ -499,8 +517,8 @@ function buildNameserverPolicy() {
   // 基础平台走域外 DoH，Apple 走域内 DoH。
   assignNameserverPolicyDomains(policy, ALL_CHAIN_PLATFORM_DOMAINS, DOH_OVERSEAS);
   assignNameserverPolicyDomains(policy, ALL_APPLE_DOMAINS, DOH_DOMESTIC);
-  // Tailscale 控制面属于域外直连域名，单独指定域外 DoH。
-  assignNameserverPolicyDomains(policy, ALL_DIRECT_EXTRA_DOMAINS, DOH_OVERSEAS);
+  // Tailscale 控制面与 MagicDNS 域名固定使用域外 DoH，避免被域内解析污染。
+  assignNameserverPolicyDomains(policy, ALL_TAILSCALE_DIRECT_DOMAINS, DOH_OVERSEAS);
 
   // AI 服务走域外 DoH。
   assignNameserverPolicyDomains(policy, ALL_CHAIN_AI_DOMAINS, DOH_OVERSEAS);
@@ -1022,11 +1040,11 @@ function buildDirectAiRules() {
   var directNetworkRules = [];
   var i;
 
-  for (i = 0; i < DIRECT_IP_CIDR_RULES.length; i++) {
+  for (i = 0; i < TAILSCALE_DIRECT_CIDR_RULES.length; i++) {
     directNetworkRules.push({
-      type: DIRECT_IP_CIDR_RULES[i].type,
-      value: DIRECT_IP_CIDR_RULES[i].value,
-      target: DIRECT_IP_CIDR_RULES[i].target,
+      type: TAILSCALE_DIRECT_CIDR_RULES[i].type,
+      value: TAILSCALE_DIRECT_CIDR_RULES[i].value,
+      target: TAILSCALE_DIRECT_CIDR_RULES[i].target,
       option: "no-resolve",
     });
   }
@@ -1034,7 +1052,7 @@ function buildDirectAiRules() {
   addRawRulesIfNotExists(
     ruleLines,
     seenRuleIdentities,
-    DIRECT_PROCESS_RULES.concat(directNetworkRules),
+    TAILSCALE_DIRECT_PROCESS_RULES.concat(directNetworkRules),
   );
   addSuffixRulesIfNotExists(
     ruleLines,

@@ -59,6 +59,11 @@ function assertNoDuplicateRuleIdentities(ruleLines) {
   }
 }
 
+function assertRulePrefix(actualRules, expectedPrefix) {
+  const actualPrefix = Array.prototype.slice.call(actualRules, 0, expectedPrefix.length);
+  assert.strictEqual(JSON.stringify(actualPrefix), JSON.stringify(expectedPrefix));
+}
+
 function testDefaultConfig() {
   const sandbox = loadSandbox();
   const config = createBaseConfig();
@@ -72,12 +77,51 @@ function testDefaultConfig() {
   );
   assert(output["proxy-groups"].some((group) => group.name === chainGroupName));
   assert(output.rules[0].startsWith("PROCESS-NAME,Tailscale,DIRECT"));
+  assert(output.rules.includes("PROCESS-NAME,tailscale,DIRECT"));
+  assert(output.rules.includes("PROCESS-NAME,tailscaled,DIRECT"));
+  assert(output.rules.includes("PROCESS-NAME,IPNExtension,DIRECT"));
+  assert(
+    output.rules.includes("PROCESS-NAME,io.tailscale.ipn.macos.network-extension,DIRECT"),
+  );
+  assert(
+    output.rules.includes("PROCESS-NAME,io.tailscale.ipn.macsys.network-extension,DIRECT"),
+  );
   assert(output.rules.includes("DOMAIN-SUFFIX,claude.ai," + chainGroupName));
   assert(!output.rules.includes("DOMAIN-SUFFIX,claude.ai,DIRECT"));
   assertNoDuplicateRuleIdentities(output.rules.slice(0, 200));
+  assertRulePrefix(output.rules, [
+    "PROCESS-NAME,Tailscale,DIRECT",
+    "PROCESS-NAME,tailscale,DIRECT",
+    "PROCESS-NAME,tailscaled,DIRECT",
+    "PROCESS-NAME,IPNExtension,DIRECT",
+    "PROCESS-NAME,io.tailscale.ipn.macos.network-extension,DIRECT",
+    "PROCESS-NAME,io.tailscale.ipn.macsys.network-extension,DIRECT",
+    "IP-CIDR,100.64.0.0/10,DIRECT,no-resolve",
+    "IP-CIDR,100.100.100.100/32,DIRECT,no-resolve",
+    "IP-CIDR6,fd7a:115c:a1e0::/48,DIRECT,no-resolve",
+    "DOMAIN-SUFFIX,tongyi.aliyun.com,DIRECT",
+    "DOMAIN-SUFFIX,qianwen.aliyun.com,DIRECT",
+    "DOMAIN-SUFFIX,dashscope.aliyuncs.com,DIRECT",
+    "DOMAIN-SUFFIX,moonshot.cn,DIRECT",
+    "DOMAIN-SUFFIX,chatglm.cn,DIRECT",
+    "DOMAIN-SUFFIX,zhipuai.cn,DIRECT",
+    "DOMAIN-SUFFIX,bigmodel.cn,DIRECT",
+    "DOMAIN-SUFFIX,siliconflow.cn,DIRECT",
+    "DOMAIN-SUFFIX,tailscale.com,DIRECT",
+    "DOMAIN-SUFFIX,tailscale.io,DIRECT",
+    "DOMAIN-SUFFIX,ts.net,DIRECT",
+  ]);
 
   assert.deepStrictEqual(
     output.dns["nameserver-policy"]["+.tailscale.com"],
+    sandbox.DOH_OVERSEAS,
+  );
+  assert.deepStrictEqual(
+    output.dns["nameserver-policy"]["+.tailscale.io"],
+    sandbox.DOH_OVERSEAS,
+  );
+  assert.deepStrictEqual(
+    output.dns["nameserver-policy"]["+.ts.net"],
     sandbox.DOH_OVERSEAS,
   );
   assert.deepStrictEqual(
@@ -96,6 +140,8 @@ function testDefaultConfig() {
   assert(output.dns["fake-ip-filter"].includes("stun.*.*"));
   assert(output.dns["fallback-filter"].domain.includes("+.sora.com"));
   assert(output.sniffer["skip-domain"].includes("+.tailscale.com"));
+  assert(output.sniffer["skip-domain"].includes("+.tailscale.io"));
+  assert(output.sniffer["skip-domain"].includes("+.ts.net"));
 }
 
 function testDisableBrowserProcessProxy() {

@@ -10,6 +10,8 @@
 >
 > 当前主脚本版本：`v8.3`
 
+Tailscale 在这个仓库里的角色很简单：它负责让你的 MacBook 安全访问远程主机、家里设备或其他 Tailnet 节点；这条访问链路本身不应该混进 MiyaIP 家宽链式代理。因此脚本会把 Tailscale 控制面域名、MagicDNS 域名、Tailnet 地址段和常见 macOS 进程都保持为 `DIRECT`，并固定使用域外 DoH。
+
 ## 工作原理
 
 ```
@@ -24,7 +26,7 @@
 3. **覆写域名嗅探（Sniffer）**——TLS（443/8443）、HTTP（80/8080/8880）、QUIC（443）三协议嗅探，并与 DNS / 规则分类保持一致；直连保留项（如 Tailscale、Apple、本地域名）继续跳过嗅探
 4. **统一注入链式代理规则**——AI 服务、浏览器、基础平台、社交与流媒体，以及指定的 macOS App / 进程，统一走现有链式代理逻辑，也就是「自选节点 + 自选家庭宽带静态IP」
 5. **统一去重并消除冲突**——同一目标的域名 / 进程规则合并成单一链式代理规则集，避免重复注入和分类间的优先级冲突
-6. **强隔离 Tailscale**——`tailscale.com/io` 控制面域名直连，Tailnet 地址段和常见 macOS Tailscale 进程置顶直连，并单独指定域外 DoH，避免远程访问链路误入家宽出口
+6. **强隔离 Tailscale**——`tailscale.com` / `tailscale.io` 控制面域名与 `ts.net` MagicDNS 域名直连，Tailnet 地址段和常见 macOS Tailscale 进程置顶直连，并固定使用域外 DoH，避免远程访问链路误入家宽出口
 
 ## 文件说明
 
@@ -99,8 +101,8 @@ var USER_OPTIONS = {
 
 - **`chainRegion`**（可选值：`US` `JP` `HK` `SG`）——链式代理流量从哪个地区出去；AI 服务、浏览器、基础平台、社交与流媒体都统一跟随这个参数
 - **`manualNode`**（节点名 / 留空）——指定跳板节点；留空则自动选该地区延迟最低的线路
-- **`enableBrowserProcessProxy`**（`true` / `false`）——默认 `true`，会把 `Arc`、`Comet`、`Dia`、`Atlas`、`Chrome`、`Edge` 整个进程带入链式代理；如果你希望这些浏览器里的普通网站继续按域名规则分流，把它改成 `false`
-- **`enableAiCliProcessProxy`**（`true` / `false`）——默认 `true`，会把 `claude`、`opencode`、`gemini`、`codex` 这些 AI CLI 可执行文件纳入链式代理；如果你不希望终端里的这些 AI CLI 经过链式代理，再把它改成 `false`。这个开关仍然不会碰 `Terminal`、`iTerm2`、`zsh`、`bash`
+- **`enableBrowserProcessProxy`**（`true` / `false`）——默认 `true`，会把 `Arc`、`Comet`、`Dia`、`Atlas`、`Chrome`、`Edge` 整个进程带入链式代理。适合“整浏览器强制走家宽出口”的场景；如果你希望这些浏览器里的普通网站继续按域名规则分流，把它改成 `false`
+- **`enableAiCliProcessProxy`**（`true` / `false`）——默认 `true`，会把 `claude`、`opencode`、`gemini`、`codex` 这些 AI CLI 可执行文件纳入链式代理。适合“终端里的 AI CLI 也必须走家宽出口”的场景；如果你不希望终端里的这些 AI CLI 经过链式代理，再把它改成 `false`。这个开关仍然不会碰 `Terminal`、`iTerm2`、`zsh`、`bash`
 
 > 如果 `chainRegion` 找不到可用的地区节点 / 代理组，或者 `manualNode` 名称写错，脚本现在会直接报错，不再静默退化成未绑定跳板的家宽出口。
 
@@ -133,7 +135,7 @@ var USER_OPTIONS = {
 - **浏览器** → 链式代理（跟随 `chainRegion` 的家宽IP出口）：Arc、Comet、Dia、Atlas、Google Chrome、Microsoft Edge；其中 helper 进程名按 Chromium 命名模式推断
 - **基础平台** → 链式代理（跟随 `chainRegion`）：`google.com`、`googleapis.com`、`gstatic.com`、`microsoft.com`、`live.com`、`office.com`、`m365.cloud.microsoft`、`sharepoint.com`、GitHub，以及 Google Drive、Teams、Outlook、Word、Excel、PowerPoint、OneDrive、VS Code
 - **社交与流媒体** → 链式代理（跟随 `chainRegion`）：YouTube、Netflix、X / Twitter、Facebook / Instagram、Telegram、Discord
-- **直连保留项** → 直连：域内 AI、`tailscale.com` / `tailscale.io`、`100.64.0.0/10`、`100.100.100.100/32`、`fd7a:115c:a1e0::/48`
+- **直连保留项** → 直连：域内 AI、`tailscale.com` / `tailscale.io` / `ts.net`、`100.64.0.0/10`、`100.100.100.100/32`、`fd7a:115c:a1e0::/48`
 - **出口测试** → 链式代理（跟随 `chainRegion` 的家宽IP出口）：ping0.cc、ipinfo.io
 
 > 浏览器单独成类，是为了明确暴露它们的副作用：你在这些浏览器里访问的普通网站，默认也会跟着走链式代理。
@@ -145,6 +147,8 @@ var USER_OPTIONS = {
 > 少量旧入口或经验域名仍保留，但在脚本里已单独加注释，例如 `makersuite.google.com`、`claudemcpclient.com`、`servd-anthropic-website.b-cdn.net`。
 >
 > `mediaRegion` 已并入链式代理，YouTube / Netflix / X / Telegram / Discord 等不再单独锁区，统一跟随 `chainRegion` 出口。
+>
+> 规则优先级固定为：`DIRECT` 保留项 > 可选 `PROCESS-NAME` 规则（AI CLI / 浏览器 / App）> 链式代理 `DOMAIN-SUFFIX` 规则 > 原始订阅规则。
 >
 > 当前实现会先把所有指向同一链式代理组的规则统一去重，再整体置顶；DNS `nameserver-policy`、`fallback-filter` 和 Sniffer 的 `force-domain` / `skip-domain` 也与同一套分类同步。
 
@@ -161,6 +165,7 @@ node tests/validate.js
 它会检查：
 
 - 管理规则不重复
+- 关键前 20 条 DIRECT 规则顺序保持稳定
 - `DIRECT` 保护规则优先置顶
 - `chainRegion` 缺少可用跳板时会显式报错
 - 关闭浏览器进程代理开关后，不再注入浏览器 `PROCESS-NAME` 规则
@@ -176,7 +181,7 @@ node tests/validate.js
 - **流媒体为什么不再单独锁区？**：当前脚本已把 `mediaRegion` 合并到链式代理逻辑里。YouTube / Netflix / X 等媒体域名现在统一走 `chainRegion` 对应的家宽IP出口，不再单独维护独立媒体地区组。
 - **想手动指定跳板节点**：把 `manualNode` 设为节点全名，要和 Clash Party 里显示的一字不差
 - **链式代理对象现在怎么分类？**：当前按用途分类为五类：`AI 服务`、`浏览器`、`基础平台`、`社交与流媒体`、`直连保留项`。分类只影响可读性和维护方式，不改变它们当前是否走链式代理的实际行为。
-- **担心 Tailscale 远程浏览把家宽出口污染了**：当前脚本已额外把 Tailscale 控制面域名、Tailnet 常见地址段，以及 macOS 上常见的 Tailscale 进程名置顶直连。只要远程浏览器本身运行在远端主机、并由远端主机直接出网，通常不会把网页流量混进 MiyaIP 家宽出口。
+- **担心 Tailscale 远程浏览把家宽出口污染了**：当前脚本已额外把 Tailscale 控制面域名、`ts.net` MagicDNS 域名、Tailnet 常见地址段，以及 macOS 上常见的 Tailscale 进程名置顶直连，并固定使用域外 DoH。只要远程浏览器本身运行在远端主机、并由远端主机直接出网，通常不会把网页流量混进 MiyaIP 家宽出口。
 
 ---
 
