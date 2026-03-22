@@ -4,8 +4,5 @@ src/MiyaIP 凭证.js
 # 本地草稿目录
 docs/superpowers/
 
-# 本地测试目录
-tests/
-
 # 系统文件
 .DS_Store
