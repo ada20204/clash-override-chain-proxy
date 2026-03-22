@@ -15,7 +15,7 @@
  * - 使用 ES5 语法，不依赖箭头函数、解构赋值、模板字符串、
  *   展开语法、`Object.values()`、`Object.fromEntries()` 等 ES6+ 特性。
  *
- * @version 8.3
+ * @version 8.4
  */
 
 // ---------------------------------------------------------------------------
@@ -28,8 +28,10 @@ var USER_OPTIONS = {
   chainRegion: "SG",
   // 手动指定跳板节点名，留空则按 chainRegion 自动匹配。
   manualNode: "",
+  // 是否启用 AI 严格链式代理模式；关闭后回退到兼容模式。
+  strictAiRouting: true,
   // 是否将浏览器主进程和 helper 进程一并纳入链式代理。
-  enableBrowserProcessProxy: true,
+  enableBrowserProcessProxy: false,
   // 是否将常见 AI CLI 可执行文件纳入链式代理。
   enableAiCliProcessProxy: true,
 };
@@ -71,6 +73,11 @@ var MIYA_PROXY_NAME_KEYWORD = "MiyaIP";
 var GROUP_NAME_SUFFIXES = {
   relay: "线路-链式代理-跳板",
   chain: "-链式代理-家宽IP出口",
+};
+
+// 脚本内部维护的托管代理组名称。
+var MANAGED_PROXY_GROUP_NAMES = {
+  strictAi: "AI 严格链式代理",
 };
 
 // ---------------------------------------------------------------------------
@@ -201,7 +208,7 @@ var PROCESS_NAMES_CHAIN_AI_MACOS = [
   "Windsurf Helper"
 ];
 
-// 可选纳入链式代理的 AI CLI 可执行文件名，默认关闭。
+// 可选纳入链式代理的 AI CLI 可执行文件名，默认开启。
 var PROCESS_NAMES_CHAIN_AI_CLI = ["claude", "opencode", "gemini", "codex"];
 
 // 官方资料可直接确认的 macOS 浏览器主进程名。
@@ -363,6 +370,35 @@ function mergeStringGroups(groups) {
   return uniqueStrings(mergedValues);
 }
 
+// 为字符串数组构建便于查询的哈希表。
+function buildStringLookup(values) {
+  var lookup = {};
+  for (var i = 0; i < values.length; i++) {
+    lookup[values[i]] = true;
+  }
+  return lookup;
+}
+
+// 从字符串数组中排除另一组字符串，保留原顺序。
+function excludeStrings(values, excludedValues) {
+  var filteredValues = [];
+  var excludedLookup = buildStringLookup(excludedValues);
+  for (var i = 0; i < values.length; i++) {
+    if (excludedLookup[values[i]]) continue;
+    filteredValues.push(values[i]);
+  }
+  return uniqueStrings(filteredValues);
+}
+
+// 从原生规则对象里提取指定类型的值列表。
+function extractRawRuleValues(rawRules, targetType) {
+  var values = [];
+  for (var i = 0; i < rawRules.length; i++) {
+    if (rawRules[i].type === targetType) values.push(rawRules[i].value);
+  }
+  return uniqueStrings(values);
+}
+
 // 把按类别分组的域名对象展平成单个数组并去重。
 function flattenGroupedDomains(groupedDomains) {
   var flattenedDomains = [];
@@ -437,12 +473,55 @@ var SNIFFER_SKIP_DOMAINS = uniqueStrings(
   ].concat(ALL_DIRECT_EXTRA_DOMAINS),
 );
 
-// 需要统一生成链式代理规则的主域名分组，按用途排序。
-var CHAIN_PROXY_DOMAIN_GROUPS = [
+// 统一收拢直连对象，作为冲突裁决和后续生成的单一来源。
+var ALL_DIRECT_DOMAIN_PATTERNS = mergeStringGroups(DIRECT_DOMAIN_GROUPS);
+var ALL_DIRECT_PROCESS_NAMES = extractRawRuleValues(
+  TAILSCALE_DIRECT_PROCESS_RULES,
+  "PROCESS-NAME",
+);
+var ALL_DIRECT_NETWORK_RULES = TAILSCALE_DIRECT_CIDR_RULES.slice();
+
+// 严格 AI 路由对象：AI 主服务、支撑平台与出口验证域名。
+var ALL_STRICT_AI_DOMAIN_PATTERNS = excludeStrings(
   ALL_CHAIN_AI_DOMAINS,
-  ALL_CHAIN_MEDIA_DOMAINS,
+  ALL_DIRECT_DOMAIN_PATTERNS,
+);
+var ALL_STRICT_SUPPORT_PLATFORM_DOMAIN_PATTERNS = excludeStrings(
   ALL_CHAIN_PLATFORM_DOMAINS,
-];
+  ALL_DIRECT_DOMAIN_PATTERNS,
+);
+var ALL_STRICT_VALIDATION_DOMAIN_PATTERNS = excludeStrings(
+  DNS_FALLBACK_EXTRA_DOMAINS,
+  ALL_DIRECT_DOMAIN_PATTERNS,
+);
+var ALL_STRICT_DOMAIN_PATTERNS = mergeStringGroups([
+  ALL_STRICT_AI_DOMAIN_PATTERNS,
+  ALL_STRICT_SUPPORT_PLATFORM_DOMAIN_PATTERNS,
+  ALL_STRICT_VALIDATION_DOMAIN_PATTERNS,
+]);
+
+// 非严格链式代理对象保持原有行为，当前只保留媒体和社交。
+var ALL_NON_STRICT_CHAIN_DOMAIN_PATTERNS = excludeStrings(
+  ALL_CHAIN_MEDIA_DOMAINS,
+  ALL_DIRECT_DOMAIN_PATTERNS,
+);
+
+// 严格 AI 路由对象对应的进程集合。
+var ALL_STRICT_PROCESS_NAMES_BASE = excludeStrings(
+  mergeStringGroups([
+    PROCESS_NAMES_CHAIN_AI_MACOS,
+    PROCESS_NAMES_CHAIN_PLATFORM_MACOS,
+  ]),
+  ALL_DIRECT_PROCESS_NAMES,
+);
+var ALL_BROWSER_CHAIN_PROCESS_NAMES = excludeStrings(
+  PROCESS_NAMES_CHAIN_BROWSER_MACOS,
+  ALL_DIRECT_PROCESS_NAMES,
+);
+var ALL_STRICT_SNIFFER_FORCE_DOMAINS = mergeStringGroups([
+  SNIFFER_FORCE_DOMAINS,
+  ALL_STRICT_DOMAIN_PATTERNS,
+]);
 
 // ---------------------------------------------------------------------------
 // 主入口
@@ -469,7 +548,9 @@ function main(config) {
   bindDialerProxy(config, relayTarget);
 
   var chainGroupName = ensureChainGroup(config, USER_OPTIONS.chainRegion);
-  injectManagedRules(config, chainGroupName);
+  var strictAiTarget = resolveStrictAiTarget(config, chainGroupName);
+  injectManagedRules(config, strictAiTarget, chainGroupName);
+  validateManagedRouting(config, strictAiTarget, chainGroupName);
 
   return config;
 }
@@ -513,18 +594,19 @@ function buildNameserverPolicy() {
     "geosite:openai": DOH_OVERSEAS,
   };
 
-  // 基础平台走域外 DoH，Apple 走域内 DoH。
-  assignNameserverPolicyDomains(policy, ALL_CHAIN_PLATFORM_DOMAINS, DOH_OVERSEAS);
+  // 严格 AI 域名与支撑平台走域外 DoH，Apple 走域内 DoH。
+  assignNameserverPolicyDomains(policy, ALL_STRICT_SUPPORT_PLATFORM_DOMAIN_PATTERNS, DOH_OVERSEAS);
   assignNameserverPolicyDomains(policy, ALL_APPLE_DOMAINS, DOH_DOMESTIC);
   // Tailscale 控制面与 MagicDNS 域名固定使用域外 DoH，避免被域内解析污染。
   assignNameserverPolicyDomains(policy, ALL_TAILSCALE_DIRECT_DOMAINS, DOH_OVERSEAS);
 
-  // AI 服务走域外 DoH。
-  assignNameserverPolicyDomains(policy, ALL_CHAIN_AI_DOMAINS, DOH_OVERSEAS);
+  // AI 服务与出口验证域名走域外 DoH。
+  assignNameserverPolicyDomains(policy, ALL_STRICT_AI_DOMAIN_PATTERNS, DOH_OVERSEAS);
+  assignNameserverPolicyDomains(policy, ALL_STRICT_VALIDATION_DOMAIN_PATTERNS, DOH_OVERSEAS);
   // 域内 AI 走域内 DoH。
   assignNameserverPolicyDomains(policy, ALL_AI_DOMESTIC_DOMAINS, DOH_DOMESTIC);
   // 流媒体与域外社交走域外 DoH。
-  assignNameserverPolicyDomains(policy, ALL_CHAIN_MEDIA_DOMAINS, DOH_OVERSEAS);
+  assignNameserverPolicyDomains(policy, ALL_NON_STRICT_CHAIN_DOMAIN_PATTERNS, DOH_OVERSEAS);
 
   return policy;
 }
@@ -589,7 +671,10 @@ function buildDnsFakeIpFilter() {
 
 // 构建 `fallback-filter` 使用的域名匹配列表。
 function buildDnsFallbackFilterDomains() {
-  return mergeStringGroups([ALL_CHAIN_DOMAINS, DNS_FALLBACK_EXTRA_DOMAINS]);
+  return mergeStringGroups([
+    ALL_STRICT_DOMAIN_PATTERNS,
+    ALL_NON_STRICT_CHAIN_DOMAIN_PATTERNS,
+  ]);
 }
 
 // 构建 Clash DNS 的 `fallback-filter` 配置对象。
@@ -641,7 +726,7 @@ function buildSnifferConfig() {
       HTTP: { ports: [80, 8080, 8880], "override-destination": true },
       QUIC: { ports: [443] },
     },
-    "force-domain": SNIFFER_FORCE_DOMAINS,
+    "force-domain": ALL_STRICT_SNIFFER_FORCE_DOMAINS,
     "skip-domain": SNIFFER_SKIP_DOMAINS,
   };
 }
@@ -704,6 +789,13 @@ function findProxyByName(proxies, proxyName) {
 // 按名称查找单个代理组。
 function findProxyGroupByName(proxyGroups, groupName) {
   return findNamedItem(proxyGroups, groupName);
+}
+
+// 从代理组列表中移除同名代理组。
+function removeProxyGroupByName(proxyGroups, groupName) {
+  for (var i = proxyGroups.length - 1; i >= 0; i--) {
+    if (proxyGroups[i].name === groupName) proxyGroups.splice(i, 1);
+  }
 }
 
 // 判断给定名称是否在节点或代理组中存在。
@@ -859,6 +951,40 @@ function ensureChainGroup(config, region) {
 
   return chainGroupName;
 }
+
+// 创建或更新脚本内部托管的 `select` 代理组。
+function upsertManagedSelectGroup(config, groupName, proxies) {
+  var proxyGroups = config["proxy-groups"];
+  var managedGroup = findProxyGroupByName(proxyGroups, groupName);
+
+  if (!managedGroup) {
+    proxyGroups.push({
+      name: groupName,
+      type: "select",
+      proxies: proxies.slice(),
+    });
+    return groupName;
+  }
+
+  managedGroup.type = "select";
+  managedGroup.proxies = proxies.slice();
+  return groupName;
+}
+
+// 在严格模式下确保存在专用 AI 托管代理组；兼容模式则移除旧组。
+function resolveStrictAiTarget(config, chainGroupName) {
+  if (!USER_OPTIONS.strictAiRouting) {
+    removeProxyGroupByName(config["proxy-groups"], MANAGED_PROXY_GROUP_NAMES.strictAi);
+    return chainGroupName;
+  }
+
+  return upsertManagedSelectGroup(
+    config,
+    MANAGED_PROXY_GROUP_NAMES.strictAi,
+    [chainGroupName],
+  );
+}
+
 // ---------------------------------------------------------------------------
 // 规则注入（去重 + 置顶）
 // ---------------------------------------------------------------------------
@@ -875,9 +1001,10 @@ function getRuleIdentity(ruleLine) {
 }
 
 // 按固定优先级拼出直连保留项和链式代理两类管理规则。
-function buildManagedRules(chainGroupName) {
+function buildManagedRules(strictAiTarget, chainGroupName) {
   return buildDirectRules()
-    .concat(buildChainProxyRules(chainGroupName));
+    .concat(buildStrictChainRules(strictAiTarget))
+    .concat(buildGeneralChainRules(chainGroupName));
 }
 
 // 把规则数组转换成便于查询的规则标识表。
@@ -912,9 +1039,10 @@ function prependRules(targetRules, rulesToPrepend) {
 // 注入管理规则并整体置顶。
 function injectManagedRules(
   config,
+  strictAiTarget,
   chainGroupName,
 ) {
-  var managedRules = buildManagedRules(chainGroupName);
+  var managedRules = buildManagedRules(strictAiTarget, chainGroupName);
   var managedRuleIdentities = buildRuleIdentityLookup(managedRules);
 
   config.rules = filterConflictingRules(config.rules, managedRuleIdentities);
@@ -1004,24 +1132,53 @@ function addProcessRulesIfNotExists(
   );
 }
 
-// 按当前用户选项返回应纳入链式代理的进程分组。
-function buildChainProxyProcessGroups() {
-  var processGroups = [PROCESS_NAMES_CHAIN_AI_MACOS];
+// 按当前用户选项返回应纳入严格 AI 路由的进程分组。
+function buildStrictProcessGroups() {
+  var processGroups = [ALL_STRICT_PROCESS_NAMES_BASE];
   if (USER_OPTIONS.enableAiCliProcessProxy) {
-    processGroups.push(PROCESS_NAMES_CHAIN_AI_CLI);
+    processGroups.push(
+      excludeStrings(PROCESS_NAMES_CHAIN_AI_CLI, ALL_DIRECT_PROCESS_NAMES),
+    );
   }
-  if (USER_OPTIONS.enableBrowserProcessProxy) {
-    processGroups.push(PROCESS_NAMES_CHAIN_BROWSER_MACOS);
-  }
-  processGroups.push(PROCESS_NAMES_CHAIN_PLATFORM_MACOS);
   return processGroups;
 }
 
-// 统一生成链式代理规则，按用途分类收拢输入，避免重复或冲突。
-function buildChainProxyRules(chainGroupName) {
+// 按当前用户选项返回应继续使用普通链式代理的进程分组。
+function buildGeneralChainProcessGroups() {
+  if (!USER_OPTIONS.enableBrowserProcessProxy) return [];
+  return [ALL_BROWSER_CHAIN_PROCESS_NAMES];
+}
+
+// 统一生成严格 AI 路由规则，按用途分类收拢输入，避免重复或冲突。
+function buildStrictChainRules(strictAiTarget) {
   var ruleLines = [];
   var seenRuleIdentities = {};
-  var processGroups = buildChainProxyProcessGroups();
+  var processGroups = buildStrictProcessGroups();
+  var i;
+
+  for (i = 0; i < processGroups.length; i++) {
+    addProcessRulesIfNotExists(
+      ruleLines,
+      seenRuleIdentities,
+      processGroups[i],
+      strictAiTarget,
+    );
+  }
+
+  addSuffixRulesIfNotExists(
+    ruleLines,
+    seenRuleIdentities,
+    ALL_STRICT_DOMAIN_PATTERNS,
+    strictAiTarget,
+  );
+  return ruleLines;
+}
+
+// 生成非严格链式代理规则，保持既有浏览器与媒体行为。
+function buildGeneralChainRules(chainGroupName) {
+  var ruleLines = [];
+  var seenRuleIdentities = {};
+  var processGroups = buildGeneralChainProcessGroups();
   var i;
 
   for (i = 0; i < processGroups.length; i++) {
@@ -1033,21 +1190,13 @@ function buildChainProxyRules(chainGroupName) {
     );
   }
 
-  for (i = 0; i < CHAIN_PROXY_DOMAIN_GROUPS.length; i++) {
-    addSuffixRulesIfNotExists(
-      ruleLines,
-      seenRuleIdentities,
-      CHAIN_PROXY_DOMAIN_GROUPS[i],
-      chainGroupName,
-    );
-  }
-
   addSuffixRulesIfNotExists(
     ruleLines,
     seenRuleIdentities,
-    CHAIN_PROXY_SUPPORT_SUFFIXES,
+    ALL_NON_STRICT_CHAIN_DOMAIN_PATTERNS,
     chainGroupName,
   );
+
   return ruleLines;
 }
 
@@ -1059,11 +1208,11 @@ function buildDirectRules() {
   var directDomainGroups = DIRECT_DOMAIN_GROUPS;
   var i;
 
-  for (i = 0; i < TAILSCALE_DIRECT_CIDR_RULES.length; i++) {
+  for (i = 0; i < ALL_DIRECT_NETWORK_RULES.length; i++) {
     directNetworkRules.push({
-      type: TAILSCALE_DIRECT_CIDR_RULES[i].type,
-      value: TAILSCALE_DIRECT_CIDR_RULES[i].value,
-      target: TAILSCALE_DIRECT_CIDR_RULES[i].target,
+      type: ALL_DIRECT_NETWORK_RULES[i].type,
+      value: ALL_DIRECT_NETWORK_RULES[i].value,
+      target: ALL_DIRECT_NETWORK_RULES[i].target,
       option: "no-resolve",
     });
   }
@@ -1082,4 +1231,46 @@ function buildDirectRules() {
     );
   }
   return ruleLines;
+}
+
+// 断言单条管理规则已经按预期目标写入最终配置。
+function assertManagedRuleTarget(ruleLines, type, value, target) {
+  var ruleLine = type + "," + value + "," + target;
+  if (ruleLines.indexOf(ruleLine) >= 0) return;
+  throw new Error(
+    "[家宽IP-链式代理] 严格 AI 路由规则未正确写入: " + ruleLine,
+  );
+}
+
+// 在严格模式下验证专用代理组与关键规则目标，避免静默泄漏。
+function validateManagedRouting(config, strictAiTarget, chainGroupName) {
+  if (!USER_OPTIONS.strictAiRouting) return;
+
+  var strictAiGroup = findProxyGroupByName(
+    config["proxy-groups"],
+    MANAGED_PROXY_GROUP_NAMES.strictAi,
+  );
+
+  if (!strictAiGroup) {
+    throw new Error("[家宽IP-链式代理] 严格 AI 代理组缺失");
+  }
+  if (
+    strictAiGroup.type !== "select" ||
+    !strictAiGroup.proxies ||
+    strictAiGroup.proxies.length !== 1 ||
+    strictAiGroup.proxies[0] !== chainGroupName
+  ) {
+    throw new Error(
+      "[家宽IP-链式代理] 严格 AI 代理组未唯一指向当前 chainRegion 出口",
+    );
+  }
+  if (strictAiTarget !== MANAGED_PROXY_GROUP_NAMES.strictAi) {
+    throw new Error(
+      "[家宽IP-链式代理] 严格 AI 路由目标异常: " + strictAiTarget,
+    );
+  }
+
+  assertManagedRuleTarget(config.rules, "DOMAIN-SUFFIX", "claude.ai", strictAiTarget);
+  assertManagedRuleTarget(config.rules, "DOMAIN-SUFFIX", "google.com", strictAiTarget);
+  assertManagedRuleTarget(config.rules, "PROCESS-NAME", "Claude", strictAiTarget);
 }

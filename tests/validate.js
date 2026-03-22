@@ -6,7 +6,10 @@ const vm = require("vm");
 const repoRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(repoRoot, "src", "家宽IP-链式代理.js");
 const scriptCode = fs.readFileSync(scriptPath, "utf8");
+
 const CHAIN_GROUP_NAME = "🇸🇬|新加坡-链式代理-家宽IP出口";
+const RELAY_GROUP_NAME = "🇸🇬|新加坡线路-链式代理-跳板";
+const STRICT_AI_GROUP_NAME = "AI 严格链式代理";
 
 function loadSandbox() {
   const sandbox = {
@@ -73,6 +76,10 @@ function assertRuleMissing(ruleLines, ruleLine) {
   assert(!ruleLines.includes(ruleLine), "Unexpected rule found: " + ruleLine);
 }
 
+function findGroup(output, groupName) {
+  return output["proxy-groups"].find((group) => group.name === groupName);
+}
+
 function assertNameserverPolicyOverseas(output, sandbox, domain) {
   assert.deepStrictEqual(output.dns["nameserver-policy"][domain], sandbox.DOH_OVERSEAS);
 }
@@ -89,33 +96,34 @@ function assertProcessRules(output, enabled, processNames, target) {
   }
 }
 
-function testDefaultConfig() {
+function testDefaultStrictConfig() {
   const sandbox = loadSandbox();
   const config = createBaseConfig();
   const output = sandbox.main(config);
 
+  assert.strictEqual(sandbox.USER_OPTIONS.strictAiRouting, true);
+  assert.strictEqual(sandbox.USER_OPTIONS.enableBrowserProcessProxy, false);
   assert.strictEqual(output._miya, undefined);
   assert.strictEqual(
     output.proxies.find((proxy) => proxy.name === "自选节点 + 家宽IP")["dialer-proxy"],
-    "🇸🇬|新加坡线路-链式代理-跳板",
+    RELAY_GROUP_NAME,
   );
-  assert(output["proxy-groups"].some((group) => group.name === CHAIN_GROUP_NAME));
-  assert(output.rules[0].startsWith("PROCESS-NAME,Tailscale,DIRECT"));
-  assertProcessRules(
-    output,
-    true,
-    [
-      "tailscale",
-      "tailscaled",
-      "IPNExtension",
-      "io.tailscale.ipn.macos.network-extension",
-      "io.tailscale.ipn.macsys.network-extension",
-    ],
-    "DIRECT",
-  );
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,claude.ai," + CHAIN_GROUP_NAME);
+
+  const chainGroup = findGroup(output, CHAIN_GROUP_NAME);
+  const strictAiGroup = findGroup(output, STRICT_AI_GROUP_NAME);
+  assert(chainGroup, "Expected chain group to exist");
+  assert(strictAiGroup, "Expected strict AI group to exist");
+  assert.strictEqual(JSON.stringify(strictAiGroup.proxies), JSON.stringify([CHAIN_GROUP_NAME]));
+
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,claude.ai," + STRICT_AI_GROUP_NAME);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com," + STRICT_AI_GROUP_NAME);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com," + CHAIN_GROUP_NAME);
+  assertRuleExists(output.rules, "PROCESS-NAME,Claude," + STRICT_AI_GROUP_NAME);
+  assertRuleExists(output.rules, "PROCESS-NAME,claude," + STRICT_AI_GROUP_NAME);
+  assertRuleMissing(output.rules, "PROCESS-NAME,Arc," + CHAIN_GROUP_NAME);
   assertRuleMissing(output.rules, "DOMAIN-SUFFIX,claude.ai,DIRECT");
-  assertNoDuplicateRuleIdentities(output.rules.slice(0, 200));
+  assertNoDuplicateRuleIdentities(output.rules.slice(0, 250));
+
   assertRulePrefix(output.rules, [
     "PROCESS-NAME,Tailscale,DIRECT",
     "PROCESS-NAME,tailscale,DIRECT",
@@ -148,31 +156,56 @@ function testDefaultConfig() {
   assert(output.dns["fake-ip-filter"].includes("+.xboxlive.com"));
   assert(output.dns["fake-ip-filter"].includes("stun.*.*"));
   assert(output.dns["fallback-filter"].domain.includes("+.sora.com"));
+  assert(output.dns["fallback-filter"].domain.includes("+.youtube.com"));
+  assert(output.sniffer["force-domain"].includes("+.claude.ai"));
+  assert(output.sniffer["force-domain"].includes("+.google.com"));
   assert(output.sniffer["skip-domain"].includes("+.tailscale.com"));
   assert(output.sniffer["skip-domain"].includes("+.tailscale.io"));
   assert(output.sniffer["skip-domain"].includes("+.ts.net"));
 }
 
-function testDisableBrowserProcessProxy() {
+function testCompatibilityMode() {
   const sandbox = loadSandbox();
-  sandbox.USER_OPTIONS.enableBrowserProcessProxy = false;
+  sandbox.USER_OPTIONS.strictAiRouting = false;
+  const config = createBaseConfig();
+  config["proxy-groups"].push({
+    name: STRICT_AI_GROUP_NAME,
+    type: "select",
+    proxies: ["错误旧组"],
+  });
+  const output = sandbox.main(config);
+
+  assert(!findGroup(output, STRICT_AI_GROUP_NAME), "Compatibility mode should remove strict AI group");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,claude.ai," + CHAIN_GROUP_NAME);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com," + CHAIN_GROUP_NAME);
+  assertRuleExists(output.rules, "PROCESS-NAME,Claude," + CHAIN_GROUP_NAME);
+  assertRuleExists(output.rules, "PROCESS-NAME,claude," + CHAIN_GROUP_NAME);
+  assertNameserverPolicyOverseas(output, sandbox, "+.sora.com");
+  assert(output.dns["fallback-filter"].domain.includes("+.sora.com"));
+  assert(output.sniffer["force-domain"].includes("+.claude.ai"));
+}
+
+function testEnableBrowserProcessProxy() {
+  const sandbox = loadSandbox();
+  sandbox.USER_OPTIONS.enableBrowserProcessProxy = true;
   const output = sandbox.main(createBaseConfig());
 
-  assertProcessRuleToggle(output, false, "Arc", CHAIN_GROUP_NAME);
-  assertProcessRuleToggle(
-    output,
-    false,
-    "Google Chrome",
-    CHAIN_GROUP_NAME,
-  );
-  assertProcessRuleToggle(output, true, "Claude", CHAIN_GROUP_NAME);
+  assertProcessRuleToggle(output, true, "Arc", CHAIN_GROUP_NAME);
+  assertProcessRuleToggle(output, true, "Google Chrome", CHAIN_GROUP_NAME);
+  assertProcessRuleToggle(output, true, "Claude", STRICT_AI_GROUP_NAME);
+  assertProcessRuleToggle(output, false, "Arc", STRICT_AI_GROUP_NAME);
 }
 
 function testAiCliProcessProxyDefaultsOn() {
   const sandbox = loadSandbox();
   const output = sandbox.main(createBaseConfig());
 
-  assertProcessRules(output, true, ["claude", "opencode", "gemini", "codex"], CHAIN_GROUP_NAME);
+  assertProcessRules(
+    output,
+    true,
+    ["claude", "opencode", "gemini", "codex"],
+    STRICT_AI_GROUP_NAME,
+  );
 }
 
 function testDisableAiCliProcessProxy() {
@@ -180,7 +213,12 @@ function testDisableAiCliProcessProxy() {
   sandbox.USER_OPTIONS.enableAiCliProcessProxy = false;
   const output = sandbox.main(createBaseConfig());
 
-  assertProcessRules(output, false, ["claude", "opencode", "gemini", "codex"], CHAIN_GROUP_NAME);
+  assertProcessRules(
+    output,
+    false,
+    ["claude", "opencode", "gemini", "codex"],
+    STRICT_AI_GROUP_NAME,
+  );
 }
 
 function testMissingRegionFails() {
@@ -206,11 +244,25 @@ function testInvalidManualNodeFails() {
   );
 }
 
-testDefaultConfig();
-testDisableBrowserProcessProxy();
+function testMissingStrictAiTargetFails() {
+  const sandbox = loadSandbox();
+  sandbox.resolveStrictAiTarget = function () {
+    return CHAIN_GROUP_NAME;
+  };
+
+  assert.throws(
+    () => sandbox.main(createBaseConfig()),
+    /严格 AI 代理组缺失/,
+  );
+}
+
+testDefaultStrictConfig();
+testCompatibilityMode();
+testEnableBrowserProcessProxy();
 testAiCliProcessProxyDefaultsOn();
 testDisableAiCliProcessProxy();
 testMissingRegionFails();
 testInvalidManualNodeFails();
+testMissingStrictAiTargetFails();
 
 console.log("validate.js: all checks passed");
