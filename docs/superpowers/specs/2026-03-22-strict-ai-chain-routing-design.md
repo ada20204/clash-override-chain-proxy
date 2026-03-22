@@ -214,6 +214,10 @@ Build a single canonical data source for:
 DNS, Sniffer, rule generation, and tests should derive from the same data source
 instead of maintaining partially overlapping lists.
 
+For planning purposes, the extraction starts from the existing domain/process
+constants in `src/家宽IP-链式代理.js`, then consolidates them into one canonical
+source used by all downstream stages.
+
 ### Stage 2: DNS and Sniffer enforcement
 
 Generate DNS and Sniffer configuration from the canonical strict/direct sets.
@@ -287,9 +291,12 @@ When `strictAiRouting` is `true`, the script must enforce the full strict path:
 When `strictAiRouting` is `false`, the script enters an explicit compatibility
 mode with a weaker contract:
 
-- AI-related traffic may still be routed by managed process and domain rules
-- the dedicated strict AI proxy group is not required
-- fail-closed validation for strict-path construction is not required
+- AI-related traffic is still routed by managed process and domain rules, but
+  those rules target the current `chainRegion` chain exit group directly rather
+  than a dedicated strict AI proxy group
+- the dedicated strict AI proxy group is not created
+- fail-closed validation is limited to existing baseline checks such as selected
+  region relay resolution and valid `manualNode` lookup
 - the repository no longer guarantees that all managed AI/support traffic uses
   only the selected chain exit
 
