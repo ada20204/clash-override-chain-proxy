@@ -67,16 +67,17 @@ var URL_TEST_PROBE_URL = "http://www.gstatic.com/generate_204";
 // 识别 MiyaIP 自身节点时使用的名称关键字。
 var MIYA_PROXY_NAME_KEYWORD = "MiyaIP";
 
+// 用户可见错误统一前缀。
+var ERROR_PREFIX = "[家宽IP-链式代理] ";
+
 // 脚本生成的各类代理组名称后缀。
 var GROUP_NAME_SUFFIXES = {
   relay: "线路-链式代理-跳板",
   chain: "-链式代理-家宽IP出口",
 };
 
-// 兼容旧版本时需要清理的废弃托管代理组名称。
-var MANAGED_PROXY_GROUP_NAMES = {
-  strictAi: "AI 严格链式代理",
-};
+// 兼容旧版本时需要清理的废弃代理组名称。
+var LEGACY_PROXY_GROUP_NAMES = ["AI 严格链式代理"];
 
 // ---------------------------------------------------------------------------
 // DNS 域名组常量
@@ -372,17 +373,6 @@ var PROCESS_NAMES_OFFICE_DOMESTIC_MACOS = [
   "WPS Office Helper",
 ];
 
-// 域内办公软件常见 macOS App / 进程名对应的直连规则。
-var OFFICE_DOMESTIC_DIRECT_PROCESS_RULES = PROCESS_NAMES_OFFICE_DOMESTIC_MACOS.map(
-  function (processName) {
-    return {
-      type: "PROCESS-NAME",
-      value: processName,
-      target: RULE_TARGET_DIRECT,
-    };
-  }
-);
-
 // Tailscale 控制面域名与 MagicDNS Tailnet 域名，固定保持 DIRECT。
 var TAILSCALE_DIRECT_DOMAINS = ["+.tailscale.com", "+.tailscale.io", "+.ts.net"];
 
@@ -471,6 +461,33 @@ function flattenGroupedDomains(groupedDomains) {
   return uniqueStrings(flattenedDomains);
 }
 
+// 为统一错误文案构建 Error 对象。
+function createUserError(message) {
+  return new Error(ERROR_PREFIX + message);
+}
+
+// 把一组进程名批量转成原生 `PROCESS-NAME` 规则。
+function buildDirectProcessRules(processNames) {
+  var rawRules = [];
+  for (var i = 0; i < processNames.length; i++) {
+    rawRules.push({
+      type: "PROCESS-NAME",
+      value: processNames[i],
+      target: RULE_TARGET_DIRECT,
+    });
+  }
+  return rawRules;
+}
+
+// 合并多组原生规则对象并保持稳定顺序。
+function mergeRawRuleGroups(rawRuleGroups) {
+  var mergedRules = [];
+  for (var i = 0; i < rawRuleGroups.length; i++) {
+    mergedRules.push.apply(mergedRules, rawRuleGroups[i]);
+  }
+  return mergedRules;
+}
+
 // 展平后的 Apple 域名列表，供 DNS 和规则注入复用。
 var ALL_APPLE_DOMAINS = flattenGroupedDomains(DOMAINS_APPLE);
 
@@ -509,6 +526,12 @@ var DIRECT_DOMAIN_GROUPS = [
   ALL_DIRECT_EXTRA_DOMAINS,
 ];
 
+// 需要直连的原生进程规则分组，按用途分类收拢输入。
+var DIRECT_PROCESS_RULE_GROUPS = [
+  TAILSCALE_DIRECT_PROCESS_RULES,
+  buildDirectProcessRules(PROCESS_NAMES_OFFICE_DOMESTIC_MACOS),
+];
+
 // 链式代理出口测试与通用静态资源域名。
 var CHAIN_PROXY_SUPPORT_SUFFIXES = uniqueStrings([
   "cdn.cloudflare.net",
@@ -543,7 +566,7 @@ var SNIFFER_SKIP_DOMAINS = uniqueStrings(
 // 统一收拢直连对象，作为冲突裁决和后续生成的单一来源。
 var ALL_DIRECT_DOMAIN_PATTERNS = mergeStringGroups(DIRECT_DOMAIN_GROUPS);
 var ALL_DIRECT_PROCESS_NAMES = extractRawRuleValues(
-  TAILSCALE_DIRECT_PROCESS_RULES.concat(OFFICE_DOMESTIC_DIRECT_PROCESS_RULES),
+  mergeRawRuleGroups(DIRECT_PROCESS_RULE_GROUPS),
   "PROCESS-NAME",
 );
 var ALL_DIRECT_NETWORK_RULES = TAILSCALE_DIRECT_CIDR_RULES.slice();
@@ -590,6 +613,31 @@ var ALL_STRICT_SNIFFER_FORCE_DOMAINS = mergeStringGroups([
   ALL_STRICT_DOMAIN_PATTERNS,
 ]);
 
+// 规则与 DNS/Sniffer 统一读取这几个总入口，避免各处分散引用。
+var ROUTING_DOMAIN_SOURCES = {
+  direct: DIRECT_DOMAIN_GROUPS,
+  strict: {
+    ai: ALL_STRICT_AI_DOMAIN_PATTERNS,
+    support: ALL_STRICT_SUPPORT_PLATFORM_DOMAIN_PATTERNS,
+    validation: ALL_STRICT_VALIDATION_DOMAIN_PATTERNS,
+    all: ALL_STRICT_DOMAIN_PATTERNS,
+  },
+  generalChain: ALL_NON_STRICT_CHAIN_DOMAIN_PATTERNS,
+};
+
+var ROUTING_PROCESS_SOURCES = {
+  directRules: DIRECT_PROCESS_RULE_GROUPS,
+  strictBase: ALL_STRICT_PROCESS_NAMES_BASE,
+  strictOptionalAiCli: PROCESS_NAMES_CHAIN_AI_CLI,
+  generalBrowser: ALL_BROWSER_CHAIN_PROCESS_NAMES,
+};
+
+var MANAGED_RULE_ASSERTIONS = [
+  { type: "DOMAIN-SUFFIX", value: "claude.ai" },
+  { type: "DOMAIN-SUFFIX", value: "google.com" },
+  { type: "PROCESS-NAME", value: "Claude" },
+];
+
 // ---------------------------------------------------------------------------
 // 主入口
 // ---------------------------------------------------------------------------
@@ -602,22 +650,19 @@ function toSuffix(domainPattern) {
 // 按固定顺序执行凭证读取、DNS/Sniffer 注入、代理链路注入和规则注入。
 function main(config) {
   var miyaCredentials = takeMiyaCredentials(config);
+  var routingTargets;
 
+  initializeManagedConfig(config);
   applyDnsAndSniffer(config);
-  ensureProxyContainers(config);
   injectMiyaProxies(config, miyaCredentials);
 
-  var relayTarget = resolveRelayTarget(
+  routingTargets = resolveRoutingTargets(
     config,
     USER_OPTIONS.chainRegion,
     USER_OPTIONS.manualNode,
   );
-  bindDialerProxy(config, relayTarget);
-
-  var chainGroupName = ensureChainGroup(config, USER_OPTIONS.chainRegion);
-  var strictAiTarget = resolveStrictAiTarget(config, chainGroupName);
-  injectManagedRules(config, strictAiTarget, chainGroupName);
-  validateManagedRouting(config, strictAiTarget, chainGroupName);
+  applyManagedRouting(config, routingTargets);
+  validateManagedRouting(config, routingTargets);
 
   return config;
 }
@@ -629,8 +674,8 @@ function main(config) {
 // 读取并移除注入到 `config._miya` 的 MiyaIP 凭证。
 function takeMiyaCredentials(config) {
   if (!config._miya) {
-    throw new Error(
-      "[家宽IP-链式代理] 缺少 config._miya，请确保 MiyaIP 凭证.js 已启用且排序在本脚本之前",
+    throw createUserError(
+      "缺少 config._miya，请确保 MiyaIP 凭证.js 已启用且排序在本脚本之前",
     );
   }
   var miyaCredentials = config._miya;
@@ -648,6 +693,12 @@ function applyDnsAndSniffer(config) {
   config.sniffer = buildSnifferConfig();
 }
 
+// 在所有修改前确保主配置存在脚本依赖的基础容器。
+function initializeManagedConfig(config) {
+  ensureProxyContainers(config);
+  removeLegacyProxyGroups(config["proxy-groups"]);
+}
+
 // 把一组域名统一绑定到同一套 DoH 服务器。
 function assignNameserverPolicyDomains(policy, domains, dohServers) {
   for (var i = 0; i < domains.length; i++) {
@@ -662,20 +713,32 @@ function buildNameserverPolicy() {
   };
 
   // 严格 AI 域名与支撑平台走域外 DoH，Apple 走域内 DoH。
-  assignNameserverPolicyDomains(policy, ALL_STRICT_SUPPORT_PLATFORM_DOMAIN_PATTERNS, DOH_OVERSEAS);
+  assignNameserverPolicyDomains(
+    policy,
+    ROUTING_DOMAIN_SOURCES.strict.support,
+    DOH_OVERSEAS,
+  );
   assignNameserverPolicyDomains(policy, ALL_APPLE_DOMAINS, DOH_DOMESTIC);
   // Tailscale 控制面与 MagicDNS 域名固定使用域外 DoH，避免被域内解析污染。
   assignNameserverPolicyDomains(policy, ALL_TAILSCALE_DIRECT_DOMAINS, DOH_OVERSEAS);
 
   // AI 服务与出口验证域名走域外 DoH。
-  assignNameserverPolicyDomains(policy, ALL_STRICT_AI_DOMAIN_PATTERNS, DOH_OVERSEAS);
-  assignNameserverPolicyDomains(policy, ALL_STRICT_VALIDATION_DOMAIN_PATTERNS, DOH_OVERSEAS);
+  assignNameserverPolicyDomains(policy, ROUTING_DOMAIN_SOURCES.strict.ai, DOH_OVERSEAS);
+  assignNameserverPolicyDomains(
+    policy,
+    ROUTING_DOMAIN_SOURCES.strict.validation,
+    DOH_OVERSEAS,
+  );
   // 域内 AI 走域内 DoH。
   assignNameserverPolicyDomains(policy, ALL_AI_DOMESTIC_DOMAINS, DOH_DOMESTIC);
   // 域内办公软件走域内 DoH。
   assignNameserverPolicyDomains(policy, ALL_OFFICE_DOMESTIC_DOMAINS, DOH_DOMESTIC);
   // 流媒体与域外社交走域外 DoH。
-  assignNameserverPolicyDomains(policy, ALL_NON_STRICT_CHAIN_DOMAIN_PATTERNS, DOH_OVERSEAS);
+  assignNameserverPolicyDomains(
+    policy,
+    ROUTING_DOMAIN_SOURCES.generalChain,
+    DOH_OVERSEAS,
+  );
 
   return policy;
 }
@@ -867,6 +930,13 @@ function removeProxyGroupByName(proxyGroups, groupName) {
   }
 }
 
+// 清理旧版遗留代理组，避免旧配置残留影响当前行为。
+function removeLegacyProxyGroups(proxyGroups) {
+  for (var i = 0; i < LEGACY_PROXY_GROUP_NAMES.length; i++) {
+    removeProxyGroupByName(proxyGroups, LEGACY_PROXY_GROUP_NAMES[i]);
+  }
+}
+
 // 判断给定名称是否在节点或代理组中存在。
 function hasProxyOrGroup(config, targetName) {
   return !!(
@@ -971,8 +1041,10 @@ function resolveRelayTarget(config, region, manualNode) {
   if (manualNode) {
     relayTarget = manualNode;
     if (!hasProxyOrGroup(config, relayTarget)) {
-      throw new Error(
-        "[家宽IP-链式代理] manualNode 未命中现有节点或代理组: " + relayTarget,
+      throw createUserError(
+        "manualNode 未命中现有节点或代理组: " +
+          relayTarget +
+          "，请改成 Clash Party 中实际存在的节点名或留空自动选择",
       );
     }
     return relayTarget;
@@ -980,10 +1052,10 @@ function resolveRelayTarget(config, region, manualNode) {
 
   relayTarget = ensureRegionGroup(config, region, GROUP_NAME_SUFFIXES.relay, true);
   if (!relayTarget) {
-    throw new Error(
-      "[家宽IP-链式代理] 未找到可用的 " +
+    throw createUserError(
+      "未找到可用的 " +
         region +
-        " 跳板节点或代理组，请检查 chainRegion 或改用 manualNode",
+        " 跳板节点或代理组，请检查 chainRegion 是否与订阅地区一致，或显式填写 manualNode",
     );
   }
   return relayTarget;
@@ -1021,10 +1093,25 @@ function ensureChainGroup(config, region) {
   return chainGroupName;
 }
 
-// 清理旧版显式 AI 代理组；当前严格模式直接指向所选 chainRegion 出口。
-function resolveStrictAiTarget(config, chainGroupName) {
-  removeProxyGroupByName(config["proxy-groups"], MANAGED_PROXY_GROUP_NAMES.strictAi);
-  return chainGroupName;
+// 统一解析本轮注入所需的关键目标，减少主流程里的状态分散。
+function resolveRoutingTargets(config, region, manualNode) {
+  var relayTarget = resolveRelayTarget(config, region, manualNode);
+  var chainGroupName = ensureChainGroup(config, region);
+  return {
+    relayTarget: relayTarget,
+    chainGroupName: chainGroupName,
+    strictAiTarget: chainGroupName,
+  };
+}
+
+// 把代理链路绑定与管理规则注入收口到一个装配步骤。
+function applyManagedRouting(config, routingTargets) {
+  bindDialerProxy(config, routingTargets.relayTarget);
+  injectManagedRules(
+    config,
+    routingTargets.strictAiTarget,
+    routingTargets.chainGroupName,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1176,10 +1263,13 @@ function addProcessRulesIfNotExists(
 
 // 按当前用户选项返回应纳入严格 AI 路由的进程分组。
 function buildStrictProcessGroups() {
-  var processGroups = [ALL_STRICT_PROCESS_NAMES_BASE];
+  var processGroups = [ROUTING_PROCESS_SOURCES.strictBase];
   if (USER_OPTIONS.enableAiCliProcessProxy) {
     processGroups.push(
-      excludeStrings(PROCESS_NAMES_CHAIN_AI_CLI, ALL_DIRECT_PROCESS_NAMES),
+      excludeStrings(
+        ROUTING_PROCESS_SOURCES.strictOptionalAiCli,
+        ALL_DIRECT_PROCESS_NAMES,
+      ),
     );
   }
   return processGroups;
@@ -1188,7 +1278,7 @@ function buildStrictProcessGroups() {
 // 按当前用户选项返回应继续使用普通链式代理的进程分组。
 function buildGeneralChainProcessGroups() {
   if (!USER_OPTIONS.enableBrowserProcessProxy) return [];
-  return [ALL_BROWSER_CHAIN_PROCESS_NAMES];
+  return [ROUTING_PROCESS_SOURCES.generalBrowser];
 }
 
 // 统一生成严格 AI 路由规则，按用途分类收拢输入，避免重复或冲突。
@@ -1210,7 +1300,7 @@ function buildStrictChainRules(strictAiTarget) {
   addSuffixRulesIfNotExists(
     ruleLines,
     seenRuleIdentities,
-    ALL_STRICT_DOMAIN_PATTERNS,
+    ROUTING_DOMAIN_SOURCES.strict.all,
     strictAiTarget,
   );
   return ruleLines;
@@ -1235,7 +1325,7 @@ function buildGeneralChainRules(chainGroupName) {
   addSuffixRulesIfNotExists(
     ruleLines,
     seenRuleIdentities,
-    ALL_NON_STRICT_CHAIN_DOMAIN_PATTERNS,
+    ROUTING_DOMAIN_SOURCES.generalChain,
     chainGroupName,
   );
 
@@ -1247,7 +1337,7 @@ function buildDirectRules() {
   var ruleLines = [];
   var seenRuleIdentities = {};
   var directNetworkRules = [];
-  var directDomainGroups = DIRECT_DOMAIN_GROUPS;
+  var directDomainGroups = ROUTING_DOMAIN_SOURCES.direct;
   var i;
 
   for (i = 0; i < ALL_DIRECT_NETWORK_RULES.length; i++) {
@@ -1262,9 +1352,7 @@ function buildDirectRules() {
   addRawRulesIfNotExists(
     ruleLines,
     seenRuleIdentities,
-    TAILSCALE_DIRECT_PROCESS_RULES
-      .concat(OFFICE_DOMESTIC_DIRECT_PROCESS_RULES)
-      .concat(directNetworkRules),
+    mergeRawRuleGroups(ROUTING_PROCESS_SOURCES.directRules).concat(directNetworkRules),
   );
   for (i = 0; i < directDomainGroups.length; i++) {
     addSuffixRulesIfNotExists(
@@ -1281,25 +1369,37 @@ function buildDirectRules() {
 function assertManagedRuleTarget(ruleLines, type, value, target) {
   var ruleLine = type + "," + value + "," + target;
   if (ruleLines.indexOf(ruleLine) >= 0) return;
-  throw new Error(
-    "[家宽IP-链式代理] 严格 AI 路由规则未正确写入: " + ruleLine,
+  throw createUserError(
+    "关键规则未正确写入: " + ruleLine + "，请检查 chainRegion、manualNode 和订阅代理组",
   );
 }
 
 // 验证关键 AI 规则目标，避免静默泄漏或错误地区回退。
-function validateManagedRouting(config, strictAiTarget, chainGroupName) {
-  if (findProxyGroupByName(config["proxy-groups"], MANAGED_PROXY_GROUP_NAMES.strictAi)) {
-    throw new Error(
-      "[家宽IP-链式代理] 遗留的 AI 严格链式代理组未被清理",
-    );
+function validateManagedRouting(config, routingTargets) {
+  var i;
+
+  for (i = 0; i < LEGACY_PROXY_GROUP_NAMES.length; i++) {
+    if (findProxyGroupByName(config["proxy-groups"], LEGACY_PROXY_GROUP_NAMES[i])) {
+      throw createUserError(
+        "遗留旧版代理组未被清理: " +
+          LEGACY_PROXY_GROUP_NAMES[i] +
+          "，请检查当前覆写脚本是否仍在重复注入旧规则",
+      );
+    }
   }
-  if (strictAiTarget !== chainGroupName) {
-    throw new Error(
-      "[家宽IP-链式代理] 严格 AI 路由未直接指向当前 chainRegion 出口",
+
+  if (routingTargets.strictAiTarget !== routingTargets.chainGroupName) {
+    throw createUserError(
+      "域外 AI 与支撑平台未直接指向当前 chainRegion 出口，请检查 chainRegion 或代理组注入逻辑",
     );
   }
 
-  assertManagedRuleTarget(config.rules, "DOMAIN-SUFFIX", "claude.ai", strictAiTarget);
-  assertManagedRuleTarget(config.rules, "DOMAIN-SUFFIX", "google.com", strictAiTarget);
-  assertManagedRuleTarget(config.rules, "PROCESS-NAME", "Claude", strictAiTarget);
+  for (i = 0; i < MANAGED_RULE_ASSERTIONS.length; i++) {
+    assertManagedRuleTarget(
+      config.rules,
+      MANAGED_RULE_ASSERTIONS[i].type,
+      MANAGED_RULE_ASSERTIONS[i].value,
+      routingTargets.strictAiTarget,
+    );
+  }
 }
