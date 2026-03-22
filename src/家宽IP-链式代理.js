@@ -105,7 +105,10 @@ var DOH_FALLBACK = DOH_OVERSEAS.concat(["https://dns.quad9.net/dns-query"]);
 
 // Apple 生态相关域名分类。
 var DOMAINS_APPLE = {
-  core: ["+.apple.com", "+.icloud.com"],
+  core: [
+    "+.apple.com",
+    "+.icloud.com"
+  ],
   content: [
     "+.icloud-content.com",
     "+.mzstatic.com",
@@ -118,15 +121,32 @@ var DOMAINS_APPLE = {
 // 需要统一走链式代理的基础平台域名。
 var DOMAINS_CHAIN_PLATFORM = {
   // Google 官方主域与官方 API / 内容分发基础设施。
-  google_core: ["+.google.com", "+.googleapis.com", "+.googleusercontent.com"],
+  google_core: [
+    "+.google.com",
+    "+.googleapis.com",
+    "+.googleusercontent.com"
+  ],
   // Google 官方静态资源与下载分发基础设施。
-  google_static: ["+.gstatic.com", "+.ggpht.com", "+.gvt1.com", "+.gvt2.com"],
+  google_static: [
+    "+.gstatic.com",
+    "+.ggpht.com",
+    "+.gvt1.com",
+    "+.gvt2.com"
+  ],
   // `withgoogle.com` 为 Google 官方活动与推广站点；`googleworkspace.com`
   // 公开一方证据不足，避免作为默认规则注入。
-  google_workspace: ["+.withgoogle.com"],
-  google_cloud: ["+.cloud.google.com"],
+  google_workspace: [
+    "+.withgoogle.com"
+  ],
+  google_cloud: [
+    "+.cloud.google.com"
+  ],
   // Microsoft 官方主域与官方基础设施入口；`windows.net` 属于官方基础设施宽域名。
-  microsoft_core: ["+.microsoft.com", "+.live.com", "+.windows.net"],
+  microsoft_core: [
+    "+.microsoft.com",
+    "+.live.com",
+    "+.windows.net"
+  ],
   microsoft_productivity: [
     "+.office.com",
     "+.office.net",
@@ -148,7 +168,9 @@ var DOMAINS_CHAIN_PLATFORM = {
     "+.vsassets.io",
     "+.vsmarketplacebadges.dev"
   ],
-  developer: ["+.github.com"]
+  developer: [
+    "+.github.com"
+  ]
 };
 
 // 需要统一走链式代理的 AI 服务域名。
@@ -191,11 +213,21 @@ var DOMAINS_CHAIN_AI = {
   ],
 
   // `perplexitycdn.com` 为 Perplexity 资源分发域名。
-  perplexity: ["+.perplexity.ai", "+.perplexitycdn.com"],
+  perplexity: [
+    "+.perplexity.ai",
+    "+.perplexitycdn.com"
+  ],
 
-  router_and_tools: ["+.openrouter.ai"],
+  router_and_tools: [
+    "+.openrouter.ai"
+  ],
 
-  xai: ["+.x.ai", "+.grok.com", "+.console.x.ai", "+.api.x.ai"]
+  xai: [
+    "+.x.ai",
+    "+.grok.com",
+    "+.console.x.ai",
+    "+.api.x.ai"
+  ]
 };
 
 // 需要统一走链式代理的 macOS AI 服务 App / 进程名。
@@ -247,7 +279,12 @@ var DOMAINS_CHAIN_MEDIA = {
     "+.nflximg.com",
     "+.nflxext.com"
   ],
-  twitter: ["+.twitter.com", "+.x.com", "+.twimg.com", "+.t.co"],
+  twitter: [
+    "+.twitter.com",
+    "+.x.com",
+    "+.twimg.com",
+    "+.t.co"
+  ],
   facebook: [
     "+.facebook.com",
     "+.fbcdn.net",
@@ -256,7 +293,12 @@ var DOMAINS_CHAIN_MEDIA = {
     "+.instagram.com",
     "+.cdninstagram.com"
   ],
-  telegram: ["+.telegram.org", "+.t.me", "+.telegra.ph", "+.telesco.pe"],
+  telegram: [
+    "+.telegram.org",
+    "+.t.me",
+    "+.telegra.ph",
+    "+.telesco.pe"
+  ],
   discord: [
     "+.discord.com",
     "+.discord.gg",
@@ -273,9 +315,17 @@ var DOMAINS_AI_DOMESTIC = {
     "+.qianwen.aliyun.com",
     "+.dashscope.aliyuncs.com"
   ],
-  moonshot: ["+.moonshot.cn"],
-  zhipu: ["+.chatglm.cn", "+.zhipuai.cn", "+.bigmodel.cn"],
-  siliconflow: ["+.siliconflow.cn"]
+  moonshot: [
+    "+.moonshot.cn"
+  ],
+  zhipu: [
+    "+.chatglm.cn",
+    "+.zhipuai.cn",
+    "+.bigmodel.cn"
+  ],
+  siliconflow: [
+    "+.siliconflow.cn"
+  ]
 };
 
 // 域内办公软件与协作平台域名，固定保持 DIRECT。
@@ -309,14 +359,23 @@ var DOMAINS_OFFICE_DOMESTIC = {
     "+.larkoffice.com"
   ],
   wps_productivity: [
-    "+.wps.cn", "+.wps.com", "+.kdocs.cn", "+.kdocs.com"
+    "+.wps.cn",
+    "+.wps.com",
+    "+.kdocs.cn",
+    "+.kdocs.com"
   ]
 };
 
 // 域外应用直连域名，当前先实装 Tailscale；Typeless 预留到后续补充。
 var DOMAINS_APPS_OVERSEAS_DIRECT = {
-  tailscale: ["+.tailscale.com", "+.tailscale.io", "+.ts.net"],
-  typeless: ["+.typeless.com"]
+  tailscale: [
+    "+.tailscale.com",
+    "+.tailscale.io",
+    "+.ts.net"
+  ],
+  typeless: [
+    "+.typeless.com"
+  ]
 };
 
 // 网络地址直连，当前主要用于 Tailnet 地址段。
@@ -431,7 +490,8 @@ var DIRECT_DOMAIN_SOURCES = {
 // DNS `fallback-filter` 额外补充的域名模式。
 var DNS_FALLBACK_EXTRA_DOMAINS = uniqueStrings([
   "+.cdn.cloudflare.net",
-  "ping0.cc", "ipinfo.io"
+  "ping0.cc",
+  "ipinfo.io"
 ]);
 
 // Sniffer 强制保留域名语义的域名模式。
