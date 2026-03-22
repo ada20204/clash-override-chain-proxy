@@ -14,7 +14,7 @@ Implement strict AI chain routing without changing the user's core workflow:
   through the selected region's chain path
 - if that strict path cannot be honored, the script must fail closed
 - when `strictAiRouting=false`, compatibility mode keeps existing chain-region
-  behavior with weaker guarantees and without the dedicated strict AI group
+  behavior with weaker guarantees and without the extra strict-mode validation layer
 
 The work should preserve current non-AI routing behavior unless a small change
 is required to avoid regressions while introducing the strict AI path.
@@ -90,29 +90,28 @@ Acceptance criteria:
   expected direct/sniffer exclusion paths
 - `strictAiRouting=false` does not weaken canonical DNS and Sniffer generation
 
-### Phase 3: Introduce the dedicated strict AI proxy group
+### Phase 3: Resolve the strict target directly
 
 Goal:
-Add the isolated proxy-group layer used only in strict mode.
+Lock strict AI/support traffic directly to the selected chain exit without an
+extra proxy-group hop.
 
 Planned changes:
 
-- Add a dedicated strict AI group name constant
 - Build or validate:
   - current region relay group
   - current region chain exit group
-  - strict AI proxy group
 - In strict mode:
-  - strict AI proxy group must exist
-  - strict AI proxy group must point only to the selected chain exit group
+  - managed AI/support rules must target the selected region chain exit group directly
+  - any legacy explicit AI proxy group must be removed from the generated config
 - In compatibility mode:
-  - do not create the strict AI group
-  - managed AI/support rules target the selected region chain exit group directly
+  - managed AI/support rules still target the selected region chain exit group directly
+  - no extra strict-mode validation layer is required
 
 Acceptance criteria:
 
-- Strict mode has exactly one dedicated target group for managed AI/support traffic
-- Compatibility mode has no dedicated strict AI group
+- Strict mode targets the selected chain exit directly
+- Compatibility mode has the same emitted target but weaker validation guarantees
 - Neither mode silently routes strict AI/support traffic to `DIRECT`, `节点选择`,
   or a different region
 
@@ -129,7 +128,7 @@ Planned changes:
   - strict AI/support domain rules
   - non-AI managed categories that remain behaviorally unchanged
 - Add a clear target resolver:
-  - strict mode target = dedicated strict AI group
+  - strict mode target = selected region chain exit group
   - compatibility mode target = selected region chain exit group
 - Keep rule ordering deterministic:
   - direct-only protections first
@@ -155,8 +154,8 @@ Planned changes:
 - Add explicit validation helpers for:
   - selected region relay resolution
   - valid `manualNode`
-  - strict AI group presence
-  - strict AI group membership correctness
+  - direct strict-target correctness for key managed rules
+  - removal of any legacy explicit AI proxy group
   - absence of target leakage for key managed rules
 - Keep compatibility mode on baseline checks only:
   - selected region relay resolution
@@ -176,11 +175,9 @@ Turn `tests/validate.js` into a strict-routing safety net.
 Planned tests:
 
 - strict mode default path
-  - strict AI group exists
-  - strict AI group points only to the selected chain exit
-  - key AI/support domains map to the strict AI group
+  - no legacy explicit AI proxy group remains
+  - key AI/support domains map directly to the selected chain exit
 - compatibility mode path
-  - no strict AI group exists
   - key AI/support rules target the selected chain exit group directly
   - DNS and Sniffer outputs remain canonical
 - direct-only protection
@@ -191,7 +188,6 @@ Planned tests:
 - hard failure cases
   - missing region relay
   - invalid `manualNode`
-  - malformed strict AI group
   - strict target mismatch
 - leakage checks
   - key AI/support domains do not remain mapped to `DIRECT`, old subscription
@@ -214,11 +210,10 @@ Planned changes:
 - Document `strictAiRouting` as a user-visible option
 - Explain strict mode:
   - selected `chainRegion`
-  - dedicated strict AI path
+  - direct lock to the selected chain exit
   - fail-closed behavior
 - Explain compatibility mode:
   - same selected region
-  - no dedicated strict AI group
   - weaker guarantees
 - Clarify what this repository does and does not promise
 - Add a validation checklist for:
@@ -239,7 +234,7 @@ Acceptance criteria:
 - Add `strictAiRouting` to `USER_OPTIONS`
 - Introduce canonical strict/direct data buckets
 - Add target-resolution helpers for strict vs compatibility mode
-- Add dedicated strict AI proxy group construction
+- Remove any legacy explicit AI proxy group from generated output
 - Refactor DNS, Sniffer, and rule generation to read from canonical data
 - Add strict validation helpers and mode-aware failure behavior
 
@@ -247,8 +242,9 @@ Acceptance criteria:
 
 - Extend test fixtures for strict mode and compatibility mode
 - Add explicit assertions for:
-  - strict AI proxy group existence and membership
+  - strict mode direct-to-chain-exit targeting
   - compatibility mode direct-to-chain-exit targeting
+  - legacy explicit AI proxy group removal
   - direct-only precedence
   - no leakage
   - hard failure behavior
@@ -264,7 +260,7 @@ Acceptance criteria:
 
 1. Add canonical routing data and `strictAiRouting`
 2. Refactor DNS and Sniffer to consume canonical data
-3. Add strict AI proxy group construction and target resolution
+3. Add direct strict-target resolution and legacy group cleanup
 4. Refactor managed rule emission around mode-aware targets
 5. Add strict validation helpers
 6. Expand tests until both modes are covered
@@ -288,7 +284,7 @@ ensures tests land before user-facing wording is finalized.
 - Validate key outputs at multiple layers:
   - DNS
   - Sniffer
-  - proxy groups
+  - proxy-group cleanup
   - rules
 
 ## Plan Exit Criteria

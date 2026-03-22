@@ -18,9 +18,9 @@ The design combines two enforcement strategies:
 
 1. Rule enforcement: AI and related traffic must be explicitly captured by
    managed DNS, Sniffer, process, and domain rules.
-2. Isolated proxy group enforcement: all managed AI-related traffic must target
-   a dedicated strict routing group that can only point to the chain proxy exit
-   for the currently selected `chainRegion`.
+2. Fail-closed direct-target enforcement: in strict mode, all managed
+   AI-related traffic must target the chain proxy exit for the currently
+   selected `chainRegion` directly, and the script must refuse silent fallback.
 
 ## Goals
 
@@ -103,24 +103,25 @@ Direct-only exclusions must be reflected in:
 - direct DNS-related behavior
 - `sniffer.skip-domain`
 
-### 4. Use an isolated strict proxy group
+### 4. Use direct strict targeting
 
-Managed AI-related traffic should not target region-specific exit groups directly.
-Instead, all such traffic should target a dedicated strict routing group, such as
-`AI 严格链式代理`.
+Managed AI-related traffic should target the selected region chain exit group
+directly in the final emitted rules.
 
-That dedicated group must resolve to exactly one valid path:
+That target must resolve to exactly one valid path:
 
 - the chain exit for the currently selected `chainRegion`
 
-It must not quietly include:
+The script must not quietly degrade that target to:
 
 - `节点选择`
 - unrelated regional groups
 - a general-purpose fallback proxy
 - `DIRECT`
 
-This separation makes intent clearer and makes tests easier to express.
+If an old explicit AI proxy group exists from a previous version, the script
+should remove it during generation so the final config does not carry redundant
+or misleading routing layers.
 
 ### 5. Fail closed
 
@@ -131,8 +132,8 @@ This includes at least:
 
 - selected region has no usable relay node or reusable region group
 - `manualNode` does not resolve to an existing node or proxy group
-- the strict AI group cannot be created
-- the strict AI group does not point only to the selected chain exit
+- strict AI rules do not target the selected chain exit directly
+- a legacy explicit AI proxy group remains present in the generated config
 - managed AI rules would otherwise fall through to existing subscription rules
 
 The repository must prefer a visible failure over an invisible routing mistake.
@@ -264,16 +265,17 @@ Direct sets feed:
 
 This stage exists to identify strict traffic early and consistently.
 
-### Stage 3: Strict proxy group construction
+### Stage 3: Strict target resolution
 
 Create or validate:
 
 - current region relay group
 - current region chain exit group
-- strict AI routing group
+- strict AI managed target
 
-The strict AI routing group should only reference the selected chain exit. It is
-the only legal target for managed AI-related domain and process rules.
+In strict mode, the strict AI managed target is the selected region chain exit
+group itself. The script should also remove any legacy explicit AI proxy group
+to prevent redundant routing layers from surviving in the output.
 
 ### Stage 4: Managed rule emission and fail-closed validation
 
@@ -314,7 +316,7 @@ visible, inspectable, and intentionally controlled by the user.
 When `strictAiRouting` is `true`, the script must enforce the full strict path:
 
 - DNS and Sniffer strict object enforcement
-- dedicated strict AI proxy group targeting
+- direct targeting of the selected `chainRegion` chain exit
 - fail-closed validation
 
 When `strictAiRouting` is `false`, the script enters an explicit compatibility
@@ -322,10 +324,8 @@ mode with a weaker contract:
 
 - canonical strict/direct object assembly remains the same
 - DNS and Sniffer generation remain the same
-- AI-related traffic is still routed by managed process and domain rules, but
-  those rules target the current `chainRegion` chain exit group directly rather
-  than a dedicated strict AI proxy group
-- the dedicated strict AI proxy group is not created
+- AI-related traffic is still routed by managed process and domain rules, and
+  those rules continue to target the current `chainRegion` chain exit group directly
 - fail-closed validation is limited to existing baseline checks such as selected
   region relay resolution and valid `manualNode` lookup
 - the repository no longer guarantees that all managed AI/support traffic uses
@@ -347,8 +347,8 @@ missing and which guarantee cannot be honored.
 Examples of failure classes:
 
 - selected region cannot build a relay target
-- strict AI proxy group missing or malformed
-- strict AI group target mismatch
+- strict AI target does not point to the selected chain exit directly
+- a legacy explicit AI proxy group remains in the generated config
 - managed rules would leak into non-strict targets
 
 When `strictAiRouting` is `true`, the script should not degrade to a weaker
@@ -365,8 +365,9 @@ Required assertions:
    All strict objects appear where expected in DNS and Sniffer outputs.
 2. Direct-only protection
    Tailscale, domestic AI, and local-network exclusions remain direct.
-3. Strict proxy group uniqueness
-   The dedicated strict AI group exists and only points to the selected chain exit.
+3. Strict direct-target invariant
+   Strict AI/support rules point directly to the selected chain exit, and no
+   legacy explicit AI proxy group remains in the generated config.
 4. Hard failure behavior
    Missing region targets, invalid manual nodes, or malformed strict groups throw.
 5. No leakage
@@ -410,7 +411,8 @@ controlled routing, not maximum automatic availability.
 Implementation planning should focus on:
 
 1. extracting canonical strict/direct object sets
-2. introducing the dedicated strict AI proxy group
+2. enforcing direct strict targeting to the selected chain exit and removing
+   any legacy explicit AI proxy group
 3. reordering the control flow so DNS and Sniffer are enforced before late rules
 4. expanding tests around leakage and hard-failure behavior
 5. rewriting README language around the new contract

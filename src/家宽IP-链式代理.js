@@ -75,7 +75,7 @@ var GROUP_NAME_SUFFIXES = {
   chain: "-链式代理-家宽IP出口",
 };
 
-// 脚本内部维护的托管代理组名称。
+// 兼容旧版本时需要清理的废弃托管代理组名称。
 var MANAGED_PROXY_GROUP_NAMES = {
   strictAi: "AI 严格链式代理",
 };
@@ -952,37 +952,10 @@ function ensureChainGroup(config, region) {
   return chainGroupName;
 }
 
-// 创建或更新脚本内部托管的 `select` 代理组。
-function upsertManagedSelectGroup(config, groupName, proxies) {
-  var proxyGroups = config["proxy-groups"];
-  var managedGroup = findProxyGroupByName(proxyGroups, groupName);
-
-  if (!managedGroup) {
-    proxyGroups.push({
-      name: groupName,
-      type: "select",
-      proxies: proxies.slice(),
-    });
-    return groupName;
-  }
-
-  managedGroup.type = "select";
-  managedGroup.proxies = proxies.slice();
-  return groupName;
-}
-
-// 在严格模式下确保存在专用 AI 托管代理组；兼容模式则移除旧组。
+// 清理旧版显式 AI 代理组；当前严格模式直接指向所选 chainRegion 出口。
 function resolveStrictAiTarget(config, chainGroupName) {
-  if (!USER_OPTIONS.strictAiRouting) {
-    removeProxyGroupByName(config["proxy-groups"], MANAGED_PROXY_GROUP_NAMES.strictAi);
-    return chainGroupName;
-  }
-
-  return upsertManagedSelectGroup(
-    config,
-    MANAGED_PROXY_GROUP_NAMES.strictAi,
-    [chainGroupName],
-  );
+  removeProxyGroupByName(config["proxy-groups"], MANAGED_PROXY_GROUP_NAMES.strictAi);
+  return chainGroupName;
 }
 
 // ---------------------------------------------------------------------------
@@ -1246,27 +1219,14 @@ function assertManagedRuleTarget(ruleLines, type, value, target) {
 function validateManagedRouting(config, strictAiTarget, chainGroupName) {
   if (!USER_OPTIONS.strictAiRouting) return;
 
-  var strictAiGroup = findProxyGroupByName(
-    config["proxy-groups"],
-    MANAGED_PROXY_GROUP_NAMES.strictAi,
-  );
-
-  if (!strictAiGroup) {
-    throw new Error("[家宽IP-链式代理] 严格 AI 代理组缺失");
-  }
-  if (
-    strictAiGroup.type !== "select" ||
-    !strictAiGroup.proxies ||
-    strictAiGroup.proxies.length !== 1 ||
-    strictAiGroup.proxies[0] !== chainGroupName
-  ) {
+  if (findProxyGroupByName(config["proxy-groups"], MANAGED_PROXY_GROUP_NAMES.strictAi)) {
     throw new Error(
-      "[家宽IP-链式代理] 严格 AI 代理组未唯一指向当前 chainRegion 出口",
+      "[家宽IP-链式代理] 遗留的 AI 严格链式代理组未被清理",
     );
   }
-  if (strictAiTarget !== MANAGED_PROXY_GROUP_NAMES.strictAi) {
+  if (strictAiTarget !== chainGroupName) {
     throw new Error(
-      "[家宽IP-链式代理] 严格 AI 路由目标异常: " + strictAiTarget,
+      "[家宽IP-链式代理] 严格 AI 路由未直接指向当前 chainRegion 出口",
     );
   }
 

@@ -9,7 +9,7 @@ const scriptCode = fs.readFileSync(scriptPath, "utf8");
 
 const CHAIN_GROUP_NAME = "🇸🇬|新加坡-链式代理-家宽IP出口";
 const RELAY_GROUP_NAME = "🇸🇬|新加坡线路-链式代理-跳板";
-const STRICT_AI_GROUP_NAME = "AI 严格链式代理";
+const LEGACY_STRICT_AI_GROUP_NAME = "AI 严格链式代理";
 
 function loadSandbox() {
   const sandbox = {
@@ -99,6 +99,11 @@ function assertProcessRules(output, enabled, processNames, target) {
 function testDefaultStrictConfig() {
   const sandbox = loadSandbox();
   const config = createBaseConfig();
+  config["proxy-groups"].push({
+    name: LEGACY_STRICT_AI_GROUP_NAME,
+    type: "select",
+    proxies: ["错误旧组"],
+  });
   const output = sandbox.main(config);
 
   assert.strictEqual(sandbox.USER_OPTIONS.strictAiRouting, true);
@@ -110,16 +115,14 @@ function testDefaultStrictConfig() {
   );
 
   const chainGroup = findGroup(output, CHAIN_GROUP_NAME);
-  const strictAiGroup = findGroup(output, STRICT_AI_GROUP_NAME);
   assert(chainGroup, "Expected chain group to exist");
-  assert(strictAiGroup, "Expected strict AI group to exist");
-  assert.strictEqual(JSON.stringify(strictAiGroup.proxies), JSON.stringify([CHAIN_GROUP_NAME]));
+  assert(!findGroup(output, LEGACY_STRICT_AI_GROUP_NAME), "Legacy strict AI group should be removed");
 
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,claude.ai," + STRICT_AI_GROUP_NAME);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com," + STRICT_AI_GROUP_NAME);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,claude.ai," + CHAIN_GROUP_NAME);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com," + CHAIN_GROUP_NAME);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com," + CHAIN_GROUP_NAME);
-  assertRuleExists(output.rules, "PROCESS-NAME,Claude," + STRICT_AI_GROUP_NAME);
-  assertRuleExists(output.rules, "PROCESS-NAME,claude," + STRICT_AI_GROUP_NAME);
+  assertRuleExists(output.rules, "PROCESS-NAME,Claude," + CHAIN_GROUP_NAME);
+  assertRuleExists(output.rules, "PROCESS-NAME,claude," + CHAIN_GROUP_NAME);
   assertRuleMissing(output.rules, "PROCESS-NAME,Arc," + CHAIN_GROUP_NAME);
   assertRuleMissing(output.rules, "DOMAIN-SUFFIX,claude.ai,DIRECT");
   assertNoDuplicateRuleIdentities(output.rules.slice(0, 250));
@@ -169,13 +172,13 @@ function testCompatibilityMode() {
   sandbox.USER_OPTIONS.strictAiRouting = false;
   const config = createBaseConfig();
   config["proxy-groups"].push({
-    name: STRICT_AI_GROUP_NAME,
+    name: LEGACY_STRICT_AI_GROUP_NAME,
     type: "select",
     proxies: ["错误旧组"],
   });
   const output = sandbox.main(config);
 
-  assert(!findGroup(output, STRICT_AI_GROUP_NAME), "Compatibility mode should remove strict AI group");
+  assert(!findGroup(output, LEGACY_STRICT_AI_GROUP_NAME), "Compatibility mode should remove legacy strict AI group");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,claude.ai," + CHAIN_GROUP_NAME);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com," + CHAIN_GROUP_NAME);
   assertRuleExists(output.rules, "PROCESS-NAME,Claude," + CHAIN_GROUP_NAME);
@@ -192,8 +195,7 @@ function testEnableBrowserProcessProxy() {
 
   assertProcessRuleToggle(output, true, "Arc", CHAIN_GROUP_NAME);
   assertProcessRuleToggle(output, true, "Google Chrome", CHAIN_GROUP_NAME);
-  assertProcessRuleToggle(output, true, "Claude", STRICT_AI_GROUP_NAME);
-  assertProcessRuleToggle(output, false, "Arc", STRICT_AI_GROUP_NAME);
+  assertProcessRuleToggle(output, true, "Claude", CHAIN_GROUP_NAME);
 }
 
 function testAiCliProcessProxyDefaultsOn() {
@@ -204,7 +206,7 @@ function testAiCliProcessProxyDefaultsOn() {
     output,
     true,
     ["claude", "opencode", "gemini", "codex"],
-    STRICT_AI_GROUP_NAME,
+    CHAIN_GROUP_NAME,
   );
 }
 
@@ -217,7 +219,7 @@ function testDisableAiCliProcessProxy() {
     output,
     false,
     ["claude", "opencode", "gemini", "codex"],
-    STRICT_AI_GROUP_NAME,
+    CHAIN_GROUP_NAME,
   );
 }
 
@@ -247,12 +249,12 @@ function testInvalidManualNodeFails() {
 function testMissingStrictAiTargetFails() {
   const sandbox = loadSandbox();
   sandbox.resolveStrictAiTarget = function () {
-    return CHAIN_GROUP_NAME;
+    return "错误目标";
   };
 
   assert.throws(
     () => sandbox.main(createBaseConfig()),
-    /严格 AI 代理组缺失/,
+    /严格 AI 路由未直接指向当前 chainRegion 出口/,
   );
 }
 
