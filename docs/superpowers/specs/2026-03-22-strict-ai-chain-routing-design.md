@@ -157,9 +157,29 @@ The repository must prefer a visible failure over an invisible routing mistake.
 
 #### Authentication, verification, download, and IDE support platforms
 
-- Google core, API, and static domains used in login, redirects, assets, and downloads
-- Microsoft identity, Office, SharePoint, OneDrive, and related auth domains
-- GitHub and developer support domains used by IDEs, extensions, and downloads
+Support-platform scope should not be inferred from broad vendor names alone.
+Implementation planning should start from the existing grouped constants in
+`src/家宽IP-链式代理.js` and keep capture limited to domains that materially
+affect AI login continuity, verification, downloads, updates, or IDE workflows.
+
+Concrete initial host groups:
+
+- Google: `google.com`, `googleapis.com`, `googleusercontent.com`,
+  `gstatic.com`, `ggpht.com`, `gvt1.com`, `gvt2.com`, `withgoogle.com`,
+  `cloud.google.com`
+- Microsoft: `microsoft.com`, `live.com`, `windows.net`, `office.com`,
+  `office.net`, `office365.com`, `m365.cloud.microsoft`, `sharepoint.com`,
+  `onenote.com`, `onedrive.com`, `microsoftonline.com`, `msftauth.net`,
+  `msauth.net`, `msecnd.net`
+- Developer platforms: `github.com`, `visualstudio.com`, `vsassets.io`,
+  `vsmarketplacebadges.dev`
+
+Selection rule for additions:
+
+- include only domains that are required for authentication, static assets,
+  redirect completion, downloads, extension delivery, or IDE service continuity
+- do not include ordinary browsing domains that are merely owned by the same
+  vendor but are unrelated to the AI workflow continuity problem
 
 #### Processes
 
@@ -209,6 +229,7 @@ Build a single canonical data source for:
 - strict processes
 - direct-only domains
 - direct-only processes
+- direct-only network/CIDR rules
 - validation domains
 
 DNS, Sniffer, rule generation, and tests should derive from the same data source
