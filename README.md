@@ -48,7 +48,7 @@
 
 - **域外 `AI` 与支撑平台**：强制命中当前 `chainRegion` 对应的链式代理出口。当前覆盖 `Claude`、`ChatGPT`、`Gemini`、`NotebookLM`、`Perplexity`，以及 `Google`、`Microsoft`、`GitHub` 等登录、下载、开发相关平台。
 - **按进程名强制分流的 `AI` 应用**：当前维护 `Claude`、`ChatGPT`、`Perplexity`、`Cursor`，并覆盖已验证的相关 `Helper` / 精确进程名。
-- **按应用名强制分流的 `AI CLI`**：当前覆盖 `Claude Code`、`Codex`、`Gemini CLI`。
+- **按应用名强制分流的 `AI CLI`**：当前覆盖已验证的 `Claude Code`、`Claude Code URL Handler`、`Claude Code` 的 Unix 可执行名 `claude`，以及 `Codex`、`Gemini CLI`。
 - **按应用名强制分流的浏览器**：当前覆盖 `Dia`、`Atlas`、`Google Chrome`、`SunBrowser`，并显式覆盖 `Helper`、`Helper (Renderer)`、`Helper (GPU)`、`Helper (Plugin)`、`Helper (Alerts)`。
 
 ### 2. `mediaRegion`
@@ -191,6 +191,7 @@ node tests/validate.js
 - **节点选择里没有看到 `-链式代理-跳板` 或 `-媒体` 组**：先确认你用的是最新版本的 `家宽IP-链式代理.js`，然后重新加载覆写。脚本只会把当前 `chainRegion` 对应的跳板组和当前 `mediaRegion` 对应的媒体组同步到已存在的 `节点选择` 组；如果你的订阅没有这个组，脚本不会额外新建。
 - **出口不符合预期**：先看凭证和中转信息，再看当前地区的家宽出口组、跳板组和媒体组有没有生成正确。偏差大多出在这几层。
 - **为什么还保留部分域外应用直连**：这类对象本来就不适合走家宽链式代理，但解析也不能随手落回域内，所以会固定成 `DIRECT + 域外 DoH + skip-domain`。
+- **为什么 `Claude Code` 要同时维护多个进程名**：本地实测里，`/Users/az/.local/bin/claude` 最终指向同一份 `Claude Code` 二进制；`Claude Code URL Handler.app` 只是另一层启动入口，负责声明 `claude-cli:` URL scheme。`LaunchServices` 会把它注册成 `Claude Code URL Handler`，而高频轮询运行态时稳定可见的 Unix 进程名仍是 `claude`，深链触发时还能短暂看到版本化二进制路径本身。脚本因此同时保留 `Claude Code`、`Claude Code URL Handler` 和 `claude` 三种入口，而不额外维护没有运行态证据的别名。
 
 ## 兼容性
 

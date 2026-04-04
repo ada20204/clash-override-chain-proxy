@@ -344,6 +344,10 @@ var SOURCE_PROCESSES = {
         "Claude Helper (Renderer)",
         "Claude Helper (GPU)",
         "Claude Helper (Plugin)",
+        // Claude Code 在本机可见的 App / Bundle 名。
+        // `claude-cli:` 深链会先命中 URL Handler，再落到同一份 `claude` 二进制。
+        "Claude Code",
+        "Claude Code URL Handler",
         "Antigravity.app",
         "Quotio.app",
         // "CC Switch.app"
@@ -616,6 +620,9 @@ function buildStrictValidationTargets() {
 
   if (isChainRegionAiCliProcessProxyEnabled()) {
     validationTargets.push({ type: "PROCESS-NAME", value: "claude" });
+    // Claude Code 同时校验 Unix 可执行名与 App / URL Handler 名，避免 macOS 启动路径差异导致漏配。
+    validationTargets.push({ type: "PROCESS-NAME", value: "Claude Code" });
+    validationTargets.push({ type: "PROCESS-NAME", value: "Claude Code URL Handler" });
     validationTargets.push({ type: "PROCESS-NAME", value: "codex" });
   }
 
