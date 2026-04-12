@@ -480,11 +480,6 @@ var SOURCE_PATTERNS = {
       }
     },
     overseasApps: {
-      tailscale: [
-        "+.tailscale.com",
-        "+.tailscale.io",
-        "+.ts.net"
-      ],
       typeless: [
         "+.typeless.com"
       ]
