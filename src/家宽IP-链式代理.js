@@ -23,7 +23,7 @@
  *   POLICY           策略表：pattern + route/dnsZone/sniffer/fakeIp/fallbackFilter
  *                    所有派生视图（strict/general/direct/sniffer）均从 POLICY 投影
  *   DERIVED          从 POLICY 投影出的数据视图（patterns + processNames + networkRules），
- *                    供下面的 build*/write* 函数直接读取
+ *                    供下面的 build-/write- 系函数直接读取
  *   builder/writer/resolver/assert  按动词前缀系统化：
  *     build*         纯产出（返回值，无副作用）
  *     resolve*       读取并计算（可能触发幂等写入作为副产物）
