@@ -841,6 +841,38 @@ function ensureProxyContainers(config) {
   if (!config.rules) config.rules = [];
 }
 
+// 清空订阅原有的代理组和规则，只保留节点列表。
+// 后续由脚本完整重建代理组和规则，避免订阅残留组干扰分流。
+function resetSubscriptionGroupsAndRules(config) {
+  config["proxy-groups"] = [];
+  config.rules = [];
+}
+
+// 生成一个包含所有订阅节点（排除 MiyaIP 节点）的 `节点选择` select 组，用于兜底流量。
+function ensureNodeSelectionGroup(config) {
+  var allNodeNames = [];
+  var managedNodeNames = [BASE.nodeNames.relay, BASE.nodeNames.transit];
+  for (var i = 0; i < config.proxies.length; i++) {
+    var proxy = config.proxies[i];
+    if (
+      proxy.name.indexOf(BASE.miyaProxyNameKeyword) < 0 &&
+      managedNodeNames.indexOf(proxy.name) < 0
+    ) {
+      allNodeNames.push(proxy.name);
+    }
+  }
+  upsertNamedItem(config["proxy-groups"], {
+    name: "节点选择",
+    type: "select",
+    proxies: allNodeNames
+  });
+  upsertNamedItem(config["proxy-groups"], {
+    name: "GLOBAL",
+    type: "select",
+    proxies: allNodeNames.slice()
+  });
+}
+
 // 把地区输入统一转成大写字符串键。
 function normalizeRegionKey(region) {
   return String(region || "").toUpperCase();
@@ -1351,6 +1383,7 @@ function buildDirectRules() {
       BASE.ruleTargets.direct
     );
   }
+  ruleLines.push("MATCH,节点选择");
   return ruleLines;
 }
 
@@ -1507,6 +1540,8 @@ function main(config) {
   var routingTargets;
 
   ensureProxyContainers(config); // 初始化基础容器
+  resetSubscriptionGroupsAndRules(config); // 清空订阅代理组和规则，由脚本完整重建
+  ensureNodeSelectionGroup(config); // 生成兜底节点选择组
   applyDnsAndSniffer(config); // 先写 DNS 与 Sniffer
   injectMiyaProxies(config, miyaCredentials); // 注入 MiyaIP 节点
 
