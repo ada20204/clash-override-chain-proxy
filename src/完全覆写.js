@@ -568,10 +568,22 @@ var SOURCE_PROCESSES = {
 
 var SOURCE_NETWORK_RULES = {
   direct: [
+    // 私有局域网网段（RFC 1918）
+    { type: "IP-CIDR",  value: "10.0.0.0/8",          target: BASE.ruleTargets.direct },
+    { type: "IP-CIDR",  value: "172.16.0.0/12",        target: BASE.ruleTargets.direct },
+    { type: "IP-CIDR",  value: "192.168.0.0/16",       target: BASE.ruleTargets.direct },
+    // 链路本地地址（APIPA / mDNS）
+    { type: "IP-CIDR",  value: "169.254.0.0/16",       target: BASE.ruleTargets.direct },
+    // 回环地址
+    { type: "IP-CIDR",  value: "127.0.0.0/8",          target: BASE.ruleTargets.direct },
+    // IPv6 私有/特殊地址
+    { type: "IP-CIDR6", value: "::1/128",               target: BASE.ruleTargets.direct },
+    { type: "IP-CIDR6", value: "fc00::/7",              target: BASE.ruleTargets.direct },
+    { type: "IP-CIDR6", value: "fe80::/10",             target: BASE.ruleTargets.direct },
     // Tailscale 进程直连（WireGuard 隧道走纯 IP，不命中域名规则）
     { type: "PROCESS-NAME", value: "tailscaled.exe", target: BASE.ruleTargets.direct },
     { type: "PROCESS-NAME", value: "tailscaled",     target: BASE.ruleTargets.direct },
-    // Tailscale IP 网段
+    // Tailscale IP 网段（CGNAT + MagicDNS + IPv6）
     { type: "IP-CIDR",  value: "100.64.0.0/10",       target: BASE.ruleTargets.direct },
     { type: "IP-CIDR",  value: "100.100.100.100/32",   target: BASE.ruleTargets.direct },
     { type: "IP-CIDR6", value: "fd7a:115c:a1e0::/48",  target: BASE.ruleTargets.direct }
