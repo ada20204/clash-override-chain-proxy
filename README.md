@@ -138,7 +138,16 @@ node tests/validate-direct.js
 | Atlas | Atlas + Helper 系列 | Atlas.exe |
 | SunBrowser | SunBrowser + Helper 系列 | SunBrowser.exe |
 
-## 兼容性
+```mermaid
+flowchart LR
+  USER["USER_OPTIONS<br/>地区 · 开关"]
+  BASE["BASE<br/>运行期常量"]
+  SRC["SOURCE_*<br/>模式字面量"]
+  POL["POLICY<br/>策略表"]
+  DER["DERIVED<br/>派生视图"]
+  CFG[("Clash 配置")]
+  EXP["EXPECTED_ROUTES<br/>路由样本"]
+  VAL[["断言 + tests/validate.js"]]
 
 - 运行环境：Clash Party 的 JavaScriptCore
 - 语法范围：ES5
