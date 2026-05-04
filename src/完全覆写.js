@@ -752,7 +752,7 @@ function buildDerived() {
       domains: [],
       dnsPolicy: null,
       fixedProxies: ["DIRECT"],
-      testUrl: "https://www.baidu.com/generate_204"
+      testUrl: "http://connect.rom.miui.com/generate_204"
     }
   ];
 
@@ -1214,13 +1214,15 @@ function ensureChainGroup() {
 // 解析本轮注入所需的关键目标。
 // 新增「🔗 家宽跳板」select 组，成员为 [自动选择, 地区组..., 自定义节点...]，
 // 用户可在界面上手动选择家宽IP走哪条跳板线路。
-function resolveRoutingTargets(config, regionGroupNames) {
+function resolveRoutingTargets(config, regionGroupNames, customProxyNames) {
   // 确保自动选择组存在（供跳板组引用）
   var relayTarget = resolveRelayTarget(config);
 
-  // 跳板组成员：自动选择 + 地区组 + 自定义节点
+  // 跳板组成员：自动选择 + 地区组 + 自定义出口节点
   var relayGroupName = "🔗 家宽跳板";
-  var relayGroupProxies = [relayTarget].concat(regionGroupNames || []);
+  var relayGroupProxies = [relayTarget]
+    .concat(regionGroupNames || [])
+    .concat(customProxyNames || []);
   upsertNamedItem(config["proxy-groups"], {
     name: relayGroupName, type: "select", proxies: relayGroupProxies
   });
@@ -1261,6 +1263,7 @@ function buildCustomProxyNode(proxyConfig) {
 }
 
 function injectCustomProxies(config, proxyConfigs) {
+  var names = [];
   for (var i = 0; i < proxyConfigs.length; i++) {
     var proxyConfig = proxyConfigs[i];
     if (!proxyConfig.server || !proxyConfig.port) {
@@ -1272,7 +1275,9 @@ function injectCustomProxies(config, proxyConfigs) {
       proxyConfig.name = "自定义出口" + (i + 1);
     }
     upsertNamedItem(config.proxies, buildCustomProxyNode(proxyConfig));
+    names.push(proxyConfig.name);
   }
+  return names;
 }
 
 // ---------------------------------------------------------------------------
@@ -1526,8 +1531,10 @@ function main(config) {
   var routingTargets;
   var hasHomeProxy = !!credentials;
 
+  var customProxyNames = [];
+
   ensureProxyContainers(config);
-  if (customProxies) injectCustomProxies(config, customProxies);
+  if (customProxies) customProxyNames = injectCustomProxies(config, customProxies);
   resetSubscriptionGroupsAndRules(config);
 
   // ① 自动选择组（最上面）：订阅有就用，没有就自建 url-test
@@ -1549,7 +1556,7 @@ function main(config) {
   var chainGroupName = null;
   if (hasHomeProxy) {
     injectHomeProxy(config, credentials);
-    routingTargets = resolveRoutingTargets(config, regionGroupNames);
+    routingTargets = resolveRoutingTargets(config, regionGroupNames, customProxyNames);
     bindDialerProxy(config, routingTargets.relayGroupName);
     chainGroupName = routingTargets.chainGroupName;
     // 将 🏠家宽IP 添加到节点选择和 GLOBAL 中（在 DIRECT 之前）
