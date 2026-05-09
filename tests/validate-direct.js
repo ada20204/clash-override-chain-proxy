@@ -129,6 +129,7 @@ function testDefaultConfig() {
   assert.strictEqual(aiGroup.type, "select");
   assert.strictEqual(aiGroup.proxies[0], EXPECTED.chainGroupName, "有家宽IP时 AI Agent 应优先使用家宽IP");
   assert(aiGroup.proxies.indexOf("节点选择") >= 0, "AI Agent 应包含节点选择");
+  assert(aiGroup.proxies.indexOf(EXPECTED.relayGroupName) < 0, "AI Agent 不应直接包含自动选择");
   assert(aiGroup.proxies.indexOf("🇭🇰|香港") >= 0, "AI Agent 应包含地区组");
   assert(aiGroup.proxies.indexOf("🇸🇬 SG Auto 01") < 0, "有家宽IP时 AI Agent 不应包含订阅裸节点");
 
@@ -192,6 +193,7 @@ function testNoCredentialPureOverwrite() {
   assert(aiGroup, "无家宽时 AI Agent 组也应存在");
   assert.strictEqual(aiGroup.type, "select");
   assert(aiGroup.proxies.indexOf("节点选择") >= 0, "无家宽时 AI Agent 应包含节点选择");
+  assert(aiGroup.proxies.indexOf(EXPECTED.relayGroupName) < 0, "无家宽时 AI Agent 不应直接包含自动选择");
   assert(aiGroup.proxies.indexOf("🇭🇰|香港") >= 0, "无家宽时 AI Agent 应包含地区组");
   assert(aiGroup.proxies.indexOf("🇸🇬 SG Auto 01") >= 0, "无家宽时 AI Agent 应包含订阅裸节点");
   assert(aiGroup.proxies.indexOf(EXPECTED.chainGroupName) < 0, "无家宽时 AI Agent 不应包含家宽IP");

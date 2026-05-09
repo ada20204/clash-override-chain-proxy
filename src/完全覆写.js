@@ -1214,10 +1214,8 @@ function ensureChainGroup() {
 
 function buildAiAgentProxies(config, options) {
   var proxies = [];
-  var autoSelectName = resolveRelayTarget(config);
   if (options.chainGroupName) proxies.push(options.chainGroupName);
   proxies.push("节点选择");
-  proxies.push(autoSelectName);
   proxies = proxies
     .concat(options.regionGroupNames || [])
     .concat(options.customProxyNames || []);
