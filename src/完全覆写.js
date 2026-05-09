@@ -50,7 +50,7 @@ var BASE = {
     US: { regex: /🇺🇸|美国|^US[\|丨\- ]/i, label: "美国", flag: "🇺🇸" },
     JP: { regex: /🇯🇵|日本|^JP[\|丨\- ]/i, label: "日本", flag: "🇯🇵" },
     SG: { regex: /🇸🇬|新加坡|^SG[\|丨\- ]/i, label: "新加坡", flag: "🇸🇬" },
-    TW: { regex: /🇹🇼|台湾|台灣|^TW[\|丨\- ]/i, label: "台湾", flag: "🇹🇼" },
+    TW: { regex: /🇹🇼|台湾|台灣|^TW[\|丨\- ]/i, label: "台湾", flag: "🇨🇳" },
     KR: { regex: /🇰🇷|韩国|韓国|韓國|^KR[\|丨\- ]/i, label: "韩国", flag: "🇰🇷" }
   },
   regionOrder: ["HK", "US", "JP", "SG", "TW", "KR"],
