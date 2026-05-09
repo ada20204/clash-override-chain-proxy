@@ -55,6 +55,7 @@ var BASE = {
   },
   regionOrder: ["HK", "US", "JP", "SG", "TW", "KR"],
   nodeNames: {
+    aiAgent: "🤖 AI Agent",
     home: "家宽IP"
   },
   ruleTargets: {
@@ -1211,6 +1212,31 @@ function ensureChainGroup() {
   return "🏠家宽IP";
 }
 
+function buildAiAgentProxies(config, options) {
+  var proxies = [];
+  var autoSelectName = resolveRelayTarget(config);
+  if (options.chainGroupName) proxies.push(options.chainGroupName);
+  proxies.push("节点选择");
+  proxies.push(autoSelectName);
+  proxies = proxies
+    .concat(options.regionGroupNames || [])
+    .concat(options.customProxyNames || []);
+  if (options.includeRawNodes) {
+    proxies = proxies.concat(options.allNodeNames || []);
+  }
+  proxies.push("DIRECT");
+  return uniqueStrings(proxies);
+}
+
+function ensureAiAgentGroup(config, options) {
+  upsertNamedItem(config["proxy-groups"], {
+    name: BASE.nodeNames.aiAgent,
+    type: "select",
+    proxies: buildAiAgentProxies(config, options)
+  });
+  return BASE.nodeNames.aiAgent;
+}
+
 // 解析本轮注入所需的关键目标。
 // 新增「🔗 家宽跳板」select 组，成员为 [自动选择, 地区组..., 自定义节点...]，
 // 用户可在界面上手动选择家宽IP走哪条跳板线路。
@@ -1237,7 +1263,7 @@ function resolveRoutingTargets(config, regionGroupNames, customProxyNames) {
     relayTarget: relayTarget,
     relayGroupName: relayGroupName,
     chainGroupName: chainGroupName,
-    strictAiTarget: chainGroupName
+    strictAiTarget: BASE.nodeNames.aiAgent
   };
 }
 
@@ -1466,18 +1492,19 @@ function haveSameStrings(values, expectedValues) {
   return true;
 }
 
-// 校验家宽IP出口组、dialer-proxy 绑定、媒体组和关键规则目标。
+// 校验家宽IP出口组、dialer-proxy 绑定、AI Agent 组、媒体组和关键规则目标。
 function validateManagedRouting(config, routingTargets) {
   var i;
   var homeProxy;
   var chainGroup;
+  var aiGroup;
   var mediaGroupName = "🌍 国际媒体";
   var strictValidationTargets  = buildStrictValidationTargets();
   var browserValidationTargets = buildBrowserValidationTargets();
   var mediaValidationTargets   = buildMediaValidationTargets();
 
-  if (routingTargets.strictAiTarget !== routingTargets.chainGroupName) {
-    throw createUserError("域外 AI 与支撑平台未直接指向家宽IP出口组，请检查代理组注入逻辑");
+  if (routingTargets.strictAiTarget !== BASE.nodeNames.aiAgent) {
+    throw createUserError("域外 AI 与支撑平台未指向 AI Agent 组，请检查代理组注入逻辑");
   }
   if (!hasProxyOrGroup(config, routingTargets.relayGroupName)) {
     throw createUserError(
@@ -1497,6 +1524,12 @@ function validateManagedRouting(config, routingTargets) {
   if (!chainGroup || chainGroup.type !== "select" ||
       !haveSameStrings(chainGroup.proxies || [], [BASE.nodeNames.home])) {
     throw createUserError("家宽IP出口组内容异常，请检查代理组注入逻辑");
+  }
+
+  aiGroup = findProxyGroupByName(config["proxy-groups"], BASE.nodeNames.aiAgent);
+  if (!aiGroup || aiGroup.type !== "select" ||
+      (aiGroup.proxies || []).indexOf(routingTargets.chainGroupName) < 0) {
+    throw createUserError("AI Agent 组内容异常，请检查代理组注入逻辑");
   }
 
   for (i = 0; i < strictValidationTargets.length; i++) {
@@ -1569,17 +1602,26 @@ function main(config) {
     }
   }
 
-  // ⑥ 地区 url-test 组（沉底）
+  // ⑥ AI Agent 策略组：有家宽时不展开订阅裸节点；无家宽时允许精确选择裸节点。
+  var aiAgentTarget = ensureAiAgentGroup(config, {
+    chainGroupName: chainGroupName,
+    regionGroupNames: regionGroupNames,
+    customProxyNames: customProxyNames,
+    allNodeNames: anchorResult.allNodeNames,
+    includeRawNodes: !hasHomeProxy
+  });
+
+  // ⑦ 地区 url-test 组（沉底）
   appendTailGroups(config, anchorResult.regionGroups);
 
-  // ⑤ DNS / Sniffer / 规则注入
+  // ⑧ DNS / Sniffer / 规则注入
   applyDnsAndSniffer(config);
   if (hasHomeProxy) {
-    injectManagedRules(config, routingTargets.strictAiTarget);
+    injectManagedRules(config, aiAgentTarget);
     validateManagedRouting(config, routingTargets);
   } else {
-    // 无家宽凭证：仅注入功能组域名规则 + 直连规则（纯分流模式）
-    injectManagedRules(config, null);
+    // 无家宽凭证：AI 规则指向 AI Agent，用户可在组内选择支持 AI 的订阅节点。
+    injectManagedRules(config, aiAgentTarget);
   }
 
   return config;

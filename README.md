@@ -6,7 +6,8 @@
 
 - **声明式功能组**：国际媒体、Telegram、GitHub、微软服务、游戏平台、Apple 等，新增组只需加一条配置
 - **地区自动检测**：根据订阅节点自动创建香港、美国、日本、新加坡、台湾、韩国等地区 url-test 组
-- **家宽IP链路（可选）**：配置家宽出口后，AI 和指定进程的流量走家宽 IP 出口
+- **AI Agent 策略组**：AI 域名和进程统一走独立策略组；有家宽出口时可选家宽 IP，无家宽出口时可直接选择订阅节点
+- **家宽IP链路（可选）**：配置家宽出口后，可在 AI Agent 组中选择家宽 IP 出口
 - **自定义出口（可选）**：注入自定义 HTTP/SOCKS5 代理节点
 - **GeoSite/GeoIP 兜底**：国内域名和 IP 自动直连，无需手动维护
 - **跨平台进程规则**：同时覆盖 macOS 和 Windows 进程名
@@ -24,17 +25,30 @@
  8. 🎮 游戏平台        ← Steam/Epic/Nintendo/PlayStation/Blizzard
  9. 🍎 Apple          ← iCloud/App Store 等
 10. 🎯 直连            ← DIRECT
-11. 🔗 家宽跳板        ← 家宽节点的上级跳板（有家宽凭证时）
-12. 🏠家宽IP          ← 家宽出口节点（有家宽凭证时）
-13+ 地区 url-test 组   ← 🇭🇰|香港、🇺🇸|美国、🇯🇵|日本 等（沉底）
+11. 🤖 AI Agent       ← AI 域名/进程的独立出口选择组
+12. 🔗 家宽跳板        ← 家宽节点的上级跳板（有家宽凭证时）
+13. 🏠家宽IP          ← 家宽出口节点（有家宽凭证时）
+14+ 地区 url-test 组   ← 🇭🇰|香港、🇺🇸|美国、🇯🇵|日本 等（沉底）
 ```
+
+`🤖 AI Agent` 的成员会按是否配置家宽 IP 自动变化：
+
+```
+有家宽IP时：
+  🏠家宽IP / 节点选择 / 自动选择 / 地区组 / 自定义出口 / DIRECT
+
+无家宽IP时：
+  节点选择 / 自动选择 / 地区组 / 自定义出口 / 订阅裸节点 / DIRECT
+```
+
+有家宽 IP 时不展开订阅裸节点，避免高阶场景下列表过长；无家宽 IP 时保留裸节点，方便单独给 AI 选择某个支持 AI 的订阅节点。
 
 ## 规则优先级
 
 ```
-AI 进程规则           → 🏠家宽IP（有家宽凭证时）
-AI + 平台域名         → 🏠家宽IP（有家宽凭证时）
-浏览器进程规则        → 🏠家宽IP（enableChainRegionBrowserProcessProxy 开启时）
+AI 进程规则           → 🤖 AI Agent
+AI + 平台域名         → 🤖 AI Agent
+浏览器进程规则        → 🤖 AI Agent（enableChainRegionBrowserProcessProxy 开启时）
 功能组域名规则        → 各功能组（国际媒体/Telegram/GitHub/微软/游戏/Apple）
 Tailscale 进程+IP    → DIRECT
 国内域名/IP直连       → DIRECT（手动列表 + GEOSITE,cn + GEOIP,cn）

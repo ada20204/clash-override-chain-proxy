@@ -17,6 +17,7 @@ const TEST_HOME_CREDENTIALS = {
 };
 
 const EXPECTED = {
+  aiGroupName:     "🤖 AI Agent",
   chainGroupName:  "🏠家宽IP",
   homeNodeName:    "家宽IP",
   relayGroupName:  "自动选择(Smart Group)",
@@ -122,6 +123,15 @@ function testDefaultConfig() {
   assert.strictEqual(chainGroup.proxies.length, 1);
   assert.strictEqual(chainGroup.proxies[0], EXPECTED.homeNodeName);
 
+  // AI Agent 组存在；有家宽IP时默认包含家宽IP，但不展开订阅裸节点
+  const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
+  assert(aiGroup, "AI Agent 组应存在");
+  assert.strictEqual(aiGroup.type, "select");
+  assert.strictEqual(aiGroup.proxies[0], EXPECTED.chainGroupName, "有家宽IP时 AI Agent 应优先使用家宽IP");
+  assert(aiGroup.proxies.indexOf("节点选择") >= 0, "AI Agent 应包含节点选择");
+  assert(aiGroup.proxies.indexOf("🇭🇰|香港") >= 0, "AI Agent 应包含地区组");
+  assert(aiGroup.proxies.indexOf("🇸🇬 SG Auto 01") < 0, "有家宽IP时 AI Agent 不应包含订阅裸节点");
+
   // 国际媒体组存在且为 select 类型，不含家宽IP节点
   const mediaGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.mediaGroupName; });
   assert(mediaGroup, "国际媒体组应存在");
@@ -135,12 +145,12 @@ function testDefaultConfig() {
     assert(groupNames.indexOf(name) >= 0, name + " 组应存在");
   });
 
-  // 关键 AI 规则指向家宽IP出口
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,claude.ai,"   + EXPECTED.chainGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,chatgpt.com," + EXPECTED.chainGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com,"  + EXPECTED.chainGroupName);
-  assertRuleExists(output.rules, "PROCESS-NAME,Claude,"       + EXPECTED.chainGroupName);
-  assertRuleExists(output.rules, "PROCESS-NAME,claude,"       + EXPECTED.chainGroupName);
+  // 关键 AI 规则统一指向 AI Agent 策略组
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,claude.ai,"   + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,chatgpt.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com,"  + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "PROCESS-NAME,Claude,"       + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "PROCESS-NAME,claude,"       + EXPECTED.aiGroupName);
 
   // 媒体规则指向媒体组
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com," + EXPECTED.mediaGroupName);
@@ -177,9 +187,18 @@ function testNoCredentialPureOverwrite() {
     assert(groupNames.indexOf(name) >= 0, name + " 组应存在");
   });
 
-  // 无 AI 进程规则（无家宽出口目标）
-  var hasProcessRule = output.rules.some(function (r) { return r.indexOf("PROCESS-NAME,Claude,") >= 0; });
-  assert(!hasProcessRule, "纯分流模式不应有 AI 进程规则");
+  // 无家宽时仍创建 AI Agent，并允许在组内精确选择订阅裸节点
+  const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
+  assert(aiGroup, "无家宽时 AI Agent 组也应存在");
+  assert.strictEqual(aiGroup.type, "select");
+  assert(aiGroup.proxies.indexOf("节点选择") >= 0, "无家宽时 AI Agent 应包含节点选择");
+  assert(aiGroup.proxies.indexOf("🇭🇰|香港") >= 0, "无家宽时 AI Agent 应包含地区组");
+  assert(aiGroup.proxies.indexOf("🇸🇬 SG Auto 01") >= 0, "无家宽时 AI Agent 应包含订阅裸节点");
+  assert(aiGroup.proxies.indexOf(EXPECTED.chainGroupName) < 0, "无家宽时 AI Agent 不应包含家宽IP");
+
+  // 无家宽时 AI 进程规则也指向 AI Agent
+  assertRuleExists(output.rules, "PROCESS-NAME,Claude," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,claude.ai," + EXPECTED.aiGroupName);
 
   // 域名规则正常
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com,🌍 国际媒体");
@@ -207,6 +226,8 @@ function testCustomProxiesAppearInGlobal() {
   });
   // 自定义出口应存在于 proxies 中
   assert(output.proxies.find(function (p) { return p.name === "自定义出口A"; }), "自定义出口应在 proxies 中");
+  const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
+  assert(aiGroup.proxies.indexOf("自定义出口A") >= 0, "AI Agent 应包含自定义出口");
 
   // 无名字时自动命名
   const { output: output2 } = runMain(function (config) {
@@ -217,6 +238,19 @@ function testCustomProxiesAppearInGlobal() {
   });
   assert(output2.proxies.find(function (p) { return p.name === "自定义出口1"; }), "第1个应自动命名为 自定义出口1");
   assert(output2.proxies.find(function (p) { return p.name === "自定义出口2"; }), "第2个应自动命名为 自定义出口2");
+}
+
+function testNoCredentialAiAgentIncludesCustomAndRawNodes() {
+  const { output } = runMain(function (config) {
+    delete config._homeProxy;
+    config._customProxies = [
+      { name: "公司代理", type: "http", server: "10.0.0.9", port: 8080 }
+    ];
+  });
+  const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
+  assert(aiGroup, "无家宽时 AI Agent 组应存在");
+  assert(aiGroup.proxies.indexOf("公司代理") >= 0, "无家宽时 AI Agent 应包含自定义出口");
+  assert(aiGroup.proxies.indexOf("🇺🇸 US Auto 01") >= 0, "无家宽时 AI Agent 应包含订阅裸节点");
 }
 
 function testFallbackToUrlTestGroup() {
@@ -256,5 +290,6 @@ testFallbackToUrlTestGroup();
 testAutoCreateUrlTestGroup();
 testAuthCredentials();
 testCustomProxiesAppearInGlobal();
+testNoCredentialAiAgentIncludesCustomAndRawNodes();
 
 console.log("validate-direct.js: all checks passed");
