@@ -148,6 +148,7 @@ flowchart LR
   CFG[("Clash 配置")]
   EXP["EXPECTED_ROUTES<br/>路由样本"]
   VAL[["断言 + tests/validate.js"]]
+```
 
 - 运行环境：Clash Party 的 JavaScriptCore
 - 语法范围：ES5
