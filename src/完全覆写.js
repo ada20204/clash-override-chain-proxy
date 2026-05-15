@@ -491,8 +491,7 @@ var SOURCE_PATTERNS = {
     dnsFallbackExtra: [
       "+.cdn.cloudflare.net",
       "ping0.cc",
-      "ipinfo.io",
-      "ipapi.is"
+      "ipinfo.io"
     ],
     snifferForceBase: [
       "+.cloudflare.com",
@@ -1390,9 +1389,21 @@ function buildFunctionalRules() {
   return rules;
 }
 
+function buildNetworkProbeRules(strictAiTarget, frontProxyName) {
+  var ruleLines = [];
+  var seenRuleIdentities = {};
+  addRuleIfNotExists(ruleLines, seenRuleIdentities, "DOMAIN-SUFFIX", "ipapi.is", strictAiTarget);
+  addRuleIfNotExists(ruleLines, seenRuleIdentities, "DOMAIN-SUFFIX", "ipwho.is", "节点选择");
+  addRuleIfNotExists(ruleLines, seenRuleIdentities, "DOMAIN-SUFFIX", "ip.sb", frontProxyName || BASE.ruleTargets.direct);
+  return ruleLines;
+}
+
 // strictAiTarget 为 null 时跳过 AI 进程和浏览器进程规则（纯分流模式）。
-function buildManagedRules(strictAiTarget) {
+function buildManagedRules(strictAiTarget, frontProxyName) {
   var rules = [];
+  if (strictAiTarget) {
+    rules = rules.concat(buildNetworkProbeRules(strictAiTarget, frontProxyName));
+  }
   if (strictAiTarget) {
     rules = rules.concat(buildStrictChainRules(strictAiTarget));
     rules = rules.concat(buildBrowserChainRules(strictAiTarget));
@@ -1428,8 +1439,8 @@ function prependRules(targetRules, rulesToPrepend) {
   }
 }
 
-function injectManagedRules(config, strictAiTarget) {
-  var managedRules = buildManagedRules(strictAiTarget);
+function injectManagedRules(config, strictAiTarget, frontProxyName) {
+  var managedRules = buildManagedRules(strictAiTarget, frontProxyName);
   var managedRuleIdentities = buildRuleIdentityLookup(managedRules);
   config.rules = filterConflictingRules(config.rules, managedRuleIdentities);
   prependRules(config.rules, managedRules);
@@ -1685,11 +1696,11 @@ function main(config) {
   // ⑧ DNS / Sniffer / 规则注入
   applyDnsAndSniffer(config);
   if (hasHomeProxy) {
-    injectManagedRules(config, aiAgentTarget);
+    injectManagedRules(config, aiAgentTarget, frontProxyName);
     validateManagedRouting(config, routingTargets);
   } else {
     // 无家宽凭证：AI 规则指向 AI Agent，用户可在组内选择支持 AI 的订阅节点。
-    injectManagedRules(config, aiAgentTarget);
+    injectManagedRules(config, aiAgentTarget, frontProxyName);
   }
 
   delete config._frontProxyName;

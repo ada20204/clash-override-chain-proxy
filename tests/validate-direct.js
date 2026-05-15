@@ -153,6 +153,11 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "PROCESS-NAME,Claude,"       + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,claude,"       + EXPECTED.aiGroupName);
 
+  // 网络信息检测源：AI / 普通代理 / 前置或直连，各司其职
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,DIRECT");
+
   // 媒体规则指向媒体组
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com," + EXPECTED.mediaGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,netflix.com," + EXPECTED.mediaGroupName);
@@ -201,6 +206,9 @@ function testNoCredentialPureOverwrite() {
   // 无家宽时 AI 进程规则也指向 AI Agent
   assertRuleExists(output.rules, "PROCESS-NAME,Claude," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,claude.ai," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,DIRECT");
 
   // 域名规则正常
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com,🌍 国际媒体");
@@ -280,6 +288,10 @@ function testFrontProxyAppliesOnlyToSubscriptionNodes() {
 
   const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
   assert(aiGroup.proxies.indexOf("上海阿里云前置") < 0, "前置代理不应作为最终出口出现在 AI Agent");
+
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,上海阿里云前置");
 }
 
 function testFrontProxyDoesNotOverrideHomeProxyDialer() {
