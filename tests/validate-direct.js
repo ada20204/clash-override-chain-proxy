@@ -255,6 +255,45 @@ function testNoCredentialAiAgentIncludesCustomAndRawNodes() {
   assert(aiGroup.proxies.indexOf("🇺🇸 US Auto 01") >= 0, "无家宽时 AI Agent 应包含订阅裸节点");
 }
 
+function testFrontProxyAppliesOnlyToSubscriptionNodes() {
+  const { output } = runMain(function (config) {
+    delete config._homeProxy;
+    config._frontProxy = { name: "上海阿里云前置", type: "socks5", server: "10.0.0.8", port: 1080 };
+    config._customProxies = [
+      { name: "公司代理", type: "http", server: "10.0.0.9", port: 8080 }
+    ];
+  });
+
+  const frontNode = output.proxies.find(function (p) { return p.name === "上海阿里云前置"; });
+  assert(frontNode, "前置代理节点应被注入");
+
+  ["🇸🇬 SG Auto 01", "🇭🇰 HK Auto 01", "🇺🇸 US Auto 01"].forEach(function (name) {
+    const node = output.proxies.find(function (p) { return p.name === name; });
+    assert.strictEqual(node["dialer-proxy"], "上海阿里云前置", name + " 应先走前置代理");
+  });
+
+  const customNode = output.proxies.find(function (p) { return p.name === "公司代理"; });
+  assert.strictEqual(customNode["dialer-proxy"], undefined, "自定义出口不应被前置代理覆盖");
+
+  const nodeSelGroup = output["proxy-groups"].find(function (g) { return g.name === "节点选择"; });
+  assert(nodeSelGroup.proxies.indexOf("上海阿里云前置") < 0, "前置代理不应作为最终出口出现在节点选择");
+
+  const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
+  assert(aiGroup.proxies.indexOf("上海阿里云前置") < 0, "前置代理不应作为最终出口出现在 AI Agent");
+}
+
+function testFrontProxyDoesNotOverrideHomeProxyDialer() {
+  const { output } = runMain(function (config) {
+    config._frontProxy = { name: "上海阿里云前置", type: "socks5", server: "10.0.0.8", port: 1080 };
+  });
+
+  const homeNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeNodeName; });
+  assert.strictEqual(homeNode["dialer-proxy"], "🔗 家宽跳板", "家宽IP应继续走家宽跳板");
+
+  const subNode = output.proxies.find(function (p) { return p.name === "🇺🇸 US Auto 01"; });
+  assert.strictEqual(subNode["dialer-proxy"], "上海阿里云前置", "订阅节点应走前置代理");
+}
+
 function testFallbackToUrlTestGroup() {
   // 没有 Smart Group，但有原始 url-test 组 → 应回退使用 url-test
   const { output } = runMain(function (config) {
@@ -293,5 +332,7 @@ testAutoCreateUrlTestGroup();
 testAuthCredentials();
 testCustomProxiesAppearInGlobal();
 testNoCredentialAiAgentIncludesCustomAndRawNodes();
+testFrontProxyAppliesOnlyToSubscriptionNodes();
+testFrontProxyDoesNotOverrideHomeProxyDialer();
 
 console.log("validate-direct.js: all checks passed");

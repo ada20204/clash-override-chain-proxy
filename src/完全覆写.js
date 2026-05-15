@@ -56,6 +56,7 @@ var BASE = {
   regionOrder: ["HK", "US", "JP", "SG", "TW", "KR"],
   nodeNames: {
     aiAgent: "🤖 AI Agent",
+    front: "前置代理",
     home: "家宽IP"
   },
   ruleTargets: {
@@ -1044,11 +1045,26 @@ function hasProxyOrGroup(config, targetName) {
   );
 }
 
-function collectRegionNodeNames(proxies, regionRegex) {
+function collectProxyNames(proxies) {
   var names = [];
   for (var i = 0; i < proxies.length; i++) {
-    var proxy = proxies[i];
-    if (regionRegex.test(proxy.name) && proxy.name !== BASE.nodeNames.home) {
+    names.push(proxies[i].name);
+  }
+  return names;
+}
+
+function isManagedProxyName(config, proxyName) {
+  return (
+    proxyName === BASE.nodeNames.home ||
+    proxyName === config._frontProxyName
+  );
+}
+
+function collectRegionNodeNames(config, regionRegex) {
+  var names = [];
+  for (var i = 0; i < config.proxies.length; i++) {
+    var proxy = config.proxies[i];
+    if (regionRegex.test(proxy.name) && !isManagedProxyName(config, proxy.name)) {
       names.push(proxy.name);
     }
   }
@@ -1061,7 +1077,9 @@ function collectRegionNodeNames(proxies, regionRegex) {
 function ensureAnchorGroups(config) {
   var allNodeNames = [];
   for (var i = 0; i < config.proxies.length; i++) {
-    allNodeNames.push(config.proxies[i].name);
+    if (!isManagedProxyName(config, config.proxies[i].name)) {
+      allNodeNames.push(config.proxies[i].name);
+    }
   }
 
   // 收集地区组定义（暂不插入 proxy-groups）
@@ -1071,7 +1089,7 @@ function ensureAnchorGroups(config) {
     var regionKey = BASE.regionOrder[j];
     var regionMeta = BASE.regions[regionKey];
     if (!regionMeta) continue;
-    var regionNodes = collectRegionNodeNames(config.proxies, regionMeta.regex);
+    var regionNodes = collectRegionNodeNames(config, regionMeta.regex);
     if (regionNodes.length === 0) continue;
     var rgName = regionMeta.flag + "|" + regionMeta.label;
     regionGroups.push({
@@ -1144,9 +1162,8 @@ function ensureAutoSelectGroup(config) {
 
   // 都没有 → 自建 url-test
   var allNodeNames = [];
-  var homeNodeName = BASE.nodeNames.home;
   for (var i = 0; i < config.proxies.length; i++) {
-    if (config.proxies[i].name !== homeNodeName) {
+    if (!isManagedProxyName(config, config.proxies[i].name)) {
       allNodeNames.push(config.proxies[i].name);
     }
   }
@@ -1186,6 +1203,51 @@ function buildHomeProxy(credentials) {
 // 将家宽IP节点注入主配置。
 function injectHomeProxy(config, credentials) {
   upsertNamedItem(config.proxies, buildHomeProxy(credentials));
+}
+
+// 读取并移除注入到 `config._frontProxy` 的前置代理配置（可选）。
+// 存在时仅给订阅原始节点绑定 dialer-proxy，不影响自定义出口和家宽IP。
+function takeFrontProxyCredentials(config) {
+  if (!config._frontProxy) return null;
+  var credentials = config._frontProxy;
+  delete config._frontProxy;
+  return credentials;
+}
+
+function buildFrontProxy(credentials) {
+  if (!credentials.server || !credentials.port) {
+    throw createUserError("前置代理配置不完整，请检查 server 和 port 字段");
+  }
+  var node = {
+    name: credentials.name || BASE.nodeNames.front,
+    type: credentials.type || "socks5",
+    server: credentials.server,
+    port: credentials.port,
+    udp: true
+  };
+  if (credentials.username) node.username = credentials.username;
+  if (credentials.password) node.password = credentials.password;
+  return node;
+}
+
+function injectFrontProxy(config, credentials, subscriptionNodeNames) {
+  var frontNode = buildFrontProxy(credentials);
+  if (subscriptionNodeNames.indexOf(frontNode.name) >= 0) {
+    throw createUserError("前置代理名称与订阅节点重名，请修改 config._frontProxy.name");
+  }
+  upsertNamedItem(config.proxies, frontNode);
+  config._frontProxyName = frontNode.name;
+  return frontNode.name;
+}
+
+function bindFrontProxyToSubscriptionNodes(config, frontProxyName, subscriptionNodeNames) {
+  var subscriptionLookup = buildStringLookup(subscriptionNodeNames);
+  for (var i = 0; i < config.proxies.length; i++) {
+    var proxy = config.proxies[i];
+    if (subscriptionLookup[proxy.name]) {
+      proxy["dialer-proxy"] = frontProxyName;
+    }
+  }
 }
 
 // 解析家宽节点前一跳应使用的跳板组。
@@ -1553,18 +1615,26 @@ function toSuffix(domainPattern) {
 }
 
 // 按初始化、DNS/Sniffer、代理节点、规则注入、最终校验的顺序装配输出配置。
-// _homeProxy 和 _customProxies 均为可选；都不配置时脚本仅做分流覆写。
+// _frontProxy、_homeProxy 和 _customProxies 均为可选；都不配置时脚本仅做分流覆写。
 function main(config) {
+  var frontProxy     = takeFrontProxyCredentials(config); // 可选：订阅节点前置代理
   var credentials    = takeHomeProxyCredentials(config); // 可选：取出家宽IP凭证
   var customProxies  = takeCustomProxies(config);        // 可选：取出自定义出口配置
   var anchorResult;
   var regionGroupNames;
   var routingTargets;
   var hasHomeProxy = !!credentials;
+  var frontProxyName = null;
+  var subscriptionNodeNames = [];
 
   var customProxyNames = [];
 
   ensureProxyContainers(config);
+  subscriptionNodeNames = collectProxyNames(config.proxies);
+  if (frontProxy) {
+    frontProxyName = injectFrontProxy(config, frontProxy, subscriptionNodeNames);
+    bindFrontProxyToSubscriptionNodes(config, frontProxyName, subscriptionNodeNames);
+  }
   if (customProxies) customProxyNames = injectCustomProxies(config, customProxies);
   resetSubscriptionGroupsAndRules(config);
 
@@ -1622,5 +1692,6 @@ function main(config) {
     injectManagedRules(config, aiAgentTarget);
   }
 
+  delete config._frontProxyName;
   return config;
 }
