@@ -171,6 +171,15 @@ function testDefaultConfig() {
   // 兜底 MATCH
   assertRuleExists(output.rules, "MATCH,节点选择");
 
+  // Tailscale 自身和 Tailnet 地址保持直连，避免 Exit Node / DERP / WireGuard 套娃
+  assertRuleExists(output.rules, "PROCESS-NAME,tailscaled,DIRECT,no-resolve");
+  assertRuleExists(output.rules, "PROCESS-NAME,tailscaled.exe,DIRECT,no-resolve");
+  assertRuleExists(output.rules, "PROCESS-NAME,IPNExtension,DIRECT,no-resolve");
+  assertRuleExists(output.rules, "PROCESS-NAME,io.tailscale.ipn.macsys.network-extension,DIRECT,no-resolve");
+  assertRuleExists(output.rules, "IP-CIDR,100.64.0.0/10,DIRECT,no-resolve");
+  assertRuleExists(output.rules, "IP-CIDR,100.100.100.100/32,DIRECT,no-resolve");
+  assertRuleExists(output.rules, "IP-CIDR6,fd7a:115c:a1e0::/48,DIRECT,no-resolve");
+
   // 无重复规则
   assertNoDuplicateRuleIdentities(output.rules);
 }

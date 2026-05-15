@@ -584,6 +584,9 @@ var SOURCE_NETWORK_RULES = {
     // Tailscale 进程直连（WireGuard 隧道走纯 IP，不命中域名规则）
     { type: "PROCESS-NAME", value: "tailscaled.exe", target: BASE.ruleTargets.direct },
     { type: "PROCESS-NAME", value: "tailscaled",     target: BASE.ruleTargets.direct },
+    { type: "PROCESS-NAME", value: "Tailscale",      target: BASE.ruleTargets.direct },
+    { type: "PROCESS-NAME", value: "IPNExtension",   target: BASE.ruleTargets.direct },
+    { type: "PROCESS-NAME", value: "io.tailscale.ipn.macsys.network-extension", target: BASE.ruleTargets.direct },
     // Tailscale IP 网段（CGNAT + MagicDNS + IPv6）
     { type: "IP-CIDR",  value: "100.64.0.0/10",       target: BASE.ruleTargets.direct },
     { type: "IP-CIDR",  value: "100.100.100.100/32",   target: BASE.ruleTargets.direct },

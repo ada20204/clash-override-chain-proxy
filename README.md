@@ -56,6 +56,23 @@ Tailscale 进程+IP    → DIRECT
 兜底                  → 节点选择
 ```
 
+## 与 Tailscale 共存
+
+脚本默认按标准 Tailscale 方式共存，不接管 Tailscale Exit Node 的转发流量。
+
+保留直连的内容：
+
+```text
+Tailscale 进程 → DIRECT
+100.64.0.0/10 → DIRECT
+100.100.100.100/32 → DIRECT
+fd7a:115c:a1e0::/48 → DIRECT
+```
+
+这样做是为了避免 Tailscale 的 WireGuard / DERP / MagicDNS 流量被 Clash 再代理一层，导致套娃或断联。
+
+如果远程设备使用这台机器作为 Tailscale Exit Node，建议按 Tailscale 官方方式配置 Exit Node；本脚本不保证这类转发流量进入 Clash 规则。若远程设备也需要使用 Clash 分流，更稳定的方式是让远程设备通过 Tailscale 访问本机 Clash 的 HTTP/SOCKS 代理端口。
+
 ## 快速开始
 
 ### 1. 准备凭证文件（可选）
@@ -167,7 +184,9 @@ node tests/validate-direct.js
 
 ## 覆盖的进程
 
-### AI 应用（走 🏠家宽IP）
+### AI 应用（走 🤖 AI Agent）
+
+以下应用和命令行工具会命中 `🤖 AI Agent`。如果 `🤖 AI Agent` 里选择了 `🏠家宽IP`，这些流量才会继续走家宽 IP；也可以按需切到地区组、自定义出口或订阅节点。
 
 | 应用 | macOS | Windows |
 |---|---|---|
@@ -180,7 +199,9 @@ node tests/validate-direct.js
 | Gemini CLI | gemini | gemini.exe |
 | Codex CLI | codex | codex.exe |
 
-### 浏览器（enableChainRegionBrowserProcessProxy 开启时走 🏠家宽IP）
+### 浏览器（enableChainRegionBrowserProcessProxy 开启时走 🤖 AI Agent）
+
+开启 `enableChainRegionBrowserProcessProxy` 后，以下浏览器进程会命中 `🤖 AI Agent`。默认关闭，避免普通浏览器流量过度影响 AI 出口选择。
 
 | 浏览器 | macOS | Windows |
 |---|---|---|
@@ -192,13 +213,13 @@ node tests/validate-direct.js
 
 ```mermaid
 flowchart LR
-  USER["USER_OPTIONS<br/>地区 · 开关"]
-  BASE["BASE<br/>运行期常量"]
-  SRC["SOURCE_*<br/>模式字面量"]
-  POL["POLICY<br/>策略表"]
-  DER["DERIVED<br/>派生视图"]
+  USER["USER_OPTIONS\n地区 · 开关"]
+  BASE["BASE\n运行期常量"]
+  SRC["SOURCE_*\n模式字面量"]
+  POL["POLICY\n策略表"]
+  DER["DERIVED\n派生视图"]
   CFG[("Clash 配置")]
-  EXP["EXPECTED_ROUTES<br/>路由样本"]
+  EXP["EXPECTED_ROUTES\n路由样本"]
   VAL[["断言 + tests/validate.js"]]
 ```
 
