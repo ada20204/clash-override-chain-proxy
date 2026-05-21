@@ -1032,6 +1032,13 @@ function upsertNamedItem(items, itemDefinition) {
   return itemDefinition;
 }
 
+function insertBeforeDirect(proxies, proxyName) {
+  if (!proxies || proxies.indexOf(proxyName) >= 0) return;
+  var directIdx = proxies.indexOf(BASE.ruleTargets.direct);
+  if (directIdx >= 0) proxies.splice(directIdx, 0, proxyName);
+  else proxies.push(proxyName);
+}
+
 function findProxyByName(proxies, proxyName) {
   return findNamedItem(proxies, proxyName);
 }
@@ -1663,6 +1670,10 @@ function main(config) {
   var nodeSelGroup = findProxyGroupByName(config["proxy-groups"], "节点选择");
   var globalProxies = ["节点选择"].concat(nodeSelGroup ? nodeSelGroup.proxies.slice() : []);
   upsertNamedItem(config["proxy-groups"], { name: "GLOBAL", type: "select", proxies: globalProxies });
+  var globalGroup = findProxyGroupByName(config["proxy-groups"], "GLOBAL");
+  if (frontProxyName && globalGroup) {
+    insertBeforeDirect(globalGroup.proxies, frontProxyName);
+  }
 
   // ④ 功能组
   buildFunctionalGroups(config, regionGroupNames);
@@ -1675,12 +1686,10 @@ function main(config) {
     bindDialerProxy(config, routingTargets.relayGroupName);
     chainGroupName = routingTargets.chainGroupName;
     // 将 🏠家宽IP 添加到节点选择和 GLOBAL 中（在 DIRECT 之前）
-    var groups = [nodeSelGroup, findProxyGroupByName(config["proxy-groups"], "GLOBAL")];
+    var groups = [nodeSelGroup, globalGroup];
     for (var gi = 0; gi < groups.length; gi++) {
       if (!groups[gi]) continue;
-      var directIdx = groups[gi].proxies.indexOf("DIRECT");
-      if (directIdx >= 0) groups[gi].proxies.splice(directIdx, 0, chainGroupName);
-      else groups[gi].proxies.push(chainGroupName);
+      insertBeforeDirect(groups[gi].proxies, chainGroupName);
     }
   }
 
