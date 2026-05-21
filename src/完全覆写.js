@@ -734,7 +734,7 @@ function buildDerived() {
     },
     {
       name: "Ⓜ️ 微软服务",
-      preference: "proxy",
+      preference: "direct",
       domains: excludeStrings(flattenGroupedPatterns(SOURCE_PATTERNS.microsoft), directAll),
       dnsPolicy: "overseas"
     },

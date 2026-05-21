@@ -6,7 +6,7 @@
 
 ## 功能
 
-- **声明式功能组**：国际媒体、Telegram、GitHub、微软服务、游戏平台、Apple 等，新增组只需加一条配置
+- **声明式功能组**：国际媒体、Telegram、GitHub、微软服务、游戏平台、Apple 等，新增组只需加一条配置；微软服务默认直连
 - **地区自动检测**：根据订阅节点自动创建香港、美国、日本、新加坡、台湾、韩国等地区 url-test 组
 - **AI Agent 策略组**：AI 域名和进程统一走独立策略组；有家宽出口时可选家宽 IP，无家宽出口时可直接选择订阅节点
 - **家宽IP链路（可选）**：配置家宽出口后，可在 AI Agent 组中选择家宽 IP 出口
@@ -24,7 +24,7 @@
  4. 🌍 国际媒体        ← YouTube/Netflix/Twitter/Disney+/Spotify 等
  5. 📲 Telegram       ← Telegram + Discord
  6. 🐙 GitHub         ← GitHub 全套
- 7. Ⓜ️ 微软服务        ← Office/Azure/Bing/Xbox/VS Code 等
+ 7. Ⓜ️ 微软服务        ← Office/Azure/Bing/Xbox/VS Code 等，默认 DIRECT
  8. 🎮 游戏平台        ← Steam/Epic/Nintendo/PlayStation/Blizzard
  9. 🍎 Apple          ← iCloud/App Store 等
 10. 🎯 直连            ← DIRECT

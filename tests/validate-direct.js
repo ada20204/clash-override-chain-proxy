@@ -21,7 +21,8 @@ const EXPECTED = {
   chainGroupName:  "🏠家宽IP",
   homeNodeName:    "家宽IP",
   relayGroupName:  "自动选择(Smart Group)",
-  mediaGroupName:  "🌍 国际媒体"
+  mediaGroupName:  "🌍 国际媒体",
+  microsoftGroupName: "Ⓜ️ 微软服务"
 };
 
 // ─── sandbox ────────────────────────────────────────────────────────────────
@@ -140,6 +141,13 @@ function testDefaultConfig() {
   assert(mediaGroup.proxies.indexOf("节点选择") >= 0, "国际媒体应包含节点选择");
   assert(mediaGroup.proxies.indexOf(EXPECTED.homeNodeName) < 0, "媒体组不应含家宽IP节点");
 
+  // 微软服务默认直连，但保留手动切换到节点选择/地区组的能力
+  const microsoftGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.microsoftGroupName; });
+  assert(microsoftGroup, "微软服务组应存在");
+  assert.strictEqual(microsoftGroup.type, "select");
+  assert.strictEqual(microsoftGroup.proxies[0], "DIRECT", "微软服务默认应走直连");
+  assert(microsoftGroup.proxies.indexOf("节点选择") >= 0, "微软服务应保留节点选择");
+
   // 功能分组存在
   const groupNames = output["proxy-groups"].map(function (g) { return g.name; });
   ["🐙 GitHub", "📲 Telegram", "🌍 国际媒体", "🎮 游戏平台", "🍎 Apple", "🎯 直连"].forEach(function (name) {
@@ -167,6 +175,7 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,github.com,🐙 GitHub");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,steampowered.com,🎮 游戏平台");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,apple.com,🍎 Apple");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,microsoft.com," + EXPECTED.microsoftGroupName);
 
   // 兜底 MATCH
   assertRuleExists(output.rules, "MATCH,节点选择");
@@ -222,7 +231,12 @@ function testNoCredentialPureOverwrite() {
   // 域名规则正常
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com,🌍 国际媒体");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,github.com,🐙 GitHub");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,microsoft.com," + EXPECTED.microsoftGroupName);
   assertRuleExists(output.rules, "MATCH,节点选择");
+
+  const microsoftGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.microsoftGroupName; });
+  assert(microsoftGroup, "微软服务组应存在");
+  assert.strictEqual(microsoftGroup.proxies[0], "DIRECT", "微软服务默认应走直连");
 }
 
 function testAuthCredentials() {
