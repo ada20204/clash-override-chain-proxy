@@ -37,7 +37,14 @@
 var USER_OPTIONS = {
   autoSelectGroupName: "自动选择", // 订阅中的自动选择组名（url-test），Smart 内核会自动追加 "(Smart Group)" 后缀
   enableChainRegionBrowserProcessProxy: false, // 是否让受管浏览器按应用名强制走家宽出口
-  enableChainRegionAiCliProcessProxy: true    // 是否让常见 AI CLI 按应用名强制走家宽出口
+  enableChainRegionAiCliProcessProxy: true,   // 是否让常见 AI CLI 按应用名强制走家宽出口
+  tailscale: {
+    enable: true,
+    controlPlaneTarget: "DIRECT",
+    processTarget: "DIRECT",
+    forceExitNodeTraffic: false,
+    forceExitNodeTrafficTarget: "节点选择"
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -580,17 +587,23 @@ var SOURCE_NETWORK_RULES = {
     // IPv6 私有/特殊地址
     { type: "IP-CIDR6", value: "::1/128",               target: BASE.ruleTargets.direct },
     { type: "IP-CIDR6", value: "fc00::/7",              target: BASE.ruleTargets.direct },
-    { type: "IP-CIDR6", value: "fe80::/10",             target: BASE.ruleTargets.direct },
-    // Tailscale 进程直连（WireGuard 隧道走纯 IP，不命中域名规则）
-    { type: "PROCESS-NAME", value: "tailscaled.exe", target: BASE.ruleTargets.direct },
-    { type: "PROCESS-NAME", value: "tailscaled",     target: BASE.ruleTargets.direct },
-    { type: "PROCESS-NAME", value: "Tailscale",      target: BASE.ruleTargets.direct },
-    { type: "PROCESS-NAME", value: "IPNExtension",   target: BASE.ruleTargets.direct },
-    { type: "PROCESS-NAME", value: "io.tailscale.ipn.macsys.network-extension", target: BASE.ruleTargets.direct },
-    // Tailscale IP 网段（CGNAT + MagicDNS + IPv6）
+    { type: "IP-CIDR6", value: "fe80::/10",             target: BASE.ruleTargets.direct }
+  ]
+};
+
+var SOURCE_TAILSCALE_RULES = {
+  destinationDirect: [
     { type: "IP-CIDR",  value: "100.64.0.0/10",       target: BASE.ruleTargets.direct },
     { type: "IP-CIDR",  value: "100.100.100.100/32",   target: BASE.ruleTargets.direct },
     { type: "IP-CIDR6", value: "fd7a:115c:a1e0::/48",  target: BASE.ruleTargets.direct }
+  ],
+  controlPlaneDomains: ["tailscale.com"],
+  processNames: [
+    "tailscaled.exe",
+    "tailscaled",
+    "Tailscale",
+    "IPNExtension",
+    "io.tailscale.ipn.macsys.network-extension"
   ]
 };
 
@@ -1083,7 +1096,10 @@ function collectRegionNodeNames(config, regionRegex) {
 // 生成锚点组（节点选择）并按 BASE.regionOrder 顺序收集可用的地区节点。
 // 节点选择的成员为 [自动选择, 地区组..., 自定义节点..., DIRECT]，选组而不是选裸节点。
 // 地区组和 GLOBAL 由 appendTailGroups 插入底部。
-function ensureAnchorGroups(config) {
+function ensureAnchorGroups(config, options) {
+  var opts = options || {};
+  var enableAutoSelect = opts.enableAutoSelect !== false;
+  var enableRegions = opts.enableRegions !== false;
   var allNodeNames = [];
   for (var i = 0; i < config.proxies.length; i++) {
     if (!isManagedProxyName(config, config.proxies[i].name)) {
@@ -1094,27 +1110,33 @@ function ensureAnchorGroups(config) {
   // 收集地区组定义（暂不插入 proxy-groups）
   var regionGroups = [];
   var regionGroupNames = [];
-  for (var j = 0; j < BASE.regionOrder.length; j++) {
-    var regionKey = BASE.regionOrder[j];
-    var regionMeta = BASE.regions[regionKey];
-    if (!regionMeta) continue;
-    var regionNodes = collectRegionNodeNames(config, regionMeta.regex);
-    if (regionNodes.length === 0) continue;
-    var rgName = regionMeta.flag + "|" + regionMeta.label;
-    regionGroups.push({
-      name: rgName, type: "url-test", proxies: regionNodes,
-      url: BASE.urlTestProbeUrl, interval: 300, tolerance: 50
-    });
-    regionGroupNames.push(rgName);
+  if (enableRegions) {
+    for (var j = 0; j < BASE.regionOrder.length; j++) {
+      var regionKey = BASE.regionOrder[j];
+      var regionMeta = BASE.regions[regionKey];
+      if (!regionMeta) continue;
+      var regionNodes = collectRegionNodeNames(config, regionMeta.regex);
+      if (regionNodes.length === 0) continue;
+      var rgName = regionMeta.flag + "|" + regionMeta.label;
+      regionGroups.push({
+        name: rgName, type: "url-test", proxies: regionNodes,
+        url: BASE.urlTestProbeUrl, interval: 300, tolerance: 50
+      });
+      regionGroupNames.push(rgName);
+    }
   }
 
-  // 自动选择组已在 ensureAutoSelectGroup 中确保存在，直接查找名字
-  var smartName = USER_OPTIONS.autoSelectGroupName + "(Smart Group)";
-  var baseName  = USER_OPTIONS.autoSelectGroupName;
-  var autoSelectName = hasProxyOrGroup(config, smartName) ? smartName : baseName;
+  var nodeSelProxies = [];
+  if (enableAutoSelect) {
+    // 自动选择组已在 ensureAutoSelectGroup 中确保存在，直接查找名字
+    var smartName = USER_OPTIONS.autoSelectGroupName + "(Smart Group)";
+    var baseName  = USER_OPTIONS.autoSelectGroupName;
+    var autoSelectName = hasProxyOrGroup(config, smartName) ? smartName : baseName;
+    nodeSelProxies.push(autoSelectName);
+  }
 
   // 节点选择 = [自动选择, 地区组..., 全部裸节点..., DIRECT]
-  var nodeSelProxies = [autoSelectName].concat(regionGroupNames).concat(allNodeNames).concat(["DIRECT"]);
+  nodeSelProxies = nodeSelProxies.concat(regionGroupNames).concat(allNodeNames).concat(["DIRECT"]);
   upsertNamedItem(config["proxy-groups"], { name: "节点选择", type: "select", proxies: nodeSelProxies });
 
   return { allNodeNames: allNodeNames, regionGroups: regionGroups, regionGroupNames: regionGroupNames };
@@ -1309,18 +1331,27 @@ function ensureAiAgentGroup(config, options) {
 // 解析本轮注入所需的关键目标。
 // 新增「🔗 家宽跳板」select 组，成员为 [自动选择, 地区组..., 自定义节点...]，
 // 用户可在界面上手动选择家宽IP走哪条跳板线路。
-function resolveRoutingTargets(config, regionGroupNames, customProxyNames) {
-  // 确保自动选择组存在（供跳板组引用）
-  var relayTarget = resolveRelayTarget(config);
+function resolveRoutingTargets(config, regionGroupNames, customProxyNames, options) {
+  var opts = options || {};
+  var relayTarget = null;
+  var relayGroupName = null;
+  var relayGroupProxies = [];
 
-  // 跳板组成员：自动选择 + 地区组 + 自定义出口节点
-  var relayGroupName = "🔗 家宽跳板";
-  var relayGroupProxies = [relayTarget]
+  if (opts.enableAutoRelay !== false) {
+    relayTarget = resolveRelayTarget(config);
+    relayGroupProxies.push(relayTarget);
+  }
+  relayGroupProxies = relayGroupProxies
     .concat(regionGroupNames || [])
     .concat(customProxyNames || []);
-  upsertNamedItem(config["proxy-groups"], {
-    name: relayGroupName, type: "select", proxies: relayGroupProxies
-  });
+  relayGroupProxies = uniqueStrings(relayGroupProxies);
+
+  if (relayGroupProxies.length > 0) {
+    relayGroupName = "🔗 家宽跳板";
+    upsertNamedItem(config["proxy-groups"], {
+      name: relayGroupName, type: "select", proxies: relayGroupProxies
+    });
+  }
 
   // 家宽IP 的 dialer-proxy 指向跳板组
   var chainGroupName = ensureChainGroup();
@@ -1344,7 +1375,7 @@ function takeCustomProxies(config) {
   return Array.isArray(raw) ? raw : [raw];
 }
 
-function buildCustomProxyNode(proxyConfig) {
+function buildCustomProxyNode(proxyConfig, frontProxyName) {
   var node = {
     name: proxyConfig.name,
     type: proxyConfig.type || "http",
@@ -1354,10 +1385,16 @@ function buildCustomProxyNode(proxyConfig) {
   };
   if (proxyConfig.username) node.username = proxyConfig.username;
   if (proxyConfig.password) node.password = proxyConfig.password;
+  if (proxyConfig.useFrontProxy) {
+    if (!frontProxyName) {
+      throw createUserError("自定义出口 " + proxyConfig.name + " 启用了 useFrontProxy，但未配置前置代理");
+    }
+    node["dialer-proxy"] = frontProxyName;
+  }
   return node;
 }
 
-function injectCustomProxies(config, proxyConfigs) {
+function injectCustomProxies(config, proxyConfigs, frontProxyName) {
   var names = [];
   for (var i = 0; i < proxyConfigs.length; i++) {
     var proxyConfig = proxyConfigs[i];
@@ -1369,7 +1406,7 @@ function injectCustomProxies(config, proxyConfigs) {
     if (!proxyConfig.name) {
       proxyConfig.name = "自定义出口" + (i + 1);
     }
-    upsertNamedItem(config.proxies, buildCustomProxyNode(proxyConfig));
+    upsertNamedItem(config.proxies, buildCustomProxyNode(proxyConfig, frontProxyName));
     names.push(proxyConfig.name);
   }
   return names;
@@ -1529,6 +1566,63 @@ function buildBrowserChainRules(browserTarget) {
   return ruleLines;
 }
 
+function getTailscaleOptions() {
+  var defaults = {
+    enable: true,
+    controlPlaneTarget: BASE.ruleTargets.direct,
+    processTarget: BASE.ruleTargets.direct,
+    forceExitNodeTraffic: false,
+    forceExitNodeTrafficTarget: "节点选择"
+  };
+  var provided = USER_OPTIONS.tailscale || {};
+  return {
+    enable: provided.enable !== false,
+    controlPlaneTarget: provided.controlPlaneTarget || defaults.controlPlaneTarget,
+    processTarget: provided.processTarget || defaults.processTarget,
+    forceExitNodeTraffic: provided.forceExitNodeTraffic === true,
+    forceExitNodeTrafficTarget: provided.forceExitNodeTrafficTarget || defaults.forceExitNodeTrafficTarget
+  };
+}
+
+function buildTailscaleRules() {
+  var options = getTailscaleOptions();
+  var rules = [];
+  var i;
+  if (!options.enable) return rules;
+
+  for (i = 0; i < SOURCE_TAILSCALE_RULES.destinationDirect.length; i++) {
+    rules.push({
+      type: SOURCE_TAILSCALE_RULES.destinationDirect[i].type,
+      value: SOURCE_TAILSCALE_RULES.destinationDirect[i].value,
+      target: BASE.ruleTargets.direct,
+      option: "no-resolve"
+    });
+  }
+  if (options.forceExitNodeTraffic) {
+    rules.push({
+      type: "SRC-IP-CIDR",
+      value: "100.64.0.0/10",
+      target: options.forceExitNodeTrafficTarget,
+      option: "no-resolve"
+    });
+  }
+  for (i = 0; i < SOURCE_TAILSCALE_RULES.controlPlaneDomains.length; i++) {
+    rules.push({
+      type: "DOMAIN-SUFFIX",
+      value: SOURCE_TAILSCALE_RULES.controlPlaneDomains[i],
+      target: options.controlPlaneTarget
+    });
+  }
+  for (i = 0; i < SOURCE_TAILSCALE_RULES.processNames.length; i++) {
+    rules.push({
+      type: "PROCESS-NAME",
+      value: SOURCE_TAILSCALE_RULES.processNames[i],
+      target: options.processTarget,
+      option: "no-resolve"
+    });
+  }
+  return rules;
+}
 
 function buildDirectRules() {
   var ruleLines = [];
@@ -1545,6 +1639,7 @@ function buildDirectRules() {
     });
   }
   addRawRulesIfNotExists(ruleLines, seenRuleIdentities, directNetworkRules);
+  addRawRulesIfNotExists(ruleLines, seenRuleIdentities, buildTailscaleRules());
   for (i = 0; i < directPatternGroups.length; i++) {
     addSuffixRulesIfNotExists(ruleLines, seenRuleIdentities, directPatternGroups[i], BASE.ruleTargets.direct);
   }
@@ -1587,7 +1682,7 @@ function validateManagedRouting(config, routingTargets) {
   if (routingTargets.strictAiTarget !== BASE.nodeNames.aiAgent) {
     throw createUserError("域外 AI 与支撑平台未指向 AI Agent 组，请检查代理组注入逻辑");
   }
-  if (!hasProxyOrGroup(config, routingTargets.relayGroupName)) {
+  if (routingTargets.relayGroupName && !hasProxyOrGroup(config, routingTargets.relayGroupName)) {
     throw createUserError(
       "家宽跳板组 \"" + routingTargets.relayGroupName + "\" 不存在，请检查代理组注入逻辑"
     );
@@ -1597,8 +1692,12 @@ function validateManagedRouting(config, routingTargets) {
   if (!homeProxy) {
     throw createUserError("家宽IP节点不存在，请检查 出口IP凭证.js 和节点注入逻辑");
   }
-  if (!homeProxy["dialer-proxy"] || homeProxy["dialer-proxy"] !== routingTargets.relayGroupName) {
+  if (routingTargets.relayGroupName &&
+      (!homeProxy["dialer-proxy"] || homeProxy["dialer-proxy"] !== routingTargets.relayGroupName)) {
     throw createUserError("家宽IP节点未正确绑定到家宽跳板组，请检查代理链路注入逻辑");
+  }
+  if (!routingTargets.relayGroupName && homeProxy["dialer-proxy"]) {
+    throw createUserError("家宽IP节点不应绑定不存在的家宽跳板组，请检查代理链路注入逻辑");
   }
 
   chainGroup = findProxyGroupByName(config["proxy-groups"], routingTargets.chainGroupName);
@@ -1647,23 +1746,33 @@ function main(config) {
   var hasHomeProxy = !!credentials;
   var frontProxyName = null;
   var subscriptionNodeNames = [];
+  var hasSubscriptionNodes = false;
+  var standaloneMode = false;
 
   var customProxyNames = [];
 
   ensureProxyContainers(config);
   subscriptionNodeNames = collectProxyNames(config.proxies);
+  hasSubscriptionNodes = subscriptionNodeNames.length > 0;
+  standaloneMode = !hasSubscriptionNodes;
+  if (standaloneMode && !hasHomeProxy && (!customProxies || customProxies.length === 0)) {
+    throw createUserError("未检测到订阅节点，也未配置 _customProxies 或 _homeProxy。请导入订阅，或使用 出口IP凭证.js 添加公司节点/固定 IP。");
+  }
   if (frontProxy) {
     frontProxyName = injectFrontProxy(config, frontProxy, subscriptionNodeNames);
     bindFrontProxyToSubscriptionNodes(config, frontProxyName, subscriptionNodeNames);
   }
-  if (customProxies) customProxyNames = injectCustomProxies(config, customProxies);
+  if (customProxies) customProxyNames = injectCustomProxies(config, customProxies, frontProxyName);
   resetSubscriptionGroupsAndRules(config);
 
   // ① 自动选择组（最上面）：订阅有就用，没有就自建 url-test
-  var autoSelectName = ensureAutoSelectGroup(config);
+  if (!standaloneMode) ensureAutoSelectGroup(config);
 
   // ② 节点选择（第二位）
-  anchorResult = ensureAnchorGroups(config);
+  anchorResult = ensureAnchorGroups(config, {
+    enableAutoSelect: !standaloneMode,
+    enableRegions: !standaloneMode
+  });
   regionGroupNames = anchorResult.regionGroupNames;
 
   // ③ GLOBAL（第三位，成员 = [节点选择] + 节点选择的全部成员）
@@ -1682,7 +1791,9 @@ function main(config) {
   var chainGroupName = null;
   if (hasHomeProxy) {
     injectHomeProxy(config, credentials);
-    routingTargets = resolveRoutingTargets(config, regionGroupNames, customProxyNames);
+    routingTargets = resolveRoutingTargets(config, regionGroupNames, customProxyNames, {
+      enableAutoRelay: !standaloneMode
+    });
     bindDialerProxy(config, routingTargets.relayGroupName);
     chainGroupName = routingTargets.chainGroupName;
     // 将 🏠家宽IP 添加到节点选择和 GLOBAL 中（在 DIRECT 之前）
@@ -1699,7 +1810,7 @@ function main(config) {
     regionGroupNames: regionGroupNames,
     customProxyNames: customProxyNames,
     allNodeNames: anchorResult.allNodeNames,
-    includeRawNodes: !hasHomeProxy
+    includeRawNodes: hasSubscriptionNodes && !hasHomeProxy
   });
 
   // ⑦ 地区 url-test 组（沉底）

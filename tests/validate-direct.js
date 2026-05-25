@@ -65,6 +65,20 @@ function runMain(configMutator, sandboxMutator) {
   return { sandbox, output: sandbox.main(config) };
 }
 
+function runMainWithConfig(config, sandboxMutator) {
+  const sandbox = loadSandbox();
+  if (typeof sandboxMutator === "function") sandboxMutator(sandbox);
+  return { sandbox, output: sandbox.main(config) };
+}
+
+function createEmptyConfig() {
+  return {
+    proxies: [],
+    "proxy-groups": [],
+    rules: ["MATCH,DIRECT"]
+  };
+}
+
 // ─── assertion helpers ───────────────────────────────────────────────────────
 
 function assertRuleExists(rules, ruleLine) {
@@ -334,6 +348,108 @@ function testFrontProxyDoesNotOverrideHomeProxyDialer() {
   assert.strictEqual(subNode["dialer-proxy"], "一级前置代理", "订阅节点应走前置代理");
 }
 
+function testStandaloneCustomProxiesWithoutSubscription() {
+  const config = createEmptyConfig();
+  config._customProxies = [
+    { name: "公司代理", type: "http", server: "10.0.0.9", port: 8080 },
+    { name: "美国固定IP", type: "socks5", server: "20.0.0.1", port: 1080 }
+  ];
+  const { output } = runMainWithConfig(config);
+
+  const groupNames = output["proxy-groups"].map(function (g) { return g.name; });
+  assert(groupNames.indexOf("自动选择") < 0, "无订阅模式不应自建自动选择组");
+  assert(groupNames.indexOf("🇺🇸|美国") < 0, "无订阅模式不应生成地区组");
+
+  const nodeSelGroup = output["proxy-groups"].find(function (g) { return g.name === "节点选择"; });
+  assert(nodeSelGroup, "无订阅模式应创建节点选择");
+  assert(nodeSelGroup.proxies.indexOf("公司代理") >= 0, "节点选择应包含公司代理");
+  assert(nodeSelGroup.proxies.indexOf("美国固定IP") >= 0, "节点选择应包含美国固定IP");
+  assert(nodeSelGroup.proxies.indexOf("DIRECT") >= 0, "节点选择应包含 DIRECT");
+
+  const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
+  assert(aiGroup, "无订阅模式应创建 AI Agent");
+  assert(aiGroup.proxies.indexOf("公司代理") >= 0, "AI Agent 应包含自定义节点");
+  assert(aiGroup.proxies.indexOf("美国固定IP") >= 0, "AI Agent 应包含固定 IP 节点");
+  assert(aiGroup.proxies.indexOf("自动选择") < 0, "AI Agent 不应包含自动选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
+  assertRuleExists(output.rules, "MATCH,节点选择");
+}
+
+function testStandaloneHomeOnlyWithoutSubscription() {
+  const config = createEmptyConfig();
+  config._homeProxy = { type: "http", server: "30.0.0.1", port: 3128 };
+  const { output } = runMainWithConfig(config);
+
+  const homeNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeNodeName; });
+  assert(homeNode, "无订阅固定 IP 模式应注入家宽IP节点");
+  assert.strictEqual(homeNode["dialer-proxy"], undefined, "没有可用跳板时家宽IP不应绑定 dialer-proxy");
+
+  const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 家宽跳板"; });
+  assert(!relayGroup, "没有订阅和自定义跳板时不应创建家宽跳板");
+
+  const chainGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.chainGroupName; });
+  assert(chainGroup, "无订阅固定 IP 模式应创建家宽IP组");
+
+  const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
+  assert.strictEqual(aiGroup.proxies[0], EXPECTED.chainGroupName, "固定 IP 应优先出现在 AI Agent");
+}
+
+function testStandaloneFrontProxyOnlyAppliesWhenRequested() {
+  const config = createEmptyConfig();
+  config._frontProxy = { name: "一级前置代理", type: "socks5", server: "10.0.0.8", port: 1080 };
+  config._customProxies = [
+    { name: "公司代理", type: "http", server: "10.0.0.9", port: 8080 },
+    { name: "上游节点", type: "socks5", server: "10.0.0.10", port: 1080, useFrontProxy: true }
+  ];
+  const { output } = runMainWithConfig(config);
+
+  const normalNode = output.proxies.find(function (p) { return p.name === "公司代理"; });
+  const chainedNode = output.proxies.find(function (p) { return p.name === "上游节点"; });
+  assert.strictEqual(normalNode["dialer-proxy"], undefined, "未声明 useFrontProxy 的自定义节点不应走前置代理");
+  assert.strictEqual(chainedNode["dialer-proxy"], "一级前置代理", "声明 useFrontProxy 的自定义节点应走前置代理");
+
+  const nodeSelGroup = output["proxy-groups"].find(function (g) { return g.name === "节点选择"; });
+  assert(nodeSelGroup.proxies.indexOf("一级前置代理") < 0, "前置代理不应进入节点选择");
+}
+
+function testTailscaleRulesAreConfigurableAndExitNodeUsesNormalRules() {
+  const { output } = runMain(function (config) {
+    delete config._homeProxy;
+  }, function (sandbox) {
+    sandbox.USER_OPTIONS.tailscale.controlPlaneTarget = "节点选择";
+    sandbox.USER_OPTIONS.tailscale.processTarget = "节点选择";
+  });
+
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,tailscale.com,节点选择");
+  assertRuleExists(output.rules, "PROCESS-NAME,tailscaled,节点选择,no-resolve");
+  assertRuleExists(output.rules, "PROCESS-NAME,Tailscale,节点选择,no-resolve");
+  assertRuleExists(output.rules, "IP-CIDR,100.64.0.0/10,DIRECT,no-resolve");
+  assert(output.rules.indexOf("SRC-IP-CIDR,100.64.0.0/10,节点选择,no-resolve") < 0,
+    "默认不应提前截获 Tailscale Exit Node 转发流量");
+}
+
+function testTailscaleExitNodeCanBeForced() {
+  const { output } = runMain(function (config) {
+    delete config._homeProxy;
+  }, function (sandbox) {
+    sandbox.USER_OPTIONS.tailscale.forceExitNodeTraffic = true;
+    sandbox.USER_OPTIONS.tailscale.forceExitNodeTrafficTarget = "节点选择";
+  });
+
+  const directIndex = output.rules.indexOf("IP-CIDR,100.64.0.0/10,DIRECT,no-resolve");
+  const forcedIndex = output.rules.indexOf("SRC-IP-CIDR,100.64.0.0/10,节点选择,no-resolve");
+  assert(directIndex >= 0, "Tailnet 目的地址直连规则应存在");
+  assert(forcedIndex >= 0, "开启后应写入 Exit Node 转发强制出口规则");
+  assert(directIndex < forcedIndex, "Tailnet 目的地址直连规则应早于 Exit Node 强制出口规则");
+}
+
+function testStandaloneEmptyConfigFailsLoudly() {
+  assert.throws(function () {
+    runMainWithConfig(createEmptyConfig());
+  }, /未检测到订阅节点/);
+}
+
 function testFallbackToUrlTestGroup() {
   // 没有 Smart Group，但有原始 url-test 组 → 应回退使用 url-test
   const { output } = runMain(function (config) {
@@ -374,5 +490,11 @@ testCustomProxiesAppearInGlobal();
 testNoCredentialAiAgentIncludesCustomAndRawNodes();
 testFrontProxyAppliesOnlyToSubscriptionNodes();
 testFrontProxyDoesNotOverrideHomeProxyDialer();
+testStandaloneCustomProxiesWithoutSubscription();
+testStandaloneHomeOnlyWithoutSubscription();
+testStandaloneFrontProxyOnlyAppliesWhenRequested();
+testTailscaleRulesAreConfigurableAndExitNodeUsesNormalRules();
+testTailscaleExitNodeCanBeForced();
+testStandaloneEmptyConfigFailsLoudly();
 
 console.log("validate-direct.js: all checks passed");

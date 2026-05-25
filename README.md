@@ -8,10 +8,12 @@
 
 - **声明式功能组**：国际媒体、Telegram、GitHub、微软服务、游戏平台、Apple 等，新增组只需加一条配置；微软服务默认直连
 - **地区自动检测**：根据订阅节点自动创建香港、美国、日本、新加坡、台湾、韩国等地区 url-test 组
+- **无订阅模式**：可用空 YAML 作为基础配置，出口节点统一写入 `出口IP凭证.js`
 - **AI Agent 策略组**：AI 域名和进程统一走独立策略组；有家宽出口时可选家宽 IP，无家宽出口时可直接选择订阅节点
 - **家宽IP链路（可选）**：配置家宽出口后，可在 AI Agent 组中选择家宽 IP 出口
 - **前置代理（可选）**：给订阅节点统一加一层一级跳板，缓解本机网络到订阅节点的污染和超时；也可在 GLOBAL 中选择它，让全局流量都先走一级代理
 - **自定义出口（可选）**：注入自定义 HTTP/SOCKS5 代理节点
+- **Tailscale 共存（可调）**：Tailnet 目的地址固定直连，官方域名和进程目标可在脚本顶部配置
 - **GeoSite/GeoIP 兜底**：国内域名和 IP 自动直连，无需手动维护
 - **跨平台进程规则**：同时覆盖 macOS 和 Windows 进程名
 
@@ -42,6 +44,9 @@
 
 无家宽IP时：
   节点选择 / 地区组 / 自定义出口 / 订阅裸节点 / DIRECT
+
+无订阅模式：
+  🏠家宽IP / 自定义出口 / 节点选择 / DIRECT
 ```
 
 AI Agent 不直接放入总的自动选择组，避免 AI 出口选择过于含糊；地区组会保留。有家宽 IP 时不展开订阅裸节点，避免高阶场景下列表过长；无家宽 IP 时保留裸节点，方便单独给 AI 选择某个支持 AI 的订阅节点。
@@ -53,27 +58,37 @@ AI 进程规则           → 🤖 AI Agent
 AI + 平台域名         → 🤖 AI Agent
 浏览器进程规则        → 🤖 AI Agent（enableChainRegionBrowserProcessProxy 开启时）
 功能组域名规则        → 各功能组（国际媒体/Telegram/GitHub/微软/游戏/Apple）
-Tailscale 进程+IP    → DIRECT
+Tailscale 目的地址     → DIRECT
+Tailscale 域名+进程    → USER_OPTIONS.tailscale 配置的目标
 国内域名/IP直连       → DIRECT（手动列表 + GEOSITE,cn + GEOIP,cn）
 兜底                  → 节点选择
 ```
 
 ## 与 Tailscale 共存
 
-脚本默认按标准 Tailscale 方式共存，不接管 Tailscale Exit Node 的转发流量。
+脚本默认按标准 Tailscale 方式共存。远程设备把本机作为 Exit Node 时，默认不会用一条 `SRC-IP-CIDR` 把转发流量提前截获，因此这类公网访问仍会继续走完整分流规则，最后才落到 `MATCH → 节点选择`。
 
-保留直连的内容：
+固定直连的 Tailnet 目的地址：
 
 ```text
-Tailscale 进程 → DIRECT
 100.64.0.0/10 → DIRECT
 100.100.100.100/32 → DIRECT
 fd7a:115c:a1e0::/48 → DIRECT
 ```
 
-这样做是为了避免 Tailscale 的 WireGuard / DERP / MagicDNS 流量被 Clash 再代理一层，导致套娃或断联。
+Tailscale 官方域名和 App 进程默认直连，但可以在 `完全覆写.js` 顶部配置：
 
-如果远程设备使用这台机器作为 Tailscale Exit Node，建议按 Tailscale 官方方式配置 Exit Node；本脚本不保证这类转发流量进入 Clash 规则。若远程设备也需要使用 Clash 分流，更稳定的方式是让远程设备通过 Tailscale 访问本机 Clash 的 HTTP/SOCKS 代理端口。
+```javascript
+tailscale: {
+  enable: true,
+  controlPlaneTarget: "DIRECT",
+  processTarget: "DIRECT",
+  forceExitNodeTraffic: false,
+  forceExitNodeTrafficTarget: "节点选择"
+}
+```
+
+如果本机网络访问 `tailscale.com` 官方域名也受污染，可以把 `controlPlaneTarget` 改成前置代理名称或 `节点选择`。`processTarget` 默认不建议改；进程级代理可能影响 WireGuard、DERP 或 STUN 行为。只有明确需要一刀切接管 Exit Node 转发公网流量时，才把 `forceExitNodeTraffic` 改成 `true`。
 
 ## 快速开始
 
@@ -116,7 +131,7 @@ function main(config) {
 }
 ```
 
-配置后，订阅原始节点会先走这个前置代理；URLTest 测速地区节点时也会先走前置代理。自定义出口、家宽IP 和 DIRECT 不会被前置代理覆盖。
+配置后，订阅原始节点会先走这个前置代理；URLTest 测速地区节点时也会先走前置代理。自定义出口默认不会被前置代理覆盖；如需让某个自定义节点也先走前置代理，在节点配置里加 `useFrontProxy: true`。
 
 如果希望全局所有流量都走一级代理，请在 `GLOBAL` 组里选择你配置的一级代理名称。`DIRECT` 是 Clash 内置直连，选择 `GLOBAL → DIRECT` 时仍然会真实直连。
 
@@ -138,9 +153,27 @@ function main(config) {
 var USER_OPTIONS = {
   autoSelectGroupName: "自动选择",              // 订阅中自动选择组的名称
   enableChainRegionBrowserProcessProxy: false,  // 浏览器进程是否走家宽出口
-  enableChainRegionAiCliProcessProxy: true      // AI CLI 进程是否走家宽出口
+  enableChainRegionAiCliProcessProxy: true,     // AI CLI 进程是否走家宽出口
+  tailscale: {
+    enable: true,
+    controlPlaneTarget: "DIRECT",
+    processTarget: "DIRECT",
+    forceExitNodeTraffic: false,
+    forceExitNodeTrafficTarget: "节点选择"
+  }
 };
 ```
+
+### 无订阅模式
+
+如果没有机场订阅，也可以使用空 YAML 作为容器：
+
+1. 导入 [`src/无订阅基础配置.yaml`](src/无订阅基础配置.yaml)
+2. 复制 [`src/出口IP凭证_样本.js`](src/出口IP凭证_样本.js)，重命名为 `出口IP凭证.js`
+3. 在 `出口IP凭证.js` 里填入公司节点、自定义节点或固定 IP
+4. 覆写顺序：`出口IP凭证.js` → `完全覆写.js`
+
+无订阅模式不会生成地区组，也不会强行创建 `自动选择`。如果空 YAML 里没有订阅节点，也没有 `_customProxies` 或 `_homeProxy`，脚本会直接报错。
 
 ### 4. 启用并验证
 
@@ -171,8 +204,9 @@ ip.sb      → 看本机到订阅节点前的第一跳；没前置代理时就�
 ```
 src/
   完全覆写.js           ← 覆写脚本（唯一）
+  无订阅基础配置.yaml    ← 无订阅模式的空基础配置
   前置代理_样本.js       ← 前置代理样本（给订阅节点统一加第一跳）
-  出口IP凭证_样本.js     ← 凭证样本（家宽IP + 自定义出口，全可选）
+  出口IP凭证_样本.js     ← 统一出口配置样本（家宽IP + 公司节点 + 自定义出口）
   家宽IP-链式代理.js     ← 原始脚本（保留参考）
   MiyaIP 凭证_样本.js    ← MiyaIP 凭证样本（保留参考）
 

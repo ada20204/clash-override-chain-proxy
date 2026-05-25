@@ -24,7 +24,7 @@ function main(config) {
   //   name: "一级前置代理",   // 节点显示名称，可自定义
   //   type: "socks5",        // socks5 或 http
   //   server: "",            // 前置代理服务器地址（IP 或域名）
-  //   port: 1080             // 前置代理端口
+  //   port: 1080,            // 前置代理端口
   //   // 如需认证，取消注释以下两行：
   //   // username: "",
   //   // password: ""
