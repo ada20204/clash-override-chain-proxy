@@ -10,10 +10,10 @@
 - **地区自动检测**：根据订阅节点自动创建香港、美国、日本、新加坡、台湾、韩国等地区 url-test 组
 - **无订阅模式**：可用空 YAML 作为基础配置，出口节点统一写入 `出口IP凭证.js`
 - **AI Agent 策略组**：AI 域名和进程统一走独立策略组；有家宽出口时可选家宽 IP，无家宽出口时可直接选择订阅节点
-- **家宽IP链路（可选）**：配置家宽出口后，可在 AI Agent 组中选择家宽 IP 出口
+- **家宽IP链路（可选）**：配置家宽出口后，会生成真直连 `家宽IP` 和可选 `家宽IP链式`，可在 AI Agent 组中选择
 - **前置代理（可选）**：给订阅节点统一加一层一级跳板，缓解本机网络到订阅节点的污染和超时；也可在 GLOBAL 中选择它，让全局流量都先走一级代理
 - **自定义出口（可选）**：注入自定义 HTTP/SOCKS5 代理节点
-- **Tailscale 共存（可调）**：Tailnet 目的地址固定直连，官方域名和进程目标可在脚本顶部配置
+- **Tailscale 共存（可调）**：Tailnet 目的地址固定直连，官方域名和进程目标可配置，并默认生成可见监控组
 - **GeoSite/GeoIP 兜底**：国内域名和 IP 自动直连，无需手动维护
 - **跨平台进程规则**：同时覆盖 macOS 和 Windows 进程名
 
@@ -31,9 +31,12 @@
  9. 🍎 Apple          ← iCloud/App Store 等
 10. 🎯 直连            ← DIRECT
 11. 🤖 AI Agent       ← AI 域名/进程的独立出口选择组
-12. 🔗 家宽跳板        ← 家宽节点的上级跳板（有家宽凭证时）
-13. 🏠家宽IP          ← 家宽出口节点（有家宽凭证时）
-14+ 地区 url-test 组   ← 🇭🇰|香港、🇺🇸|美国、🇯🇵|日本 等（沉底）
+12. 🧩 Tailnet 内部直连 ← Tailnet 目的地址监控组
+13. 🧩 Tailscale 控制面 ← tailscale.com 等官方域名监控组
+14. 🧩 Tailscale 进程  ← Tailscale App / 服务进程监控组
+15. 🔗 家宽跳板        ← 家宽链式节点的上级跳板（有家宽凭证和可用跳板时）
+16. 🏠家宽IP          ← 家宽出口选择组（有家宽凭证时）
+17+ 地区 url-test 组   ← 🇭🇰|香港、🇺🇸|美国、🇯🇵|日本 等（沉底）
 ```
 
 `🤖 AI Agent` 的成员会按是否配置家宽 IP 自动变化：
@@ -58,8 +61,8 @@ AI 进程规则           → 🤖 AI Agent
 AI + 平台域名         → 🤖 AI Agent
 浏览器进程规则        → 🤖 AI Agent（enableChainRegionBrowserProcessProxy 开启时）
 功能组域名规则        → 各功能组（国际媒体/Telegram/GitHub/微软/游戏/Apple）
-Tailscale 目的地址     → DIRECT
-Tailscale 域名+进程    → USER_OPTIONS.tailscale 配置的目标
+Tailscale 目的地址     → 🧩 Tailnet 内部直连 → DIRECT
+Tailscale 域名+进程    → Tailscale 监控组 → USER_OPTIONS.tailscale 配置的目标
 国内域名/IP直连       → DIRECT（手动列表 + GEOSITE,cn + GEOIP,cn）
 兜底                  → 节点选择
 ```
@@ -68,19 +71,30 @@ Tailscale 域名+进程    → USER_OPTIONS.tailscale 配置的目标
 
 脚本默认按标准 Tailscale 方式共存。远程设备把本机作为 Exit Node 时，默认不会用一条 `SRC-IP-CIDR` 把转发流量提前截获，因此这类公网访问仍会继续走完整分流规则，最后才落到 `MATCH → 节点选择`。
 
-固定直连的 Tailnet 目的地址：
+最终直连的 Tailnet 目的地址：
 
 ```text
-100.64.0.0/10 → DIRECT
-100.100.100.100/32 → DIRECT
-fd7a:115c:a1e0::/48 → DIRECT
+100.64.0.0/10 → 🧩 Tailnet 内部直连 → DIRECT
+100.100.100.100/32 → 🧩 Tailnet 内部直连 → DIRECT
+fd7a:115c:a1e0::/48 → 🧩 Tailnet 内部直连 → DIRECT
 ```
 
-Tailscale 官方域名和 App 进程默认直连，但可以在 `完全覆写.js` 顶部配置：
+Tailscale 官方域名和 App 进程默认直连，但规则会先进入可见监控组，便于在 Clash Party 的连接图里确认流向：
+
+| 监控组 | 默认成员 | 用途 |
+|---|---|---|
+| `🧩 Tailnet 内部直连` | `DIRECT` | `100.64.0.0/10`、MagicDNS 等 Tailnet 目的地址 |
+| `🧩 Tailscale 控制面` | `DIRECT` | `tailscale.com`、`tailscale.io`、`ts.net` |
+| `🧩 Tailscale 进程` | `DIRECT` | Tailscale App / 服务进程 |
+| `🧩 Tailscale Exit Node` | `forceExitNodeTrafficTarget` | 仅在强制接管 Exit Node 转发流量时出现 |
+
+可以在 `完全覆写.js` 顶部配置：
 
 ```javascript
 tailscale: {
   enable: true,
+  monitorGroups: true,
+  subnetCidrs: [],
   controlPlaneTarget: "DIRECT",
   processTarget: "DIRECT",
   forceExitNodeTraffic: false,
@@ -88,7 +102,7 @@ tailscale: {
 }
 ```
 
-如果本机网络访问 `tailscale.com` 官方域名也受污染，可以把 `controlPlaneTarget` 改成前置代理名称或 `节点选择`。`processTarget` 默认不建议改；进程级代理可能影响 WireGuard、DERP 或 STUN 行为。只有明确需要一刀切接管 Exit Node 转发公网流量时，才把 `forceExitNodeTraffic` 改成 `true`。
+如果本机网络访问 `tailscale.com` 官方域名也受污染，可以把 `controlPlaneTarget` 改成前置代理名称或 `节点选择`。如果启用了 Tailscale subnet route，并希望这些内网段也在连接图里归到 `🧩 Tailnet 内部直连`，把网段写入 `subnetCidrs`，例如 `["192.168.88.0/24"]`。`monitorGroups` 只影响界面可观测性，设为 `false` 后规则会直接指向配置目标。`processTarget` 默认不建议改；进程级代理可能影响 WireGuard、DERP 或 STUN 行为。只有明确需要一刀切接管 Exit Node 转发公网流量时，才把 `forceExitNodeTraffic` 改成 `true`。
 
 ## 快速开始
 
@@ -156,6 +170,8 @@ var USER_OPTIONS = {
   enableChainRegionAiCliProcessProxy: true,     // AI CLI 进程是否走家宽出口
   tailscale: {
     enable: true,
+    monitorGroups: true,
+    subnetCidrs: [],
     controlPlaneTarget: "DIRECT",
     processTarget: "DIRECT",
     forceExitNodeTraffic: false,

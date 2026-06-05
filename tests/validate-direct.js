@@ -20,9 +20,14 @@ const EXPECTED = {
   aiGroupName:     "🤖 AI Agent",
   chainGroupName:  "🏠家宽IP",
   homeNodeName:    "家宽IP",
+  homeChainedNodeName: "家宽IP链式",
   relayGroupName:  "自动选择(Smart Group)",
   mediaGroupName:  "🌍 国际媒体",
-  microsoftGroupName: "Ⓜ️ 微软服务"
+  microsoftGroupName: "Ⓜ️ 微软服务",
+  tailscaleControlGroupName: "🧩 Tailscale 控制面",
+  tailscaleProcessGroupName: "🧩 Tailscale 进程",
+  tailnetDirectGroupName: "🧩 Tailnet 内部直连",
+  tailscaleExitGroupName: "🧩 Tailscale Exit Node"
 };
 
 // ─── sandbox ────────────────────────────────────────────────────────────────
@@ -103,6 +108,12 @@ function assertNoDuplicateRuleIdentities(rules) {
   }
 }
 
+function assertSingleProxy(group, proxyName, message) {
+  assert(group, message + "：代理组不存在");
+  assert.strictEqual(group.proxies.length, 1, message + "：应只有一个成员");
+  assert.strictEqual(group.proxies[0], proxyName, message);
+}
+
 // ─── tests ───────────────────────────────────────────────────────────────────
 
 function testDefaultConfig() {
@@ -111,14 +122,18 @@ function testDefaultConfig() {
   // 凭证不输出到最终配置
   assert.strictEqual(output._homeProxy, undefined);
 
-  // 家宽IP节点正确注入
+  // 家宽IP节点正确注入；真直连节点不挂 dialer-proxy
   const homeNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeNodeName; });
   assert(homeNode, "家宽IP节点应存在");
   assert.strictEqual(homeNode.type,   TEST_HOME_CREDENTIALS.type);
   assert.strictEqual(homeNode.server, TEST_HOME_CREDENTIALS.server);
   assert.strictEqual(homeNode.port,   TEST_HOME_CREDENTIALS.port);
-  assert.strictEqual(homeNode["dialer-proxy"], "🔗 家宽跳板",
-    "家宽IP节点的 dialer-proxy 应指向家宽跳板组");
+  assert.strictEqual(homeNode["dialer-proxy"], undefined, "家宽IP节点应是真直连，不应挂 dialer-proxy");
+
+  const homeChainedNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeChainedNodeName; });
+  assert(homeChainedNode, "存在可用跳板时应额外创建家宽IP链式节点");
+  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 家宽跳板",
+    "家宽IP链式节点的 dialer-proxy 应指向家宽跳板组");
 
   // 家宽跳板组存在
   const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 家宽跳板"; });
@@ -135,8 +150,8 @@ function testDefaultConfig() {
   const chainGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.chainGroupName; });
   assert(chainGroup, "家宽IP出口组应存在");
   assert.strictEqual(chainGroup.type, "select");
-  assert.strictEqual(chainGroup.proxies.length, 1);
-  assert.strictEqual(chainGroup.proxies[0], EXPECTED.homeNodeName);
+  assert.strictEqual(chainGroup.proxies[0], EXPECTED.homeChainedNodeName, "有跳板时默认应优先使用链式家宽");
+  assert.strictEqual(chainGroup.proxies[1], EXPECTED.homeNodeName, "家宽出口组应保留真直连备选");
 
   // AI Agent 组存在；有家宽IP时默认包含家宽IP，但不展开订阅裸节点
   const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
@@ -154,6 +169,7 @@ function testDefaultConfig() {
   assert.strictEqual(mediaGroup.type, "select");
   assert(mediaGroup.proxies.indexOf("节点选择") >= 0, "国际媒体应包含节点选择");
   assert(mediaGroup.proxies.indexOf(EXPECTED.homeNodeName) < 0, "媒体组不应含家宽IP节点");
+  assert(mediaGroup.proxies.indexOf(EXPECTED.homeChainedNodeName) < 0, "媒体组不应含家宽IP链式节点");
 
   // 微软服务默认直连，但保留手动切换到节点选择/地区组的能力
   const microsoftGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.microsoftGroupName; });
@@ -194,14 +210,21 @@ function testDefaultConfig() {
   // 兜底 MATCH
   assertRuleExists(output.rules, "MATCH,节点选择");
 
-  // Tailscale 自身和 Tailnet 地址保持直连，避免 Exit Node / DERP / WireGuard 套娃
-  assertRuleExists(output.rules, "PROCESS-NAME,tailscaled,DIRECT,no-resolve");
-  assertRuleExists(output.rules, "PROCESS-NAME,tailscaled.exe,DIRECT,no-resolve");
-  assertRuleExists(output.rules, "PROCESS-NAME,IPNExtension,DIRECT,no-resolve");
-  assertRuleExists(output.rules, "PROCESS-NAME,io.tailscale.ipn.macsys.network-extension,DIRECT,no-resolve");
-  assertRuleExists(output.rules, "IP-CIDR,100.64.0.0/10,DIRECT,no-resolve");
-  assertRuleExists(output.rules, "IP-CIDR,100.100.100.100/32,DIRECT,no-resolve");
-  assertRuleExists(output.rules, "IP-CIDR6,fd7a:115c:a1e0::/48,DIRECT,no-resolve");
+  // Tailscale 自身和 Tailnet 地址进入可见监控组，组内默认直连，避免 Exit Node / DERP / WireGuard 套娃
+  assertRuleExists(output.rules, "PROCESS-NAME,tailscaled," + EXPECTED.tailscaleProcessGroupName + ",no-resolve");
+  assertRuleExists(output.rules, "PROCESS-NAME,tailscaled.exe," + EXPECTED.tailscaleProcessGroupName + ",no-resolve");
+  assertRuleExists(output.rules, "PROCESS-NAME,IPNExtension," + EXPECTED.tailscaleProcessGroupName + ",no-resolve");
+  assertRuleExists(output.rules, "PROCESS-NAME,io.tailscale.ipn.macsys.network-extension," + EXPECTED.tailscaleProcessGroupName + ",no-resolve");
+  assertRuleExists(output.rules, "IP-CIDR,100.64.0.0/10," + EXPECTED.tailnetDirectGroupName + ",no-resolve");
+  assertRuleExists(output.rules, "IP-CIDR,100.100.100.100/32," + EXPECTED.tailnetDirectGroupName + ",no-resolve");
+  assertRuleExists(output.rules, "IP-CIDR6,fd7a:115c:a1e0::/48," + EXPECTED.tailnetDirectGroupName + ",no-resolve");
+
+  const tailnetGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailnetDirectGroupName; });
+  const tsControlGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailscaleControlGroupName; });
+  const tsProcessGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailscaleProcessGroupName; });
+  assertSingleProxy(tailnetGroup, "DIRECT", "Tailnet 内部地址默认仍直连");
+  assertSingleProxy(tsControlGroup, "DIRECT", "Tailscale 控制面默认仍直连");
+  assertSingleProxy(tsProcessGroup, "DIRECT", "Tailscale 进程默认仍直连");
 
   // 无重复规则
   assertNoDuplicateRuleIdentities(output.rules);
@@ -216,7 +239,7 @@ function testNoCredentialPureOverwrite() {
   assert(!homeNode, "纯分流模式不应注入家宽IP节点");
 
   // 无家宽出口组
-  const chainGroup = output["proxy-groups"].find(function (g) { return g.name === "家宽IP出口"; });
+  const chainGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.chainGroupName; });
   assert(!chainGroup, "纯分流模式不应创建家宽出口组");
 
   // 功能组仍正常存在
@@ -342,7 +365,10 @@ function testFrontProxyDoesNotOverrideHomeProxyDialer() {
   });
 
   const homeNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeNodeName; });
-  assert.strictEqual(homeNode["dialer-proxy"], "🔗 家宽跳板", "家宽IP应继续走家宽跳板");
+  assert.strictEqual(homeNode["dialer-proxy"], undefined, "家宽IP真直连节点不应被前置代理覆盖");
+
+  const homeChainedNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeChainedNodeName; });
+  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 家宽跳板", "家宽IP链式应继续走家宽跳板");
 
   const subNode = output.proxies.find(function (p) { return p.name === "🇺🇸 US Auto 01"; });
   assert.strictEqual(subNode["dialer-proxy"], "一级前置代理", "订阅节点应走前置代理");
@@ -390,6 +416,10 @@ function testStandaloneHomeOnlyWithoutSubscription() {
 
   const chainGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.chainGroupName; });
   assert(chainGroup, "无订阅固定 IP 模式应创建家宽IP组");
+  assertSingleProxy(chainGroup, EXPECTED.homeNodeName, "没有跳板时家宽IP组只应包含真直连节点");
+
+  const homeChainedNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeChainedNodeName; });
+  assert(!homeChainedNode, "没有可用跳板时不应创建家宽IP链式节点");
 
   const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
   assert.strictEqual(aiGroup.proxies[0], EXPECTED.chainGroupName, "固定 IP 应优先出现在 AI Agent");
@@ -421,12 +451,17 @@ function testTailscaleRulesAreConfigurableAndExitNodeUsesNormalRules() {
     sandbox.USER_OPTIONS.tailscale.processTarget = "节点选择";
   });
 
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,tailscale.com,节点选择");
-  assertRuleExists(output.rules, "PROCESS-NAME,tailscaled,节点选择,no-resolve");
-  assertRuleExists(output.rules, "PROCESS-NAME,Tailscale,节点选择,no-resolve");
-  assertRuleExists(output.rules, "IP-CIDR,100.64.0.0/10,DIRECT,no-resolve");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,tailscale.com," + EXPECTED.tailscaleControlGroupName);
+  assertRuleExists(output.rules, "PROCESS-NAME,tailscaled," + EXPECTED.tailscaleProcessGroupName + ",no-resolve");
+  assertRuleExists(output.rules, "PROCESS-NAME,Tailscale," + EXPECTED.tailscaleProcessGroupName + ",no-resolve");
+  assertRuleExists(output.rules, "IP-CIDR,100.64.0.0/10," + EXPECTED.tailnetDirectGroupName + ",no-resolve");
   assert(output.rules.indexOf("SRC-IP-CIDR,100.64.0.0/10,节点选择,no-resolve") < 0,
     "默认不应提前截获 Tailscale Exit Node 转发流量");
+
+  const tsControlGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailscaleControlGroupName; });
+  const tsProcessGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailscaleProcessGroupName; });
+  assertSingleProxy(tsControlGroup, "节点选择", "控制面监控组应指向用户配置的目标");
+  assertSingleProxy(tsProcessGroup, "节点选择", "进程监控组应指向用户配置的目标");
 }
 
 function testTailscaleExitNodeCanBeForced() {
@@ -437,11 +472,41 @@ function testTailscaleExitNodeCanBeForced() {
     sandbox.USER_OPTIONS.tailscale.forceExitNodeTrafficTarget = "节点选择";
   });
 
-  const directIndex = output.rules.indexOf("IP-CIDR,100.64.0.0/10,DIRECT,no-resolve");
-  const forcedIndex = output.rules.indexOf("SRC-IP-CIDR,100.64.0.0/10,节点选择,no-resolve");
+  const directIndex = output.rules.indexOf("IP-CIDR,100.64.0.0/10," + EXPECTED.tailnetDirectGroupName + ",no-resolve");
+  const forcedIndex = output.rules.indexOf("SRC-IP-CIDR,100.64.0.0/10," + EXPECTED.tailscaleExitGroupName + ",no-resolve");
   assert(directIndex >= 0, "Tailnet 目的地址直连规则应存在");
   assert(forcedIndex >= 0, "开启后应写入 Exit Node 转发强制出口规则");
   assert(directIndex < forcedIndex, "Tailnet 目的地址直连规则应早于 Exit Node 强制出口规则");
+
+  const tsExitGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailscaleExitGroupName; });
+  assertSingleProxy(tsExitGroup, "节点选择", "Exit Node 强制出口监控组应指向用户配置目标");
+}
+
+function testTailscaleMonitorGroupsCanBeDisabled() {
+  const { output } = runMain(function (config) {
+    delete config._homeProxy;
+  }, function (sandbox) {
+    sandbox.USER_OPTIONS.tailscale.monitorGroups = false;
+    sandbox.USER_OPTIONS.tailscale.controlPlaneTarget = "节点选择";
+    sandbox.USER_OPTIONS.tailscale.processTarget = "节点选择";
+  });
+
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,tailscale.com,节点选择");
+  assertRuleExists(output.rules, "PROCESS-NAME,tailscaled,节点选择,no-resolve");
+  assertRuleExists(output.rules, "IP-CIDR,100.64.0.0/10,DIRECT,no-resolve");
+  assert(!output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailscaleControlGroupName; }),
+    "关闭 monitorGroups 后不应创建 Tailscale 控制面监控组");
+}
+
+function testTailscaleSubnetCidrsAreVisibleInTailnetGroup() {
+  const { output } = runMain(function (config) {
+    delete config._homeProxy;
+  }, function (sandbox) {
+    sandbox.USER_OPTIONS.tailscale.subnetCidrs = ["192.168.88.0/24", "fd00:abcd::/64"];
+  });
+
+  assertRuleExists(output.rules, "IP-CIDR,192.168.88.0/24," + EXPECTED.tailnetDirectGroupName + ",no-resolve");
+  assertRuleExists(output.rules, "IP-CIDR6,fd00:abcd::/64," + EXPECTED.tailnetDirectGroupName + ",no-resolve");
 }
 
 function testStandaloneEmptyConfigFailsLoudly() {
@@ -461,7 +526,9 @@ function testFallbackToUrlTestGroup() {
     });
   });
   const homeNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeNodeName; });
-  assert.strictEqual(homeNode["dialer-proxy"], "🔗 家宽跳板", "回退时 dialer-proxy 应指向家宽跳板组");
+  assert.strictEqual(homeNode["dialer-proxy"], undefined, "回退时家宽IP真直连节点不应挂 dialer-proxy");
+  const homeChainedNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeChainedNodeName; });
+  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 家宽跳板", "回退时家宽IP链式应指向家宽跳板组");
 }
 
 function testAutoCreateUrlTestGroup() {
@@ -472,7 +539,9 @@ function testAutoCreateUrlTestGroup() {
     });
   });
   const homeNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeNodeName; });
-  assert.strictEqual(homeNode["dialer-proxy"], "🔗 家宽跳板", "自建时 dialer-proxy 应指向家宽跳板组");
+  assert.strictEqual(homeNode["dialer-proxy"], undefined, "自建时家宽IP真直连节点不应挂 dialer-proxy");
+  const homeChainedNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeChainedNodeName; });
+  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 家宽跳板", "自建时家宽IP链式应指向家宽跳板组");
   const autoGroup = output["proxy-groups"].find(function (g) { return g.name === "自动选择"; });
   assert(autoGroup, "自动选择组应被自动创建");
   assert.strictEqual(autoGroup.type, "url-test");
@@ -495,6 +564,8 @@ testStandaloneHomeOnlyWithoutSubscription();
 testStandaloneFrontProxyOnlyAppliesWhenRequested();
 testTailscaleRulesAreConfigurableAndExitNodeUsesNormalRules();
 testTailscaleExitNodeCanBeForced();
+testTailscaleMonitorGroupsCanBeDisabled();
+testTailscaleSubnetCidrsAreVisibleInTailnetGroup();
 testStandaloneEmptyConfigFailsLoudly();
 
 console.log("validate-direct.js: all checks passed");
