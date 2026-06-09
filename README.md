@@ -94,6 +94,7 @@ Tailscale 官方域名和 App 进程默认直连，但规则会先进入可见�
 tailscale: {
   enable: true,
   monitorGroups: true,
+  hideMonitorGroups: true,
   subnetCidrs: [],
   controlPlaneTarget: "DIRECT",
   processTarget: "DIRECT",
@@ -102,7 +103,7 @@ tailscale: {
 }
 ```
 
-如果本机网络访问 `tailscale.com` 官方域名也受污染，可以把 `controlPlaneTarget` 改成前置代理名称或 `节点选择`。如果启用了 Tailscale subnet route，并希望这些内网段也在连接图里归到 `🧩 Tailnet 内部直连`，把网段写入 `subnetCidrs`，例如 `["192.168.88.0/24"]`。`monitorGroups` 只影响界面可观测性，设为 `false` 后规则会直接指向配置目标。`processTarget` 默认不建议改；进程级代理可能影响 WireGuard、DERP 或 STUN 行为。只有明确需要一刀切接管 Exit Node 转发公网流量时，才把 `forceExitNodeTraffic` 改成 `true`。
+如果本机网络访问 `tailscale.com` 官方域名也受污染，可以把 `controlPlaneTarget` 改成前置代理名称或 `节点选择`。如果启用了 Tailscale subnet route，并希望这些内网段也在连接图里归到 `🧩 Tailnet 内部直连`，把网段写入 `subnetCidrs`，例如 `["192.168.88.0/24"]`。`monitorGroups` 只影响界面可观测性，设为 `false` 后规则会直接指向配置目标。`hideMonitorGroups` 默认隐藏这些监控组，避免它们在代理组列表里显示 DIRECT 测速超时；临时排查时可改成 `false`。`processTarget` 默认不建议改；进程级代理可能影响 WireGuard、DERP 或 STUN 行为。只有明确需要一刀切接管 Exit Node 转发公网流量时，才把 `forceExitNodeTraffic` 改成 `true`。
 
 ## 快速开始
 
@@ -171,6 +172,7 @@ var USER_OPTIONS = {
   tailscale: {
     enable: true,
     monitorGroups: true,
+    hideMonitorGroups: true,
     subnetCidrs: [],
     controlPlaneTarget: "DIRECT",
     processTarget: "DIRECT",

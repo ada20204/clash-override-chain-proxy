@@ -41,6 +41,7 @@ var USER_OPTIONS = {
   tailscale: {
     enable: true,
     monitorGroups: true,
+    hideMonitorGroups: true,
     subnetCidrs: [],
     controlPlaneTarget: "DIRECT",
     processTarget: "DIRECT",
@@ -1581,6 +1582,7 @@ function getTailscaleOptions() {
   var defaults = {
     enable: true,
     monitorGroups: true,
+    hideMonitorGroups: true,
     subnetCidrs: [],
     controlPlaneTarget: BASE.ruleTargets.direct,
     processTarget: BASE.ruleTargets.direct,
@@ -1591,6 +1593,7 @@ function getTailscaleOptions() {
   return {
     enable: provided.enable !== false,
     monitorGroups: provided.monitorGroups !== false,
+    hideMonitorGroups: provided.hideMonitorGroups !== false,
     subnetCidrs: Array.isArray(provided.subnetCidrs) ? provided.subnetCidrs : defaults.subnetCidrs,
     controlPlaneTarget: provided.controlPlaneTarget || defaults.controlPlaneTarget,
     processTarget: provided.processTarget || defaults.processTarget,
@@ -1621,30 +1624,40 @@ function normalizeTailscaleMonitorTarget(target, groupName) {
   return target || BASE.ruleTargets.direct;
 }
 
+function buildTailscaleMonitorGroup(name, proxies, options) {
+  var group = {
+    name: name,
+    type: "select",
+    proxies: proxies
+  };
+  if (options.hideMonitorGroups) group.hidden = true;
+  return group;
+}
+
 function ensureTailscaleMonitorGroups(config) {
   var options = getTailscaleOptions();
   if (!options.enable || !options.monitorGroups) return;
-  upsertNamedItem(config["proxy-groups"], {
-    name: BASE.nodeNames.tailnetDirect,
-    type: "select",
-    proxies: [BASE.ruleTargets.direct]
-  });
-  upsertNamedItem(config["proxy-groups"], {
-    name: BASE.nodeNames.tailscaleControl,
-    type: "select",
-    proxies: [normalizeTailscaleMonitorTarget(options.controlPlaneTarget, BASE.nodeNames.tailscaleControl)]
-  });
-  upsertNamedItem(config["proxy-groups"], {
-    name: BASE.nodeNames.tailscaleProcess,
-    type: "select",
-    proxies: [normalizeTailscaleMonitorTarget(options.processTarget, BASE.nodeNames.tailscaleProcess)]
-  });
+  upsertNamedItem(config["proxy-groups"], buildTailscaleMonitorGroup(
+    BASE.nodeNames.tailnetDirect,
+    [BASE.ruleTargets.direct],
+    options
+  ));
+  upsertNamedItem(config["proxy-groups"], buildTailscaleMonitorGroup(
+    BASE.nodeNames.tailscaleControl,
+    [normalizeTailscaleMonitorTarget(options.controlPlaneTarget, BASE.nodeNames.tailscaleControl)],
+    options
+  ));
+  upsertNamedItem(config["proxy-groups"], buildTailscaleMonitorGroup(
+    BASE.nodeNames.tailscaleProcess,
+    [normalizeTailscaleMonitorTarget(options.processTarget, BASE.nodeNames.tailscaleProcess)],
+    options
+  ));
   if (options.forceExitNodeTraffic) {
-    upsertNamedItem(config["proxy-groups"], {
-      name: BASE.nodeNames.tailscaleExit,
-      type: "select",
-      proxies: [normalizeTailscaleMonitorTarget(options.forceExitNodeTrafficTarget, BASE.nodeNames.tailscaleExit)]
-    });
+    upsertNamedItem(config["proxy-groups"], buildTailscaleMonitorGroup(
+      BASE.nodeNames.tailscaleExit,
+      [normalizeTailscaleMonitorTarget(options.forceExitNodeTrafficTarget, BASE.nodeNames.tailscaleExit)],
+      options
+    ));
   }
 }
 

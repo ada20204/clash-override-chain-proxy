@@ -114,6 +114,11 @@ function assertSingleProxy(group, proxyName, message) {
   assert.strictEqual(group.proxies[0], proxyName, message);
 }
 
+function assertHiddenGroup(group, message) {
+  assert(group, message + "：代理组不存在");
+  assert.strictEqual(group.hidden, true, message + "：应默认隐藏，避免在代理组列表展示");
+}
+
 // ─── tests ───────────────────────────────────────────────────────────────────
 
 function testDefaultConfig() {
@@ -225,6 +230,9 @@ function testDefaultConfig() {
   assertSingleProxy(tailnetGroup, "DIRECT", "Tailnet 内部地址默认仍直连");
   assertSingleProxy(tsControlGroup, "DIRECT", "Tailscale 控制面默认仍直连");
   assertSingleProxy(tsProcessGroup, "DIRECT", "Tailscale 进程默认仍直连");
+  assertHiddenGroup(tailnetGroup, "Tailnet 内部直连监控组");
+  assertHiddenGroup(tsControlGroup, "Tailscale 控制面监控组");
+  assertHiddenGroup(tsProcessGroup, "Tailscale 进程监控组");
 
   // 无重复规则
   assertNoDuplicateRuleIdentities(output.rules);
@@ -462,6 +470,8 @@ function testTailscaleRulesAreConfigurableAndExitNodeUsesNormalRules() {
   const tsProcessGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailscaleProcessGroupName; });
   assertSingleProxy(tsControlGroup, "节点选择", "控制面监控组应指向用户配置的目标");
   assertSingleProxy(tsProcessGroup, "节点选择", "进程监控组应指向用户配置的目标");
+  assertHiddenGroup(tsControlGroup, "控制面监控组");
+  assertHiddenGroup(tsProcessGroup, "进程监控组");
 }
 
 function testTailscaleExitNodeCanBeForced() {
@@ -480,6 +490,7 @@ function testTailscaleExitNodeCanBeForced() {
 
   const tsExitGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailscaleExitGroupName; });
   assertSingleProxy(tsExitGroup, "节点选择", "Exit Node 强制出口监控组应指向用户配置目标");
+  assertHiddenGroup(tsExitGroup, "Exit Node 强制出口监控组");
 }
 
 function testTailscaleMonitorGroupsCanBeDisabled() {
@@ -507,6 +518,21 @@ function testTailscaleSubnetCidrsAreVisibleInTailnetGroup() {
 
   assertRuleExists(output.rules, "IP-CIDR,192.168.88.0/24," + EXPECTED.tailnetDirectGroupName + ",no-resolve");
   assertRuleExists(output.rules, "IP-CIDR6,fd00:abcd::/64," + EXPECTED.tailnetDirectGroupName + ",no-resolve");
+}
+
+function testTailscaleMonitorGroupsCanBeShownForDebugging() {
+  const { output } = runMain(function (config) {
+    delete config._homeProxy;
+  }, function (sandbox) {
+    sandbox.USER_OPTIONS.tailscale.hideMonitorGroups = false;
+  });
+
+  const tailnetGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailnetDirectGroupName; });
+  const tsControlGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailscaleControlGroupName; });
+  const tsProcessGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailscaleProcessGroupName; });
+  assert.strictEqual(tailnetGroup.hidden, undefined, "关闭隐藏开关后 Tailnet 监控组应可见");
+  assert.strictEqual(tsControlGroup.hidden, undefined, "关闭隐藏开关后控制面监控组应可见");
+  assert.strictEqual(tsProcessGroup.hidden, undefined, "关闭隐藏开关后进程监控组应可见");
 }
 
 function testStandaloneEmptyConfigFailsLoudly() {
@@ -566,6 +592,7 @@ testTailscaleRulesAreConfigurableAndExitNodeUsesNormalRules();
 testTailscaleExitNodeCanBeForced();
 testTailscaleMonitorGroupsCanBeDisabled();
 testTailscaleSubnetCidrsAreVisibleInTailnetGroup();
+testTailscaleMonitorGroupsCanBeShownForDebugging();
 testStandaloneEmptyConfigFailsLoudly();
 
 console.log("validate-direct.js: all checks passed");
