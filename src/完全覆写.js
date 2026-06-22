@@ -1313,7 +1313,7 @@ function resolveRelayTarget(config) {
 
 // 返回家宽IP出口组的固定名称。
 function ensureChainGroup() {
-  return "🏠家宽IP";
+  return "🏠 家宽IP";
 }
 
 function ensureChainGroupWithProxies(config, chainProxies) {
@@ -1958,7 +1958,7 @@ function main(config) {
     routingTargets.chainProxies = injectHomeProxies(config, credentials, routingTargets.relayGroupName);
     chainGroupName = ensureChainGroupWithProxies(config, routingTargets.chainProxies);
     routingTargets.chainGroupName = chainGroupName;
-    // 将 🏠家宽IP 添加到节点选择和 GLOBAL 中（在 DIRECT 之前）
+    // 将 🏠 家宽IP 添加到节点选择和 GLOBAL 中（在 DIRECT 之前）
     var groups = [nodeSelGroup, globalGroup];
     for (var gi = 0; gi < groups.length; gi++) {
       if (!groups[gi]) continue;

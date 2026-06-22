@@ -18,7 +18,7 @@ const TEST_HOME_CREDENTIALS = {
 
 const EXPECTED = {
   aiGroupName:     "🤖 AI Agent",
-  chainGroupName:  "🏠家宽IP",
+  chainGroupName:  "🏠 家宽IP",
   homeNodeName:    "家宽IP",
   homeChainedNodeName: "家宽IP链式",
   relayGroupName:  "自动选择(Smart Group)",
