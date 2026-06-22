@@ -122,12 +122,32 @@ function main(config) {
 
   // 自定义出口（可选，数组）
   config._customProxies = [
-    { name: "自定义出口", type: "http", server: "10.0.0.1", port: 3128 }
+    {
+      name: "自定义出口",
+      type: "http",
+      server: "10.0.0.1",
+      port: 3128,
+      // 可选：公司代理在 Tailscale subnet 内时，指定 Tailscale 网卡，例如 "utun4"
+      interfaceName: ""
+    }
   ];
 
   return config;
 }
 ```
+
+如果自定义出口是 Tailscale subnet 内的地址，并且虚拟网卡模式下开启了「自动选择流量出口接口」，需要给该节点配置 `interfaceName`。macOS 可通过 `route -n get 代理IP` 查看当前接口名。
+
+也可以使用仓库内的辅助脚本自动探测并写入：
+
+```bash
+node scripts/update-interface-name.js \
+  --file "/path/to/出口IP凭证.js" \
+  --server 10.96.0.100 \
+  --write
+```
+
+不加 `--write` 时只预览，不会修改文件。
 
 不配置任何凭证时，脚本仅做分流覆写（纯功能组 + 域名规则 + GeoSite/GeoIP 直连）。
 

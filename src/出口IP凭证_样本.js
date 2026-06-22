@@ -34,6 +34,12 @@ function main(config) {
   //   - 默认不写或 false：这个节点直接拨号
   //   - true：这个节点先走「前置代理.js」里配置的 config._frontProxy
   //   - 只有同时导入「前置代理.js」时才能设为 true
+  //
+  // interfaceName:
+  //   - 可选：指定这个节点从哪个网卡发起连接
+  //   - 如果公司代理在 Tailscale subnet 内，且虚拟网卡模式下全局开启
+  //     「自动选择流量出口接口」会导致该节点超时，可以填 Tailscale 网卡名
+  //   - macOS 可用 `route -n get 代理IP` 查看 interface，例如 utun4
 
   // config._customProxies = [
   //   {
@@ -41,7 +47,8 @@ function main(config) {
   //     type: "http",          // http 或 socks5
   //     server: "",            // 代理服务器地址（IP 或域名）
   //     port: 3128,            // 代理端口
-  //     useFrontProxy: false   // 默认直连拨号，不经过前置代理
+  //     useFrontProxy: false,  // 默认直连拨号，不经过前置代理
+  //     interfaceName: ""      // 可选：例如 "utun4"，仅需给 Tailscale subnet 节点配置
   //     // 如需认证，取消注释以下两行：
   //     // username: "",
   //     // password: ""

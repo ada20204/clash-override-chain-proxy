@@ -43,6 +43,8 @@ var USER_OPTIONS = {
     monitorGroups: true,
     hideMonitorGroups: true,
     subnetCidrs: [],
+    excludeProxyServerFromTun: true,
+    routeExcludeCidrs: [],
     controlPlaneTarget: "DIRECT",
     processTarget: "DIRECT",
     forceExitNodeTraffic: false,
@@ -1397,6 +1399,9 @@ function buildCustomProxyNode(proxyConfig, frontProxyName) {
   };
   if (proxyConfig.username) node.username = proxyConfig.username;
   if (proxyConfig.password) node.password = proxyConfig.password;
+  if (proxyConfig.interfaceName || proxyConfig["interface-name"]) {
+    node["interface-name"] = proxyConfig.interfaceName || proxyConfig["interface-name"];
+  }
   if (proxyConfig.useFrontProxy) {
     if (!frontProxyName) {
       throw createUserError("自定义出口 " + proxyConfig.name + " 启用了 useFrontProxy，但未配置前置代理");
@@ -1578,12 +1583,72 @@ function buildBrowserChainRules(browserTarget) {
   return ruleLines;
 }
 
+function parseIpv4Address(value) {
+  if (typeof value !== "string") return null;
+  var parts = value.split(".");
+  var numbers = [];
+  if (parts.length !== 4) return null;
+  for (var i = 0; i < parts.length; i++) {
+    if (!/^\d+$/.test(parts[i])) return null;
+    var part = parseInt(parts[i], 10);
+    if (part < 0 || part > 255) return null;
+    numbers.push(part);
+  }
+  return numbers;
+}
+
+function isPrivateOrTailnetIpv4(value) {
+  var ip = parseIpv4Address(value);
+  if (!ip) return false;
+  if (ip[0] === 10) return true;
+  if (ip[0] === 172 && ip[1] >= 16 && ip[1] <= 31) return true;
+  if (ip[0] === 192 && ip[1] === 168) return true;
+  if (ip[0] === 100 && ip[1] >= 64 && ip[1] <= 127) return true;
+  return false;
+}
+
+function collectProxyServerRouteExcludeCidrs(proxyConfigs) {
+  var cidrs = [];
+  for (var i = 0; i < proxyConfigs.length; i++) {
+    var proxyConfig = proxyConfigs[i];
+    if (!proxyConfig || !isPrivateOrTailnetIpv4(proxyConfig.server)) continue;
+    cidrs.push(proxyConfig.server + "/32");
+  }
+  return uniqueStrings(cidrs);
+}
+
+function applyTunRouteExcludes(config, customProxies, frontProxy, homeProxy) {
+  var options = getTailscaleOptions();
+  var candidates = [];
+  var routeExcludes;
+  var proxyConfigs = [];
+
+  if (!options.enable) return;
+  if (frontProxy) proxyConfigs.push(frontProxy);
+  if (homeProxy) proxyConfigs.push(homeProxy);
+  if (customProxies) proxyConfigs = proxyConfigs.concat(customProxies);
+  if (config.proxies) proxyConfigs = proxyConfigs.concat(config.proxies);
+
+  if (options.excludeProxyServerFromTun) {
+    candidates = candidates.concat(collectProxyServerRouteExcludeCidrs(proxyConfigs));
+  }
+  candidates = candidates.concat(options.routeExcludeCidrs);
+  candidates = uniqueStrings(candidates);
+  if (candidates.length === 0) return;
+
+  if (!config.tun) config.tun = {};
+  routeExcludes = config.tun["route-exclude-address"] || [];
+  config.tun["route-exclude-address"] = uniqueStrings(routeExcludes.concat(candidates));
+}
+
 function getTailscaleOptions() {
   var defaults = {
     enable: true,
     monitorGroups: true,
     hideMonitorGroups: true,
     subnetCidrs: [],
+    excludeProxyServerFromTun: true,
+    routeExcludeCidrs: [],
     controlPlaneTarget: BASE.ruleTargets.direct,
     processTarget: BASE.ruleTargets.direct,
     forceExitNodeTraffic: false,
@@ -1595,6 +1660,8 @@ function getTailscaleOptions() {
     monitorGroups: provided.monitorGroups !== false,
     hideMonitorGroups: provided.hideMonitorGroups !== false,
     subnetCidrs: Array.isArray(provided.subnetCidrs) ? provided.subnetCidrs : defaults.subnetCidrs,
+    excludeProxyServerFromTun: provided.excludeProxyServerFromTun !== false,
+    routeExcludeCidrs: Array.isArray(provided.routeExcludeCidrs) ? provided.routeExcludeCidrs : defaults.routeExcludeCidrs,
     controlPlaneTarget: provided.controlPlaneTarget || defaults.controlPlaneTarget,
     processTarget: provided.processTarget || defaults.processTarget,
     forceExitNodeTraffic: provided.forceExitNodeTraffic === true,
@@ -1912,6 +1979,7 @@ function main(config) {
 
   // ⑧ DNS / Sniffer / 规则注入
   applyDnsAndSniffer(config);
+  applyTunRouteExcludes(config, customProxies, frontProxy, credentials);
   if (hasHomeProxy) {
     injectManagedRules(config, aiAgentTarget, frontProxyName);
     validateManagedRouting(config, routingTargets);

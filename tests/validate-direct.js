@@ -451,6 +451,57 @@ function testStandaloneFrontProxyOnlyAppliesWhenRequested() {
   assert(nodeSelGroup.proxies.indexOf("一级前置代理") < 0, "前置代理不应进入节点选择");
 }
 
+function testTailnetCustomProxyServerBypassesTunRoute() {
+  const config = createEmptyConfig();
+  config._customProxies = [
+    { name: "公司代理", type: "http", server: "10.96.0.100", port: 3456, interfaceName: "utun4" },
+    { name: "公网代理", type: "http", server: "8.8.8.8", port: 8080 }
+  ];
+  const { output } = runMainWithConfig(config);
+  const routeExcludes = output.tun && output.tun["route-exclude-address"];
+  const companyNode = output.proxies.find(function (p) { return p.name === "公司代理"; });
+
+  assert(routeExcludes, "Tailnet/private 自定义节点服务器应生成 tun.route-exclude-address");
+  assert(routeExcludes.indexOf("10.96.0.100/32") >= 0,
+    "作为自定义节点服务器的 Tailnet/private IP 应绕过 TUN，避免节点测速自拨被虚拟网卡截获");
+  assert(routeExcludes.indexOf("8.8.8.8/32") < 0, "公网自定义节点服务器不应自动绕过 TUN");
+  assert.strictEqual(companyNode["interface-name"], "utun4",
+    "Tailnet 自定义节点应支持按节点绑定 Tailscale 出口接口");
+}
+
+function testTailnetExistingProxyServerBypassesTunRoute() {
+  const config = createEmptyConfig();
+  config.proxies = [
+    { name: "公司代理", type: "http", server: "10.96.0.100", port: 3456 },
+    { name: "公网代理", type: "http", server: "8.8.8.8", port: 8080 }
+  ];
+  const { output } = runMainWithConfig(config);
+  const routeExcludes = output.tun && output.tun["route-exclude-address"];
+
+  assert(routeExcludes, "已有代理节点中的 Tailnet/private server 也应生成 tun.route-exclude-address");
+  assert(routeExcludes.indexOf("10.96.0.100/32") >= 0,
+    "最终配置内已有的 Tailnet/private 代理服务器应绕过 TUN");
+  assert(routeExcludes.indexOf("8.8.8.8/32") < 0, "最终配置内已有的公网代理服务器不应自动绕过 TUN");
+}
+
+function testTunRouteExcludesAreMergedAndConfigurable() {
+  const config = createEmptyConfig();
+  config.tun = { enable: true, "route-exclude-address": ["10.96.0.100/32"] };
+  config._frontProxy = { name: "一级前置代理", type: "http", server: "10.96.0.100", port: 3456 };
+  config._customProxies = [
+    { name: "公司代理", type: "http", server: "10.166.0.10", port: 8080 }
+  ];
+  const { output } = runMainWithConfig(config, function (sandbox) {
+    sandbox.USER_OPTIONS.tailscale.routeExcludeCidrs = ["10.168.100.0/24"];
+  });
+  const routeExcludes = output.tun["route-exclude-address"];
+
+  assert.strictEqual(routeExcludes.filter(function (cidr) { return cidr === "10.96.0.100/32"; }).length, 1,
+    "已有 TUN 排除项应保留且去重");
+  assert(routeExcludes.indexOf("10.166.0.10/32") >= 0, "新增私网自定义节点服务器应追加到 TUN 排除");
+  assert(routeExcludes.indexOf("10.168.100.0/24") >= 0, "用户手工配置的 routeExcludeCidrs 应追加到 TUN 排除");
+}
+
 function testTailscaleRulesAreConfigurableAndExitNodeUsesNormalRules() {
   const { output } = runMain(function (config) {
     delete config._homeProxy;
@@ -588,6 +639,9 @@ testFrontProxyDoesNotOverrideHomeProxyDialer();
 testStandaloneCustomProxiesWithoutSubscription();
 testStandaloneHomeOnlyWithoutSubscription();
 testStandaloneFrontProxyOnlyAppliesWhenRequested();
+testTailnetCustomProxyServerBypassesTunRoute();
+testTailnetExistingProxyServerBypassesTunRoute();
+testTunRouteExcludesAreMergedAndConfigurable();
 testTailscaleRulesAreConfigurableAndExitNodeUsesNormalRules();
 testTailscaleExitNodeCanBeForced();
 testTailscaleMonitorGroupsCanBeDisabled();
