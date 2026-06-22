@@ -237,6 +237,35 @@ ip.sb      → 看本机到订阅节点前的第一跳；没前置代理时就�
 
 如果配置了 `前置代理.js`，地区组和 URLTest 测速订阅节点时会先走前置代理，因此 `IP.SB` 应显示前置代理的 IP；但 `ipwho.is` 仍应显示普通代理节点的最终出口 IP。
 
+如果要排查某个出口节点本身是否稳定，可以绕过 Clash 分流，直接用仓库脚本批量访问检测源：
+
+```bash
+python3 scripts/proxy-reliability-test.py \
+  --scheme http \
+  --host 你的出口IP或域名 \
+  --port 代理端口 \
+  --username 用户名 \
+  --password 密码 \
+  --url https://ipapi.is/ \
+  --count 50 \
+  --concurrency 2 \
+  --tcp-check \
+  --csv /tmp/proxy-reliability.csv
+```
+
+也可以直接传完整代理地址：
+
+```bash
+python3 scripts/proxy-reliability-test.py \
+  --proxy http://user:pass@10.96.0.100:3456 \
+  --url https://ipwho.is/ \
+  --count 30 \
+  --timeout 10 \
+  --json
+```
+
+这个脚本用于验证 `家宽IP`、公司代理、自定义出口这类 HTTP/HTTPS 代理节点的连通率和延迟；Clash 里的分流是否命中，仍然以「网络信息」和连接图为准。
+
 ## 文件说明
 
 ```
@@ -250,12 +279,17 @@ src/
 
 tests/
   validate-direct.js    ← 测试用例
+
+scripts/
+  update-interface-name.js     ← 自动探测并写入 Tailscale 网卡名
+  proxy-reliability-test.py    ← 批量测试 HTTP 出口代理可用率
 ```
 
 ## 本地校验
 
 ```bash
 node tests/validate-direct.js
+python3 -m py_compile scripts/proxy-reliability-test.py
 ```
 
 ## 覆盖的进程
