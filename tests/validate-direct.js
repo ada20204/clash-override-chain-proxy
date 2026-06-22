@@ -210,6 +210,7 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,github.com,🐙 GitHub");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,steampowered.com,🎮 游戏平台");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,apple.com,🍎 Apple");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,icloud.com.cn,🍎 Apple");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,microsoft.com," + EXPECTED.microsoftGroupName);
 
   // 兜底 MATCH
@@ -622,6 +623,8 @@ function testAutoCreateUrlTestGroup() {
   const autoGroup = output["proxy-groups"].find(function (g) { return g.name === "自动选择"; });
   assert(autoGroup, "自动选择组应被自动创建");
   assert.strictEqual(autoGroup.type, "url-test");
+  assert.strictEqual(autoGroup.url, "https://www.gstatic.com/generate_204",
+    "自动创建的测速组应使用 HTTPS 探测，避免 HTTP 代理节点被 HTTP delay 误判");
   assert(autoGroup.proxies.length > 0, "自建组应包含订阅节点");
 }
 

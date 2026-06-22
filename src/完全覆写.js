@@ -79,7 +79,7 @@ var BASE = {
   ruleTargets: {
     direct: "DIRECT"
   },
-  urlTestProbeUrl: "http://www.gstatic.com/generate_204",
+  urlTestProbeUrl: "https://www.gstatic.com/generate_204",
   errorPrefix: "[家宽IP-直连] ",
   dns: {
     overseas: [
@@ -103,7 +103,8 @@ var SOURCE_PATTERNS = {
   apple: {
     core: [
       "+.apple.com",
-      "+.icloud.com"
+      "+.icloud.com",
+      "+.icloud.com.cn"
     ],
     content: [
       "+.icloud-content.com",
