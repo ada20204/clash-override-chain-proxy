@@ -621,6 +621,7 @@ function testFallbackToUrlTestGroup() {
 function testAutoCreateUrlTestGroup() {
   // Smart Group 和 url-test 都不存在 → 应自建 url-test
   const { output } = runMain(function (config) {
+    config.proxies.push({ name: "剩余流量：48.35% 298.19GB", type: "ss" });
     config["proxy-groups"] = config["proxy-groups"].filter(function (g) {
       return g.name !== "自动选择(Smart Group)" && g.name !== "自动选择";
     });
@@ -635,6 +636,43 @@ function testAutoCreateUrlTestGroup() {
   assert.strictEqual(autoGroup.url, "https://www.gstatic.com/generate_204",
     "自动创建的测速组应使用 HTTPS 探测，避免 HTTP 代理节点被 HTTP delay 误判");
   assert(autoGroup.proxies.length > 0, "自建组应包含订阅节点");
+  assert(autoGroup.proxies.indexOf("剩余流量：48.35% 298.19GB") < 0,
+    "自建自动选择组也应过滤订阅状态信息节点");
+}
+
+function testAutoSelectFiltersSubscriptionInfoNodes() {
+  const infoNodeNames = [
+    "官网地址 - https://hitun.io",
+    "🌈 剩余流量：48.35% 298.19GB",
+    "🌈 套餐时间：2026-07-19",
+    "🌈 A应急续费使用 | 到期后可用5天"
+  ];
+  const { output } = runMain(function (config) {
+    for (let i = 0; i < infoNodeNames.length; i++) {
+      config.proxies.push({ name: infoNodeNames[i], type: "ss" });
+    }
+    const autoGroup = config["proxy-groups"].find(function (g) {
+      return g.name === EXPECTED.relayGroupName;
+    });
+    autoGroup.proxies = autoGroup.proxies.concat(infoNodeNames);
+  });
+
+  const autoGroup = output["proxy-groups"].find(function (g) {
+    return g.name === EXPECTED.relayGroupName;
+  });
+  const nodeSelGroup = output["proxy-groups"].find(function (g) {
+    return g.name === "节点选择";
+  });
+
+  for (let i = 0; i < infoNodeNames.length; i++) {
+    assert(output.proxies.find(function (p) { return p.name === infoNodeNames[i]; }),
+      "信息节点仍应保留在订阅节点中: " + infoNodeNames[i]);
+    assert(nodeSelGroup.proxies.indexOf(infoNodeNames[i]) >= 0,
+      "信息节点仍应保留在节点选择中用于查看订阅状态: " + infoNodeNames[i]);
+    assert(autoGroup.proxies.indexOf(infoNodeNames[i]) < 0,
+      "信息节点不应进入自动选择测速组: " + infoNodeNames[i]);
+  }
+  assert(autoGroup.proxies.indexOf("🇸🇬 SG Auto 01") >= 0, "真实节点应保留在自动选择中");
 }
 
 // ─── run ─────────────────────────────────────────────────────────────────────
@@ -643,6 +681,7 @@ testDefaultConfig();
 testNoCredentialPureOverwrite();
 testFallbackToUrlTestGroup();
 testAutoCreateUrlTestGroup();
+testAutoSelectFiltersSubscriptionInfoNodes();
 testAuthCredentials();
 testCustomProxiesAppearInGlobal();
 testNoCredentialAiAgentIncludesCustomAndRawNodes();

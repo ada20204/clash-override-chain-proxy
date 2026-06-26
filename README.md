@@ -296,6 +296,8 @@ node scripts/check-claude-rules.js
 
 `check-claude-rules.js` 会从 `https://ip.net.coffee/claude/site.html` 抽取 Claude/Anthropic 相关域名和 IP 段，并和 `完全覆写.js` 当前规则对比。明确遗漏的域名或 CIDR 会让脚本失败；关键词、ASN、NTP/GeoSite 这类宽规则只作为 advisory 输出，避免默认规则过宽造成误伤。
 
+`自动选择` 组会自动过滤订阅里的状态信息节点，例如官网地址、剩余流量、套餐时间、到期/续费提醒等。这些节点不会参与测速，但仍保留在 `节点选择` 里，方便查看订阅状态。如需补充服务商特有关键词，可在 `USER_OPTIONS.autoSelectExcludeKeywords` 里追加。
+
 ## 覆盖的进程
 
 ### AI 应用（走 🤖 AI Agent）

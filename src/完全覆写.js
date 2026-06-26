@@ -36,6 +36,7 @@
 
 var USER_OPTIONS = {
   autoSelectGroupName: "自动选择", // 订阅中的自动选择组名（url-test），Smart 内核会自动追加 "(Smart Group)" 后缀
+  autoSelectExcludeKeywords: [], // 只过滤自动选择组；订阅状态信息仍会保留在节点选择里
   enableChainRegionBrowserProcessProxy: false, // 是否让受管浏览器按应用名强制走家宽出口
   enableChainRegionAiCliProcessProxy: true,   // 是否让常见 AI CLI 按应用名强制走家宽出口
   tailscale: {
@@ -94,6 +95,30 @@ var BASE = {
 };
 
 BASE.dns.fallback = BASE.dns.overseas.concat(["https://dns.quad9.net/dns-query"]);
+
+var AUTO_SELECT_INFO_NODE_KEYWORDS = [
+  "官网",
+  "网址",
+  "网站",
+  "地址",
+  "剩余流量",
+  "流量",
+  "套餐",
+  "到期",
+  "过期",
+  "有效期",
+  "续费",
+  "应急",
+  "重置",
+  "更新订阅",
+  "订阅",
+  "公告",
+  "通知",
+  "traffic",
+  "expire",
+  "subscription",
+  "renew"
+];
 
 // ---------------------------------------------------------------------------
 // 原始分类数据源
@@ -1101,6 +1126,39 @@ function collectProxyNames(proxies) {
   return names;
 }
 
+function getAutoSelectExcludeKeywords() {
+  var customKeywords = USER_OPTIONS.autoSelectExcludeKeywords || [];
+  return uniqueStrings(AUTO_SELECT_INFO_NODE_KEYWORDS.concat(customKeywords));
+}
+
+function isAutoSelectInfoNodeName(proxyName) {
+  var name = String(proxyName || "");
+  var lowerName = name.toLowerCase();
+  var keywords = getAutoSelectExcludeKeywords();
+  var i;
+  if (/https?:\/\//i.test(name)) return true;
+  for (i = 0; i < keywords.length; i++) {
+    if (lowerName.indexOf(String(keywords[i]).toLowerCase()) >= 0) return true;
+  }
+  return false;
+}
+
+function filterAutoSelectProxyNames(proxyNames) {
+  var filtered = [];
+  for (var i = 0; i < proxyNames.length; i++) {
+    if (isAutoSelectInfoNodeName(proxyNames[i])) continue;
+    filtered.push(proxyNames[i]);
+  }
+  return uniqueStrings(filtered);
+}
+
+function normalizeAutoSelectGroup(group) {
+  if (group && group.proxies) {
+    group.proxies = filterAutoSelectProxyNames(group.proxies);
+  }
+  return group;
+}
+
 function isManagedProxyName(config, proxyName) {
   return (
     proxyName === BASE.nodeNames.home ||
@@ -1208,6 +1266,7 @@ function ensureAutoSelectGroup(config) {
 
   // 优先使用 resetSubscriptionGroupsAndRules 暂存的组
   if (config._savedAutoGroup) {
+    normalizeAutoSelectGroup(config._savedAutoGroup);
     upsertNamedItem(config["proxy-groups"], config._savedAutoGroup);
     var savedName = config._savedAutoGroup.name;
     delete config._savedAutoGroup;
@@ -1215,8 +1274,16 @@ function ensureAutoSelectGroup(config) {
   }
 
   // proxy-groups 中已存在
-  if (hasProxyOrGroup(config, smartName)) return smartName;
-  if (hasProxyOrGroup(config, baseName))  return baseName;
+  var smartGroup = findProxyGroupByName(config["proxy-groups"], smartName);
+  if (smartGroup) {
+    normalizeAutoSelectGroup(smartGroup);
+    return smartName;
+  }
+  var baseGroup = findProxyGroupByName(config["proxy-groups"], baseName);
+  if (baseGroup) {
+    normalizeAutoSelectGroup(baseGroup);
+    return baseName;
+  }
 
   // 都没有 → 自建 url-test
   var allNodeNames = [];
@@ -1225,6 +1292,7 @@ function ensureAutoSelectGroup(config) {
       allNodeNames.push(config.proxies[i].name);
     }
   }
+  allNodeNames = filterAutoSelectProxyNames(allNodeNames);
   if (allNodeNames.length === 0) {
     throw createUserError("没有可用的订阅节点，无法创建自动选择组");
   }
