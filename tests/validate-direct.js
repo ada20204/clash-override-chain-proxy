@@ -191,6 +191,14 @@ function testDefaultConfig() {
 
   // 关键 AI 规则统一指向 AI Agent 策略组
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,claude.ai,"   + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,claudemcpcontent.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,anthropic.auth0.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,anthropic.com.cdn.cloudflare.net," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,browser-intake-us5-datadoghq.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,cdn.usefathom.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,sentry.io," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "IP-CIDR,160.79.104.0/21," + EXPECTED.aiGroupName + ",no-resolve");
+  assertRuleExists(output.rules, "IP-CIDR6,2607:6bc0::/32," + EXPECTED.aiGroupName + ",no-resolve");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,chatgpt.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com,"  + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,Claude,"       + EXPECTED.aiGroupName);
@@ -212,6 +220,7 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,apple.com,🍎 Apple");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,icloud.com.cn,🍎 Apple");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,microsoft.com," + EXPECTED.microsoftGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,rivotek.com,DIRECT");
 
   // 兜底 MATCH
   assertRuleExists(output.rules, "MATCH,节点选择");

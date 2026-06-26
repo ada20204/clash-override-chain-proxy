@@ -251,11 +251,18 @@ var SOURCE_PATTERNS = {
         "+.anthropic.com",
         "+.claudeusercontent.com",
         "+.claudemcpclient.com",
+        "+.claudemcpcontent.com",
         "+.servd-anthropic-website.b-cdn.net",
         "+.clau.de",
+        "+.anthropic.com.cdn.cloudflare.net",
+        "+.anthropic.auth0.com",
+        "+.anthropic-com.ghost.io",
         "+.intercom.io",         // Claude 应用内嵌客服
         "+.intercomcdn.com",
+        "+.cdn.usefathom.com",
+        "+.sentry.io",
         "+.datadoghq.com",       // Claude 应用内嵌监控
+        "+.browser-intake-us5-datadoghq.com",
         "+.statsigapi.net",      // AI 应用常用的 feature flag 服务
         "+.statsig.com"
       ],
@@ -491,6 +498,9 @@ var SOURCE_PATTERNS = {
           "+.larksuite.com",
           "+.larkoffice.com"
         ],
+        rivotek_internal: [
+          "+.rivotek.com"
+        ],
         wps_productivity: [
           "+.wps.cn",
           "+.wps.com",
@@ -601,6 +611,11 @@ var SOURCE_NETWORK_RULES = {
     { type: "IP-CIDR6", value: "fe80::/10",             target: BASE.ruleTargets.direct }
   ]
 };
+
+var SOURCE_ANTHROPIC_NETWORK_RULES = [
+  { type: "IP-CIDR",  value: "160.79.104.0/21" },
+  { type: "IP-CIDR6", value: "2607:6bc0::/32" }
+];
 
 var SOURCE_TAILSCALE_RULES = {
   destinationDirect: [
@@ -1570,6 +1585,16 @@ function buildStrictChainRules(strictAiTarget) {
     addProcessRulesIfNotExists(ruleLines, seenRuleIdentities, processGroups[i], strictAiTarget);
   }
   addSuffixRulesIfNotExists(ruleLines, seenRuleIdentities, DERIVED.patterns.strict.all, strictAiTarget);
+  var anthropicNetworkRules = [];
+  for (i = 0; i < SOURCE_ANTHROPIC_NETWORK_RULES.length; i++) {
+    anthropicNetworkRules.push({
+      type:   SOURCE_ANTHROPIC_NETWORK_RULES[i].type,
+      value:  SOURCE_ANTHROPIC_NETWORK_RULES[i].value,
+      target: strictAiTarget,
+      option: "no-resolve"
+    });
+  }
+  addRawRulesIfNotExists(ruleLines, seenRuleIdentities, anthropicNetworkRules);
   return ruleLines;
 }
 

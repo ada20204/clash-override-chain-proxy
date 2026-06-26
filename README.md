@@ -283,6 +283,7 @@ tests/
 scripts/
   update-interface-name.js     ← 自动探测并写入 Tailscale 网卡名
   proxy-reliability-test.py    ← 批量测试 HTTP 出口代理可用率
+  check-claude-rules.js        ← 对照参考页检查 Claude/Anthropic 规则遗漏
 ```
 
 ## 本地校验
@@ -290,7 +291,10 @@ scripts/
 ```bash
 node tests/validate-direct.js
 python3 -m py_compile scripts/proxy-reliability-test.py
+node scripts/check-claude-rules.js
 ```
+
+`check-claude-rules.js` 会从 `https://ip.net.coffee/claude/site.html` 抽取 Claude/Anthropic 相关域名和 IP 段，并和 `完全覆写.js` 当前规则对比。明确遗漏的域名或 CIDR 会让脚本失败；关键词、ASN、NTP/GeoSite 这类宽规则只作为 advisory 输出，避免默认规则过宽造成误伤。
 
 ## 覆盖的进程
 
