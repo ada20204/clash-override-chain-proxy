@@ -45,7 +45,7 @@ var USER_OPTIONS = {
     hideMonitorGroups: true,
     subnetCidrs: [],
     excludeProxyServerFromTun: true,
-    routeExcludeCidrs: [],
+    routeExcludeCidrs: ["100.64.0.0/10"],
     controlPlaneTarget: "DIRECT",
     processTarget: "DIRECT",
     forceExitNodeTraffic: false,
