@@ -183,6 +183,8 @@ function testDefaultConfig() {
   assert.strictEqual(microsoftGroup.proxies[0], "DIRECT", "微软服务默认应走直连");
   assert(microsoftGroup.proxies.indexOf("节点选择") >= 0, "微软服务应保留节点选择");
 
+  assert(output["proxy-groups"].every(function (g) { return g.name !== "🧩 VS Code 插件"; }), "不应创建独立 VS Code 插件组");
+
   // 功能分组存在
   const groupNames = output["proxy-groups"].map(function (g) { return g.name; });
   ["🐙 GitHub", "📲 Telegram", "🌍 国际媒体", "🎮 游戏平台", "🍎 Apple", "🎯 直连"].forEach(function (name) {
@@ -200,7 +202,22 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "IP-CIDR,160.79.104.0/21," + EXPECTED.aiGroupName + ",no-resolve");
   assertRuleExists(output.rules, "IP-CIDR6,2607:6bc0::/32," + EXPECTED.aiGroupName + ",no-resolve");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,chatgpt.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,grokipedia.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,oaistatsig.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ct.sendgrid.net," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,openaimerge.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,workos.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,workoscdn.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,workos.imgix.net," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,challenges.cloudflare.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,js.stripe.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,rum.browser-intake-datadoghq.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,humb.apple.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com,"  + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.ca,"   + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,cloudcode-pa.googleapis.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,daily-cloudcode-pa.googleapis.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "PROCESS-NAME,agy,"          + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,Claude,"       + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,claude,"       + EXPECTED.aiGroupName);
 
@@ -220,6 +237,11 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,apple.com,🍎 Apple");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,icloud.com.cn,🍎 Apple");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,microsoft.com," + EXPECTED.microsoftGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,marketplace.visualstudio.com,节点选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,gallery.vsassets.io,节点选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,gallerycdn.vsassets.io,节点选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,vscode-cdn.net,节点选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,vscode-unpkg.net,节点选择");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,rivotek.com,DIRECT");
 
   // 兜底 MATCH
@@ -420,6 +442,115 @@ function testStandaloneCustomProxiesWithoutSubscription() {
   assertRuleExists(output.rules, "MATCH,节点选择");
 }
 
+function testCustomRuleGroupsRouteOnlyMatchedDomains() {
+  const { output } = runMain(function (config) {
+    config._customRuleGroups = [
+      {
+        name: "自定义业务",
+        testUrl: "http://service.example.test/health",
+        proxy: { name: "自定义业务节点", type: "socks5", server: "127.0.0.1", port: 10880 },
+        rules: [
+          "DOMAIN,service.example.test",
+          { type: "DOMAIN-SUFFIX", value: "internal.example.test" },
+          { type: "DOMAIN-SUFFIX", value: "github.com" }
+        ]
+      }
+    ];
+  });
+
+  const customNode = output.proxies.find(function (p) { return p.name === "自定义业务节点"; });
+  assert(customNode, "自定义规则组应能注入专用节点");
+  assert.strictEqual(customNode.type, "socks5");
+  assert.strictEqual(customNode.server, "127.0.0.1");
+  assert.strictEqual(customNode.port, 10880);
+
+  const customGroup = output["proxy-groups"].find(function (g) { return g.name === "自定义业务"; });
+  assert(customGroup, "应创建自定义规则组");
+  assert.strictEqual(customGroup.type, "select");
+  assert.strictEqual(customGroup.url, "http://service.example.test/health",
+    "自定义规则组应支持 testUrl 覆盖全局测速地址");
+  assert(customGroup.proxies.indexOf("自定义业务节点") >= 0, "自定义规则组应包含专用节点");
+  assert(customGroup.proxies.indexOf("DIRECT") >= 0, "自定义规则组应保留 DIRECT 兜底");
+
+  const nodeSelGroup = output["proxy-groups"].find(function (g) { return g.name === "节点选择"; });
+  assert(nodeSelGroup.proxies.indexOf("自定义业务节点") < 0,
+    "自定义规则组节点不应默认进入节点选择");
+  assertRuleExists(output.rules, "DOMAIN,service.example.test,自定义业务");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,internal.example.test,自定义业务");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,github.com,自定义业务");
+  assertRulesMissing(output.rules, ["DOMAIN-SUFFIX,github.com,🐙 GitHub"]);
+}
+
+function testProbeUrlsAreSplitByGroupPurpose() {
+  const { output } = runMain(function (config) {
+    config._customRuleGroups = [
+      {
+        name: "本机直连业务",
+        proxies: ["DIRECT"],
+        rules: ["DOMAIN-SUFFIX,local.example.test"]
+      }
+    ];
+  });
+
+  const autoGroup = output["proxy-groups"].find(function (g) {
+    return g.name === "自动选择" || g.name === "自动选择(Smart Group)";
+  });
+  const hkGroup = output["proxy-groups"].find(function (g) { return g.name === "🇭🇰|香港"; });
+  const customGroup = output["proxy-groups"].find(function (g) { return g.name === "本机直连业务"; });
+  const nodeSelGroup = output["proxy-groups"].find(function (g) { return g.name === "节点选择"; });
+  const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
+  const globalGroup = output["proxy-groups"].find(function (g) { return g.name === "GLOBAL"; });
+  const chainGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.chainGroupName; });
+  const githubGroup = output["proxy-groups"].find(function (g) { return g.name === "🐙 GitHub"; });
+  const appleGroup = output["proxy-groups"].find(function (g) { return g.name === "🍎 Apple"; });
+  const directGroup = output["proxy-groups"].find(function (g) { return g.name === "🎯 直连"; });
+  const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 家宽跳板"; });
+  const tailnetGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailnetDirectGroupName; });
+
+  assert.strictEqual(autoGroup.url, "https://www.gstatic.com/generate_204",
+    "自动选择组应使用代理出海测速地址");
+  assert.strictEqual(hkGroup.url, "https://www.gstatic.com/generate_204",
+    "地区 url-test 组应使用代理出海测速地址");
+  assert.strictEqual(nodeSelGroup.url, "https://www.gstatic.com/generate_204",
+    "节点选择应使用代理出海测速地址");
+  assert.strictEqual(aiGroup.url, "https://www.gstatic.com/generate_204",
+    "AI Agent 应使用代理出海测速地址");
+  assert.strictEqual(globalGroup.url, "https://www.gstatic.com/generate_204",
+    "GLOBAL 应使用代理出海测速地址");
+  assert.strictEqual(chainGroup.url, "https://www.gstatic.com/generate_204",
+    "家宽 IP 组应使用代理出海测速地址");
+  assert.strictEqual(githubGroup.url, "https://www.gstatic.com/generate_204",
+    "代理优先功能组应使用代理出海测速地址");
+  assert.strictEqual(relayGroup.url, "https://www.gstatic.com/generate_204",
+    "家宽跳板应使用代理出海测速地址");
+  assert.strictEqual(appleGroup.url, "http://connect.rom.miui.com/generate_204",
+    "直连优先功能组应使用国内健康检查地址");
+  assert.strictEqual(directGroup.url, "http://connect.rom.miui.com/generate_204",
+    "直连组应使用国内健康检查地址");
+  assert.strictEqual(tailnetGroup.url, "http://connect.rom.miui.com/generate_204",
+    "Tailscale 监控组应使用国内健康检查地址");
+  assert.strictEqual(customGroup.url, "http://connect.rom.miui.com/generate_204",
+    "自定义规则组未设置 testUrl 时应继承直连/界面健康检查地址");
+}
+
+function testStandaloneCustomRuleGroupsWithoutSubscription() {
+  const config = createEmptyConfig();
+  config._customRuleGroups = [
+    {
+      name: "自定义业务",
+      proxies: ["DIRECT"],
+      rules: ["DOMAIN-SUFFIX,internal.example.test"]
+    }
+  ];
+  const { output } = runMainWithConfig(config);
+
+  const nodeSelGroup = output["proxy-groups"].find(function (g) { return g.name === "节点选择"; });
+  assert(nodeSelGroup, "只有自定义规则组时仍应创建基础节点选择");
+  assert(nodeSelGroup.proxies.indexOf("DIRECT") >= 0, "基础节点选择应保留 DIRECT");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,internal.example.test,自定义业务");
+  assertRuleExists(output.rules, "MATCH,节点选择");
+}
+
 function testStandaloneHomeOnlyWithoutSubscription() {
   const config = createEmptyConfig();
   config._homeProxy = { type: "http", server: "30.0.0.1", port: 3128 };
@@ -510,6 +641,17 @@ function testTunRouteExcludesAreMergedAndConfigurable() {
     "已有 TUN 排除项应保留且去重");
   assert(routeExcludes.indexOf("10.166.0.10/32") >= 0, "新增私网自定义节点服务器应追加到 TUN 排除");
   assert(routeExcludes.indexOf("10.168.100.0/24") >= 0, "用户手工配置的 routeExcludeCidrs 应追加到 TUN 排除");
+}
+
+function testTailscaleCgnatRangeBypassesTunByDefault() {
+  const { output } = runMain(function (config) {
+    delete config._homeProxy;
+  });
+  const routeExcludes = output.tun && output.tun["route-exclude-address"];
+
+  assert(routeExcludes, "默认配置应生成 tun.route-exclude-address");
+  assert(routeExcludes.indexOf("100.64.0.0/10") >= 0,
+    "默认应将整个 Tailscale CGNAT 网段排除出 Clash TUN，避免 Tailnet 地址被 utun1500 截获");
 }
 
 function testTailscaleRulesAreConfigurableAndExitNodeUsesNormalRules() {
@@ -634,7 +776,7 @@ function testAutoCreateUrlTestGroup() {
   assert(autoGroup, "自动选择组应被自动创建");
   assert.strictEqual(autoGroup.type, "url-test");
   assert.strictEqual(autoGroup.url, "https://www.gstatic.com/generate_204",
-    "自动创建的测速组应使用 HTTPS 探测，避免 HTTP 代理节点被 HTTP delay 误判");
+    "自动创建的测速组应使用代理出海测速地址");
   assert(autoGroup.proxies.length > 0, "自建组应包含订阅节点");
   assert(autoGroup.proxies.indexOf("剩余流量：48.35% 298.19GB") < 0,
     "自建自动选择组也应过滤订阅状态信息节点");
@@ -688,11 +830,15 @@ testNoCredentialAiAgentIncludesCustomAndRawNodes();
 testFrontProxyAppliesOnlyToSubscriptionNodes();
 testFrontProxyDoesNotOverrideHomeProxyDialer();
 testStandaloneCustomProxiesWithoutSubscription();
+testCustomRuleGroupsRouteOnlyMatchedDomains();
+testProbeUrlsAreSplitByGroupPurpose();
+testStandaloneCustomRuleGroupsWithoutSubscription();
 testStandaloneHomeOnlyWithoutSubscription();
 testStandaloneFrontProxyOnlyAppliesWhenRequested();
 testTailnetCustomProxyServerBypassesTunRoute();
 testTailnetExistingProxyServerBypassesTunRoute();
 testTunRouteExcludesAreMergedAndConfigurable();
+testTailscaleCgnatRangeBypassesTunByDefault();
 testTailscaleRulesAreConfigurableAndExitNodeUsesNormalRules();
 testTailscaleExitNodeCanBeForced();
 testTailscaleMonitorGroupsCanBeDisabled();

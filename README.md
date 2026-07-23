@@ -103,6 +103,15 @@ tailscale: {
 }
 ```
 
+测速地址在 `完全覆写.js` 顶部按用途分层配置：
+
+```javascript
+urlTestProbeUrl: "http://connect.rom.miui.com/generate_204",
+proxyProbeUrl: "https://www.gstatic.com/generate_204"
+```
+
+`urlTestProbeUrl` 用于直连、Tailscale 监控和自定义业务组的界面健康检查，避免 DIRECT 被 Google 测速误判超时。`proxyProbeUrl` 用于 `自动选择`、地区组、`节点选择`、`AI Agent`、家宽跳板等代理出海组。需要某个分组单独使用业务健康检查地址时，再在该分组里配置 `testUrl` 覆盖。
+
 如果本机网络访问 `tailscale.com` 官方域名也受污染，可以把 `controlPlaneTarget` 改成前置代理名称或 `节点选择`。如果启用了 Tailscale subnet route，并希望这些内网段也在连接图里归到 `🧩 Tailnet 内部直连`，把网段写入 `subnetCidrs`，例如 `["192.168.88.0/24"]`。`monitorGroups` 只影响界面可观测性，设为 `false` 后规则会直接指向配置目标。`hideMonitorGroups` 默认隐藏这些监控组，避免它们在代理组列表里显示 DIRECT 测速超时；临时排查时可改成 `false`。`processTarget` 默认不建议改；进程级代理可能影响 WireGuard、DERP 或 STUN 行为。只有明确需要一刀切接管 Exit Node 转发公网流量时，才把 `forceExitNodeTraffic` 改成 `true`。
 
 ## 快速开始
@@ -137,6 +146,33 @@ function main(config) {
 ```
 
 如果自定义出口是 Tailscale subnet 内的地址，并且虚拟网卡模式下开启了「自动选择流量出口接口」，需要给该节点配置 `interfaceName`。macOS 可通过 `route -n get 代理IP` 查看当前接口名。
+
+如果只想让固定域名或网段走某个目标，可以复制 [`自定义规则组_样本.js`](src/自定义规则组_样本.js)，重命名后按需配置：
+
+```javascript
+function main(config) {
+  config._customRuleGroups = [
+    {
+      name: "自定义业务",
+      proxy: {
+        name: "自定义业务节点",
+        type: "socks5",
+        server: "127.0.0.1",
+        port: 10880
+      },
+      rules: [
+        "DOMAIN,service.example.test",
+        "DOMAIN-SUFFIX,internal.example.test"
+      ],
+      testUrl: "http://connect.rom.miui.com/generate_204"
+    }
+  ];
+
+  return config;
+}
+```
+
+这会生成一个独立策略组，并把指定规则指向这个组；该组不会默认进入「节点选择」，避免被当作普通出口误选。如果目标节点已经存在，也可以删掉 `proxy`，改用 `proxies: ["已有节点名"]` 或 `proxies: ["DIRECT"]`。自定义规则组的测速地址按“分组 `testUrl` → 全局 `USER_OPTIONS.urlTestProbeUrl` → 脚本内置默认值”的顺序取值。
 
 也可以使用仓库内的辅助脚本自动探测并写入：
 
@@ -274,6 +310,7 @@ src/
   无订阅基础配置.yaml    ← 无订阅模式的空基础配置
   前置代理_样本.js       ← 前置代理样本（给订阅节点统一加第一跳）
   出口IP凭证_样本.js     ← 统一出口配置样本（家宽IP + 公司节点 + 自定义出口）
+  自定义规则组_样本.js    ← 固定规则指向自定义策略组的样本
   家宽IP-链式代理.js     ← 原始脚本（保留参考）
   MiyaIP 凭证_样本.js    ← MiyaIP 凭证样本（保留参考）
 

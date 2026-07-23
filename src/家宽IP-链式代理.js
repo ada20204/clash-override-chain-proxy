@@ -1646,11 +1646,11 @@ function main(config, derivedOverride) {
   var miyaCredentials = takeMiyaCredentials(config); // 先取出并隐藏凭证
   var routingTargets;
 
-  ensureProxyContainers(config); // 初始化基础容器
+  writeContainers(config); // 初始化基础容器
   resetSubscriptionGroupsAndRules(config); // 清空订阅代理组和规则，由脚本完整重建
   ensureNodeSelectionGroup(config); // 生成兜底节点选择组
-  applyDnsAndSniffer(config); // 先写 DNS 与 Sniffer
-  injectMiyaProxies(config, miyaCredentials); // 注入 MiyaIP 节点
+  writeDnsAndSniffer(config, derived); // 先写 DNS 与 Sniffer
+  writeMiyaProxies(config, miyaCredentials); // 注入 MiyaIP 节点
 
   routingTargets = resolveRoutingTargets(
     config,

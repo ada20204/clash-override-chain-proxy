@@ -189,7 +189,7 @@ function assertManagedProxyTopology(output, sandbox) {
   assert(nodeSelection, "node selection group missing");
   assert.deepEqual(
     nodeSelection.proxies,
-    ["🇸🇬 SG Auto 01", names.relay, names.media]
+    ["🇸🇬 SG Auto 01", "🇭🇰 HK Auto 01", "🇺🇸 US Auto 01", names.relay, names.media]
   );
 }
 

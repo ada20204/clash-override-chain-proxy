@@ -37,6 +37,8 @@
 var USER_OPTIONS = {
   autoSelectGroupName: "自动选择", // 订阅中的自动选择组名（url-test），Smart 内核会自动追加 "(Smart Group)" 后缀
   autoSelectExcludeKeywords: [], // 只过滤自动选择组；订阅状态信息仍会保留在节点选择里
+  urlTestProbeUrl: "http://connect.rom.miui.com/generate_204", // 直连/界面健康检查默认测速地址；单个分组可用 testUrl 覆盖
+  proxyProbeUrl: "https://www.gstatic.com/generate_204", // 代理/地区/出海能力默认测速地址
   enableChainRegionBrowserProcessProxy: false, // 是否让受管浏览器按应用名强制走家宽出口
   enableChainRegionAiCliProcessProxy: true,   // 是否让常见 AI CLI 按应用名强制走家宽出口
   tailscale: {
@@ -94,6 +96,22 @@ var BASE = {
   }
 };
 
+function getDefaultProbeUrl() {
+  return USER_OPTIONS.urlTestProbeUrl || BASE.urlTestProbeUrl;
+}
+
+function getProxyProbeUrl() {
+  return USER_OPTIONS.proxyProbeUrl || BASE.urlTestProbeUrl;
+}
+
+function getGroupProbeUrl(groupConfig) {
+  if (groupConfig && groupConfig.testUrl) return groupConfig.testUrl;
+  if (groupConfig && (groupConfig.probePolicy === "proxy" || groupConfig.preference === "proxy")) {
+    return getProxyProbeUrl();
+  }
+  return getDefaultProbeUrl();
+}
+
 BASE.dns.fallback = BASE.dns.overseas.concat(["https://dns.quad9.net/dns-query"]);
 
 var AUTO_SELECT_INFO_NODE_KEYWORDS = [
@@ -139,6 +157,21 @@ var SOURCE_PATTERNS = {
     ],
     services: ["+.apple-cloudkit.com"]
   },
+  nodeSelection: [
+    "+.visualstudio.com",
+    "+.marketplace.visualstudio.com",
+    "+.gallery.vsassets.io",
+    "+.gallerycdn.vsassets.io",
+    "+.vscode.dev",
+    "+.vscode-cdn.net",
+    "+.vscode-unpkg.net",
+    "+.vscode.download.prss.microsoft.com",
+    "+.download.visualstudio.microsoft.com",
+    "+.vscode-sync.trafficmanager.net",
+    "+.vscode-sync-insiders.trafficmanager.net",
+    "+.default.exp-tas.com",
+    "+.vsmarketplacebadges.dev"
+  ],
   microsoft: {
     core: [
       "+.microsoft.com",
@@ -231,6 +264,7 @@ var SOURCE_PATTERNS = {
     platform: {
       google_core: [
         "+.google.com",
+        "+.google.ca",
         "+.googleapis.com",
         "+.googleusercontent.com",
         "+.gmail.com",
@@ -296,9 +330,21 @@ var SOURCE_PATTERNS = {
         "+.chatgpt.com",
         "+.sora.com",
         "+.oaiusercontent.com",
-        "+.oaistatic.com"
+        "+.oaistatic.com",
+        "+.oaistatsig.com",
+        "+.ct.sendgrid.net",
+        "+.openaimerge.com",
+        "+.workos.com",
+        "+.workoscdn.com",
+        "+.workos.imgix.net",
+        "+.challenges.cloudflare.com",
+        "+.js.stripe.com",
+        "+.rum.browser-intake-datadoghq.com",
+        "+.humb.apple.com"
       ],
       google_ai: [
+        "+.cloudcode-pa.googleapis.com",
+        "+.daily-cloudcode-pa.googleapis.com",
         "+.gemini.google.com",
         "+.aistudio.google.com",
         "+.ai.google.dev",
@@ -322,6 +368,7 @@ var SOURCE_PATTERNS = {
       xai: [
         "+.x.ai",
         "+.grok.com",
+        "+.grokipedia.com",
         "+.console.x.ai",
         "+.api.x.ai"
       ]
@@ -592,7 +639,7 @@ var SOURCE_PROCESSES = {
         "Claude Code.exe"
       ]
     },
-    aiCli: ["claude", "gemini", "codex", "claude.exe", "gemini.exe", "codex.exe"],
+    aiCli: ["agy", "claude", "gemini", "codex", "claude.exe", "gemini.exe", "codex.exe"],
     browser: {
       apps: [
         // macOS（会自动展开 Helper 后缀）
@@ -758,6 +805,8 @@ function buildDerived() {
   var directDomesticOffice = flattenGroupedPatterns(SOURCE_PATTERNS.direct.domestic.office);
   var directOverseasApps   = flattenGroupedPatterns(SOURCE_PATTERNS.direct.overseasApps);
   var directAll            = mergeStringGroups([directDomesticAi, directDomesticOffice, directOverseasApps]);
+  var nodeSelectionDomains = SOURCE_PATTERNS.nodeSelection.slice();
+  var microsoftDomains    = excludeStrings(flattenGroupedPatterns(SOURCE_PATTERNS.microsoft), nodeSelectionDomains);
 
   var aiPatterns       = flattenGroupedPatterns(SOURCE_PATTERNS.chain.ai);
   var platformPatterns = flattenGroupedPatterns(SOURCE_PATTERNS.chain.platform);
@@ -799,7 +848,7 @@ function buildDerived() {
     {
       name: "Ⓜ️ 微软服务",
       preference: "direct",
-      domains: excludeStrings(flattenGroupedPatterns(SOURCE_PATTERNS.microsoft), directAll),
+      domains: excludeStrings(microsoftDomains, directAll),
       dnsPolicy: "overseas"
     },
     {
@@ -845,6 +894,7 @@ function buildDerived() {
         overseasApps: directOverseasApps,
         groups: [directDomesticAi, directDomesticOffice, directOverseasApps]
       },
+      nodeSelection: excludeStrings(nodeSelectionDomains, directAll),
       apple: flattenGroupedPatterns(SOURCE_PATTERNS.apple),
       sniffer: { force: snifferForce, skip: snifferSkip }
     }
@@ -1156,6 +1206,9 @@ function normalizeAutoSelectGroup(group) {
   if (group && group.proxies) {
     group.proxies = filterAutoSelectProxyNames(group.proxies);
   }
+  if (group && (group.type === "url-test" || group.type === "smart")) {
+    group.url = getProxyProbeUrl();
+  }
   return group;
 }
 
@@ -1205,7 +1258,7 @@ function ensureAnchorGroups(config, options) {
       var rgName = regionMeta.flag + "|" + regionMeta.label;
       regionGroups.push({
         name: rgName, type: "url-test", proxies: regionNodes,
-        url: BASE.urlTestProbeUrl, interval: 300, tolerance: 50
+        url: getProxyProbeUrl(), interval: 300, tolerance: 50
       });
       regionGroupNames.push(rgName);
     }
@@ -1222,7 +1275,12 @@ function ensureAnchorGroups(config, options) {
 
   // 节点选择 = [自动选择, 地区组..., 全部裸节点..., DIRECT]
   nodeSelProxies = nodeSelProxies.concat(regionGroupNames).concat(allNodeNames).concat(["DIRECT"]);
-  upsertNamedItem(config["proxy-groups"], { name: "节点选择", type: "select", proxies: nodeSelProxies });
+  upsertNamedItem(config["proxy-groups"], {
+    name: "节点选择",
+    type: "select",
+    proxies: nodeSelProxies,
+    url: getProxyProbeUrl()
+  });
 
   return { allNodeNames: allNodeNames, regionGroups: regionGroups, regionGroupNames: regionGroupNames };
 }
@@ -1244,8 +1302,7 @@ function buildFunctionalGroups(config, regionGroupNames) {
     } else {
       proxies = ["DIRECT", "节点选择"].concat(extra);
     }
-    groupDef = { name: spec.name, type: "select", proxies: proxies };
-    if (spec.testUrl) groupDef.url = spec.testUrl;
+    groupDef = { name: spec.name, type: "select", proxies: proxies, url: getGroupProbeUrl(spec) };
     upsertNamedItem(config["proxy-groups"], groupDef);
   }
 }
@@ -1298,7 +1355,7 @@ function ensureAutoSelectGroup(config) {
   }
   upsertNamedItem(config["proxy-groups"], {
     name: baseName, type: "url-test", proxies: allNodeNames,
-    url: BASE.urlTestProbeUrl, interval: 300, tolerance: 50
+    url: getProxyProbeUrl(), interval: 300, tolerance: 50
   });
   return baseName;
 }
@@ -1402,7 +1459,7 @@ function ensureChainGroup() {
 function ensureChainGroupWithProxies(config, chainProxies) {
   var chainGroupName = ensureChainGroup();
   upsertNamedItem(config["proxy-groups"], {
-    name: chainGroupName, type: "select", proxies: chainProxies
+    name: chainGroupName, type: "select", proxies: chainProxies, url: getProxyProbeUrl()
   });
   return chainGroupName;
 }
@@ -1425,7 +1482,8 @@ function ensureAiAgentGroup(config, options) {
   upsertNamedItem(config["proxy-groups"], {
     name: BASE.nodeNames.aiAgent,
     type: "select",
-    proxies: buildAiAgentProxies(config, options)
+    proxies: buildAiAgentProxies(config, options),
+    url: getProxyProbeUrl()
   });
   return BASE.nodeNames.aiAgent;
 }
@@ -1451,7 +1509,7 @@ function resolveRoutingTargets(config, regionGroupNames, customProxyNames, optio
   if (relayGroupProxies.length > 0) {
     relayGroupName = "🔗 家宽跳板";
     upsertNamedItem(config["proxy-groups"], {
-      name: relayGroupName, type: "select", proxies: relayGroupProxies
+      name: relayGroupName, type: "select", proxies: relayGroupProxies, url: getProxyProbeUrl()
     });
   }
 
@@ -1513,6 +1571,82 @@ function injectCustomProxies(config, proxyConfigs, frontProxyName) {
   return names;
 }
 
+function takeCustomRuleGroups(config) {
+  if (!config._customRuleGroups) return null;
+  var raw = config._customRuleGroups;
+  delete config._customRuleGroups;
+  return Array.isArray(raw) ? raw : [raw];
+}
+
+function normalizeRuleType(type) {
+  return String(type || "").toUpperCase();
+}
+
+function normalizeCustomRule(ruleConfig, target) {
+  var parts;
+  if (typeof ruleConfig === "string") {
+    parts = ruleConfig.split(",");
+    if (parts.length < 2) {
+      throw createUserError("自定义规则格式不完整：" + ruleConfig);
+    }
+    return {
+      type: normalizeRuleType(parts[0]),
+      value: parts[1],
+      target: target,
+      option: parts.length > 2 ? parts.slice(2).join(",") : null
+    };
+  }
+  if (!ruleConfig || !ruleConfig.type || !ruleConfig.value) {
+    throw createUserError("自定义规则配置不完整，请检查 type 和 value 字段");
+  }
+  return {
+    type: normalizeRuleType(ruleConfig.type),
+    value: ruleConfig.value,
+    target: target,
+    option: ruleConfig.option || null
+  };
+}
+
+function buildCustomRuleGroupRules(groupConfig) {
+  var rules = [];
+  var sourceRules = groupConfig.rules || [];
+  for (var i = 0; i < sourceRules.length; i++) {
+    rules.push(normalizeCustomRule(sourceRules[i], groupConfig.name));
+  }
+  return rules;
+}
+
+function injectCustomRuleGroups(config, groupConfigs) {
+  var rules = [];
+  var seenRuleIdentities = {};
+  for (var i = 0; i < groupConfigs.length; i++) {
+    var groupConfig = groupConfigs[i];
+    var proxies = [];
+    if (!groupConfig.name) {
+      throw createUserError("自定义规则组缺少 name 字段（第 " + (i + 1) + " 条）");
+    }
+    if (groupConfig.proxy) {
+      if (!groupConfig.proxy.name) groupConfig.proxy.name = groupConfig.name + "节点";
+      if (!groupConfig.proxy.server || !groupConfig.proxy.port) {
+        throw createUserError("自定义规则组 " + groupConfig.name + " 的 proxy 缺少 server 或 port");
+      }
+      upsertNamedItem(config.proxies, buildCustomProxyNode(groupConfig.proxy, null));
+      proxies.push(groupConfig.proxy.name);
+    }
+    proxies = proxies.concat(groupConfig.proxies || []);
+    if (proxies.length === 0) proxies.push(BASE.ruleTargets.direct);
+    if (proxies.indexOf(BASE.ruleTargets.direct) < 0) proxies.push(BASE.ruleTargets.direct);
+    upsertNamedItem(config["proxy-groups"], {
+      name: groupConfig.name,
+      type: groupConfig.type || "select",
+      proxies: uniqueStrings(proxies),
+      url: getGroupProbeUrl(groupConfig)
+    });
+    addRawRulesIfNotExists(rules, seenRuleIdentities, buildCustomRuleGroupRules(groupConfig));
+  }
+  return rules;
+}
+
 // ---------------------------------------------------------------------------
 // 规则注入（去重 + 置顶）
 // ---------------------------------------------------------------------------
@@ -1546,6 +1680,13 @@ function buildNetworkProbeRules(strictAiTarget, frontProxyName) {
   return ruleLines;
 }
 
+function buildNodeSelectionRules() {
+  var ruleLines = [];
+  var seenRuleIdentities = {};
+  addSuffixRulesIfNotExists(ruleLines, seenRuleIdentities, DERIVED.patterns.nodeSelection, "节点选择");
+  return ruleLines;
+}
+
 // strictAiTarget 为 null 时跳过 AI 进程和浏览器进程规则（纯分流模式）。
 function buildManagedRules(strictAiTarget, frontProxyName) {
   var rules = [];
@@ -1557,6 +1698,7 @@ function buildManagedRules(strictAiTarget, frontProxyName) {
     rules = rules.concat(buildBrowserChainRules(strictAiTarget));
   }
   return rules
+    .concat(buildNodeSelectionRules())
     .concat(buildFunctionalRules())
     .concat(buildDirectRules());
 }
@@ -1592,6 +1734,12 @@ function injectManagedRules(config, strictAiTarget, frontProxyName) {
   var managedRuleIdentities = buildRuleIdentityLookup(managedRules);
   config.rules = filterConflictingRules(config.rules, managedRuleIdentities);
   prependRules(config.rules, managedRules);
+}
+
+function injectCustomRuleGroupRules(config, ruleLines) {
+  var ruleIdentities = buildRuleIdentityLookup(ruleLines);
+  config.rules = filterConflictingRules(config.rules, ruleIdentities);
+  prependRules(config.rules, ruleLines);
 }
 
 function addRuleIfNotExists(ruleLines, seenRuleIdentities, type, value, target) {
@@ -1789,7 +1937,8 @@ function buildTailscaleMonitorGroup(name, proxies, options) {
   var group = {
     name: name,
     type: "select",
-    proxies: proxies
+    proxies: proxies,
+    url: getDefaultProbeUrl()
   };
   if (options.hideMonitorGroups) group.hidden = true;
   return group;
@@ -1989,11 +2138,12 @@ function toSuffix(domainPattern) {
 }
 
 // 按初始化、DNS/Sniffer、代理节点、规则注入、最终校验的顺序装配输出配置。
-// _frontProxy、_homeProxy 和 _customProxies 均为可选；都不配置时脚本仅做分流覆写。
+// _frontProxy、_homeProxy、_customProxies 和 _customRuleGroups 均为可选。
 function main(config) {
   var frontProxy     = takeFrontProxyCredentials(config); // 可选：订阅节点前置代理
   var credentials    = takeHomeProxyCredentials(config); // 可选：取出家宽IP凭证
   var customProxies  = takeCustomProxies(config);        // 可选：取出自定义出口配置
+  var customRuleGroups = takeCustomRuleGroups(config);   // 可选：取出自定义规则组配置
   var anchorResult;
   var regionGroupNames;
   var routingTargets;
@@ -2004,12 +2154,16 @@ function main(config) {
   var standaloneMode = false;
 
   var customProxyNames = [];
+  var customRuleGroupRules = [];
 
   ensureProxyContainers(config);
   subscriptionNodeNames = collectProxyNames(config.proxies);
   hasSubscriptionNodes = subscriptionNodeNames.length > 0;
   standaloneMode = !hasSubscriptionNodes;
-  if (standaloneMode && !hasHomeProxy && (!customProxies || customProxies.length === 0)) {
+  if (standaloneMode &&
+      !hasHomeProxy &&
+      (!customProxies || customProxies.length === 0) &&
+      (!customRuleGroups || customRuleGroups.length === 0)) {
     throw createUserError("未检测到订阅节点，也未配置 _customProxies 或 _homeProxy。请导入订阅，或使用 出口IP凭证.js 添加公司节点/固定 IP。");
   }
   if (frontProxy) {
@@ -2032,7 +2186,12 @@ function main(config) {
   // ③ GLOBAL（第三位，成员 = [节点选择] + 节点选择的全部成员）
   var nodeSelGroup = findProxyGroupByName(config["proxy-groups"], "节点选择");
   var globalProxies = ["节点选择"].concat(nodeSelGroup ? nodeSelGroup.proxies.slice() : []);
-  upsertNamedItem(config["proxy-groups"], { name: "GLOBAL", type: "select", proxies: globalProxies });
+  upsertNamedItem(config["proxy-groups"], {
+    name: "GLOBAL",
+    type: "select",
+    proxies: globalProxies,
+    url: getProxyProbeUrl()
+  });
   var globalGroup = findProxyGroupByName(config["proxy-groups"], "GLOBAL");
   if (frontProxyName && globalGroup) {
     insertBeforeDirect(globalGroup.proxies, frontProxyName);
@@ -2041,6 +2200,7 @@ function main(config) {
   // ④ 功能组
   buildFunctionalGroups(config, regionGroupNames);
   ensureTailscaleMonitorGroups(config);
+  if (customRuleGroups) customRuleGroupRules = injectCustomRuleGroups(config, customRuleGroups);
 
   // ⑤ 家宽出口 + 跳板组（有凭证时）
   var chainGroupName = null;
@@ -2076,10 +2236,12 @@ function main(config) {
   applyTunRouteExcludes(config, customProxies, frontProxy, credentials);
   if (hasHomeProxy) {
     injectManagedRules(config, aiAgentTarget, frontProxyName);
+    if (customRuleGroupRules.length > 0) injectCustomRuleGroupRules(config, customRuleGroupRules);
     validateManagedRouting(config, routingTargets);
   } else {
     // 无家宽凭证：AI 规则指向 AI Agent，用户可在组内选择支持 AI 的订阅节点。
     injectManagedRules(config, aiAgentTarget, frontProxyName);
+    if (customRuleGroupRules.length > 0) injectCustomRuleGroupRules(config, customRuleGroupRules);
   }
 
   delete config._frontProxyName;
