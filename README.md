@@ -10,10 +10,15 @@
 - **地区自动检测**：根据订阅节点自动创建香港、美国、日本、新加坡、台湾、韩国等地区 url-test 组
 - **无订阅模式**：可用空 YAML 作为基础配置，出口节点统一写入 `出口IP凭证.js`
 - **AI Agent 策略组**：AI 域名和进程统一走独立策略组；有家宽出口时可选家宽 IP，无家宽出口时可直接选择订阅节点
+- **AI QUIC 防泄漏**：默认拒绝 AI 域名的 UDP/443，让浏览器立即回退 HTTPS/TCP，避免 HTTP 出口不支持 UDP 时继续匹配到直连
+- **WebRTC UDP 防泄漏**：默认拒绝常用 STUN UDP 端口，避免不支持 UDP 的 HTTP 出口暴露本地公网 IP
 - **家宽IP链路（可选）**：配置家宽出口后，会生成真直连 `家宽IP` 和可选 `家宽IP链式`，可在 AI Agent 组中选择
 - **前置代理（可选）**：给订阅节点统一加一层一级跳板，缓解本机网络到订阅节点的污染和超时；也可在 GLOBAL 中选择它，让全局流量都先走一级代理
 - **自定义出口（可选）**：注入自定义 HTTP/SOCKS5 代理节点
-- **Tailscale 共存（可调）**：Tailnet 目的地址固定直连，官方域名和进程目标可配置，并默认生成可见监控组
+- **公司代理隔离（可选）**：`scope: "dedicated"` 节点只接受显式业务规则引用，不进入通用出口
+- **通用出海兜底**：未分类国际流量通过隐藏的 `🌐 通用出海` 复用 `节点选择`，与公司内网代理解耦
+- **分流 DNS**：国内域名使用国内 DNS；海外 DNS 默认随 `🤖 AI Agent` 建立 DoH 连接
+- **Tailscale 共存（可调）**：Tailnet 目的地址固定直连，官方域名和进程目标可配置，并默认生成隐藏监控组
 - **GeoSite/GeoIP 兜底**：国内域名和 IP 自动直连，无需手动维护
 - **跨平台进程规则**：同时覆盖 macOS 和 Windows 进程名
 
@@ -21,35 +26,34 @@
 
 ```
  1. 自动选择           ← url-test，自动选最快节点
- 2. 节点选择           ← select，可选组/地区/裸节点/DIRECT
- 3. GLOBAL            ← select，含节点选择 + 全部选项
+ 2. 节点选择           ← select，可选组/地区/普通自定义节点/裸节点/DIRECT
+ 3. GLOBAL            ← select，含节点选择和全部普通选项
  4. 🌍 国际媒体        ← YouTube/Netflix/Twitter/Disney+/Spotify 等
  5. 📲 Telegram       ← Telegram + Discord
  6. 🐙 GitHub         ← GitHub 全套
- 7. Ⓜ️ 微软服务        ← Office/Azure/Bing/Xbox/VS Code 等，默认 DIRECT
- 8. 🎮 游戏平台        ← Steam/Epic/Nintendo/PlayStation/Blizzard
+ 7. Ⓜ️ 微软服务        ← Office/Azure/Windows 等，默认 DIRECT
+ 8. 🎮 游戏平台        ← Steam/Epic/Nintendo/PlayStation/Blizzard，默认代理
  9. 🍎 Apple          ← iCloud/App Store 等
 10. 🎯 直连            ← DIRECT
 11. 🤖 AI Agent       ← AI 域名/进程的独立出口选择组
-12. 🧩 Tailnet 内部直连 ← Tailnet 目的地址监控组
-13. 🧩 Tailscale 控制面 ← tailscale.com 等官方域名监控组
-14. 🧩 Tailscale 进程  ← Tailscale App / 服务进程监控组
-15. 🔗 家宽跳板        ← 家宽链式节点的上级跳板（有家宽凭证和可用跳板时）
-16. 🏠 家宽IP          ← 家宽出口选择组（有家宽凭证时）
-17+ 地区 url-test 组   ← 🇭🇰|香港、🇺🇸|美国、🇯🇵|日本 等（沉底）
+12. 🔗 家宽跳板        ← 家宽链式节点的上级跳板（有家宽凭证和可用跳板时）
+13. 🏠 家宽IP          ← 家宽出口选择组（有家宽凭证时）
+14+ 地区 url-test 组   ← 🇭🇰|香港、🇺🇸|美国、🇯🇵|日本 等（沉底）
 ```
+
+`🌐 通用出海`、`🇯🇵 日本服务` 与 Tailscale 监控组均为隐藏内部组：前者只负责让 `MATCH` 复用 `节点选择`；日本服务保持 LINE、Yahoo Japan、Sony、Nintendo 等规则优先日本节点；Tailscale 监控组只用于连接信息观测。VS Code Marketplace、npm、NuGet、Bing 等开发服务不创建独立分组，直接走 `节点选择`。
 
 `🤖 AI Agent` 的成员会按是否配置家宽 IP 自动变化：
 
 ```
 有家宽IP时：
-  🏠 家宽IP / 节点选择 / 地区组 / 自定义出口 / DIRECT
+  🏠 家宽IP / 节点选择 / 地区组 / 普通自定义出口 / DIRECT
 
 无家宽IP时：
-  节点选择 / 地区组 / 自定义出口 / 订阅裸节点 / DIRECT
+  节点选择 / 地区组 / 普通自定义出口 / 订阅裸节点 / DIRECT
 
 无订阅模式：
-  🏠 家宽IP / 自定义出口 / 节点选择 / DIRECT
+  🏠 家宽IP / 普通自定义出口 / 节点选择 / DIRECT
 ```
 
 AI Agent 不直接放入总的自动选择组，避免 AI 出口选择过于含糊；地区组会保留。有家宽 IP 时不展开订阅裸节点，避免高阶场景下列表过长；无家宽 IP 时保留裸节点，方便单独给 AI 选择某个支持 AI 的订阅节点。
@@ -57,19 +61,25 @@ AI Agent 不直接放入总的自动选择组，避免 AI 出口选择过于含�
 ## 规则优先级
 
 ```
+代理服务器地址         → DIRECT（避免下游 Clash 重复代理）
+AI 域名 UDP/443       → REJECT（rejectAiQuic 开启时，立即回退 TCP）
+WebRTC STUN UDP       → REJECT（3478、5349、19302，rejectWebRtcUdp 开启时）
+YouTube 共享 Google API → 🌍 国际媒体（优先于通用 Google 域名）
 AI 进程规则           → 🤖 AI Agent
-AI + 平台域名         → 🤖 AI Agent
+明确 AI 域名          → 🤖 AI Agent（Gemini / AI Studio / Antigravity 等）
+通用 Google 服务      → 节点选择
 浏览器进程规则        → 🤖 AI Agent（enableChainRegionBrowserProcessProxy 开启时）
-功能组域名规则        → 各功能组（国际媒体/Telegram/GitHub/微软/游戏/Apple）
+功能组域名规则        → 各功能组（媒体/Telegram/GitHub/日本服务/微软/游戏/Apple）
+公司域名和网段        → dedicated 自定义规则组
 Tailscale 目的地址     → 🧩 Tailnet 内部直连 → DIRECT
 Tailscale 域名+进程    → Tailscale 监控组 → USER_OPTIONS.tailscale 配置的目标
 国内域名/IP直连       → DIRECT（手动列表 + GEOSITE,cn + GEOIP,cn）
-兜底                  → 节点选择
+兜底                  → 隐藏的 🌐 通用出海 → 节点选择
 ```
 
 ## 与 Tailscale 共存
 
-脚本默认按标准 Tailscale 方式共存。远程设备把本机作为 Exit Node 时，默认不会用一条 `SRC-IP-CIDR` 把转发流量提前截获，因此这类公网访问仍会继续走完整分流规则，最后才落到 `MATCH → 节点选择`。
+脚本默认按标准 Tailscale 方式共存。远程设备把本机作为 Exit Node 时，默认不会用一条 `SRC-IP-CIDR` 把转发流量提前截获，因此这类公网访问仍会继续走完整分流规则，最后才落到 `MATCH → 🌐 通用出海 → 节点选择`。
 
 最终直连的 Tailnet 目的地址：
 
@@ -79,7 +89,7 @@ Tailscale 域名+进程    → Tailscale 监控组 → USER_OPTIONS.tailscale �
 fd7a:115c:a1e0::/48 → 🧩 Tailnet 内部直连 → DIRECT
 ```
 
-Tailscale 官方域名和 App 进程默认直连，但规则会先进入可见监控组，便于在 Clash Party 的连接图里确认流向：
+Tailscale 官方域名和 App 进程默认直连，但规则会先进入隐藏监控组，便于在 Clash Party 的连接图里确认流向：
 
 | 监控组 | 默认成员 | 用途 |
 |---|---|---|
@@ -112,6 +122,20 @@ proxyProbeUrl: "https://www.gstatic.com/generate_204"
 
 `urlTestProbeUrl` 用于直连、Tailscale 监控和自定义业务组的界面健康检查，避免 DIRECT 被 Google 测速误判超时。`proxyProbeUrl` 用于 `自动选择`、地区组、`节点选择`、`AI Agent`、家宽跳板等代理出海组。需要某个分组单独使用业务健康检查地址时，再在该分组里配置 `testUrl` 覆盖。
 
+`directProxyServerRules` 默认开启：脚本会从最终代理节点列表读取 `server`，将字面量 IP 生成为 `IP-CIDR -> DIRECT`，将服务器域名生成为 `DOMAIN-SUFFIX -> DIRECT`。这只处理代理节点本身的上游连接，适合 Mac Clash 经过局域网到 XStation 时避免 XStation 再次代理节点服务器；如某个节点的 `server` 是域名，且下游 Clash 只能看到已解析 IP，再把实际 IP 写入 `proxyServerResolvedIps`，脚本会额外生成对应的 `/32` 或 `/128 DIRECT` 规则：
+
+```javascript
+proxyServerResolvedIps: {
+  "edge.example.com": ["203.0.113.10", "2001:db8::10"]
+}
+```
+
+域名的 IP 发生变化时需要同步更新这份映射；如某个环境不需要代理服务器直连豁免，可将 `directProxyServerRules` 改为 `false`。
+
+`rejectAiQuic` 默认开启：脚本会复用 AI Agent 的域名清单，在普通 AI 代理规则之前自动生成 UDP/443 `REJECT`。这适合 HTTP 家宽代理等运行时显示 `udp=false` 的出口，可防止 Mihomo 跳过不支持 UDP 的策略后继续向下匹配到直连。`rejectWebRtcUdp` 也默认开启，会拒绝浏览器常用的 STUN UDP 端口 `3478`、`5349`、`19302`，避免 WebRTC 暴露本地公网 IP。需要实时语音/视频，且所选代理链已验证支持 UDP 时，再将相应开关改为 `false`。
+
+DNS 默认开启 `respect-rules`。`geosite:cn` 和直连/代理节点启动解析使用 AliDNS / DNSPod；未知域名与海外策略默认使用 Google、Cloudflare、Quad9，并通过 `🤖 AI Agent` 建立 DoH 连接，所以会随你为 AI 选择的家宽或指定节点出站。将 `overseasDnsTarget` 改为 `"节点选择"`，则恢复使用普通出海线路。DNS 检测页展示的是 Google、Cloudflare 等递归 DNS 的地址，不会等于你的家宽出口 IP；关键是它不再显示中国大陆递归 DNS。
+
 如果本机网络访问 `tailscale.com` 官方域名也受污染，可以把 `controlPlaneTarget` 改成前置代理名称或 `节点选择`。如果启用了 Tailscale subnet route，并希望这些内网段也在连接图里归到 `🧩 Tailnet 内部直连`，把网段写入 `subnetCidrs`，例如 `["192.168.88.0/24"]`。`monitorGroups` 只影响界面可观测性，设为 `false` 后规则会直接指向配置目标。`hideMonitorGroups` 默认隐藏这些监控组，避免它们在代理组列表里显示 DIRECT 测速超时；临时排查时可改成 `false`。`processTarget` 默认不建议改；进程级代理可能影响 WireGuard、DERP 或 STUN 行为。只有明确需要一刀切接管 Exit Node 转发公网流量时，才把 `forceExitNodeTraffic` 改成 `true`。
 
 ## 快速开始
@@ -129,14 +153,14 @@ function main(config) {
     port: 1080
   };
 
-  // 自定义出口（可选，数组）
+  // 普通自定义出口（可选，数组；会进入通用选择组）
   config._customProxies = [
     {
       name: "自定义出口",
       type: "http",
       server: "10.0.0.1",
       port: 3128,
-      // 可选：公司代理在 Tailscale subnet 内时，指定 Tailscale 网卡，例如 "utun4"
+      // 可选：节点在 Tailscale subnet 内时，指定 Tailscale 网卡，例如 "utun4"
       interfaceName: ""
     }
   ];
@@ -144,6 +168,36 @@ function main(config) {
   return config;
 }
 ```
+
+只允许公司域名或内网网段使用的代理应标记为 dedicated，并同时配置规则组：
+
+```javascript
+function main(config) {
+  config._customProxies = [
+    {
+      name: "公司代理",
+      scope: "dedicated",
+      type: "http",
+      server: "10.0.0.1",
+      port: 3128,
+      interfaceName: ""
+    }
+  ];
+  config._customRuleGroups = [
+    {
+      name: "公司内网",
+      proxies: ["公司代理"],
+      rules: [
+        "DOMAIN-SUFFIX,example.corp",
+        { type: "IP-CIDR", value: "10.0.0.0/8", option: "no-resolve" }
+      ]
+    }
+  ];
+  return config;
+}
+```
+
+`scope: "dedicated"` 节点不会进入 `节点选择`、`🌐 通用出海`、AI、媒体、GitHub、游戏平台、家宽跳板或 `GLOBAL`。未被 `_customRuleGroups.proxies` 引用时，脚本会直接报错。
 
 如果自定义出口是 Tailscale subnet 内的地址，并且虚拟网卡模式下开启了「自动选择流量出口接口」，需要给该节点配置 `interfaceName`。macOS 可通过 `route -n get 代理IP` 查看当前接口名。
 
@@ -223,6 +277,10 @@ function main(config) {
 ```javascript
 var USER_OPTIONS = {
   autoSelectGroupName: "自动选择",              // 订阅中自动选择组的名称
+  overseasDnsTarget: "🤖 AI Agent",             // 海外 DoH 连接随 AI Agent 出站；可改为“节点选择”
+  proxyServerResolvedIps: {},                     // 域名代理服务器的已解析 IP 白名单
+  rejectAiQuic: true,                            // AI 域名拒绝 UDP/443 并回退 TCP
+  rejectWebRtcUdp: true,                         // 拒绝常用 STUN UDP，防止 WebRTC 暴露本地公网 IP
   enableChainRegionBrowserProcessProxy: false,  // 浏览器进程是否走家宽出口
   enableChainRegionAiCliProcessProxy: true,     // AI CLI 进程是否走家宽出口
   tailscale: {
@@ -244,7 +302,7 @@ var USER_OPTIONS = {
 
 1. 导入 [`src/无订阅基础配置.yaml`](src/无订阅基础配置.yaml)
 2. 复制 [`src/出口IP凭证_样本.js`](src/出口IP凭证_样本.js)，重命名为 `出口IP凭证.js`
-3. 在 `出口IP凭证.js` 里填入公司节点、自定义节点或固定 IP
+3. 在 `出口IP凭证.js` 里填入 dedicated 公司节点、普通自定义节点或固定 IP
 4. 覆写顺序：`出口IP凭证.js` → `完全覆写.js`
 
 无订阅模式不会生成地区组，也不会强行创建 `自动选择`。如果空 YAML 里没有订阅节点，也没有 `_customProxies` 或 `_homeProxy`，脚本会直接报错。
@@ -260,14 +318,14 @@ var USER_OPTIONS = {
 | 检测源 | 用来判断什么 | 规则目标 | 预期结果 |
 |---|---|---|---|
 | `ipapi.is` | AI 专用出口 | `🤖 AI Agent` | 显示 AI Agent 当前选择的出口；如果选了 `🏠 家宽IP`，就显示家宽 IP |
-| `ipwho.is` | 普通代理出口 | `节点选择` | 显示常规代理节点出口，不受 AI Agent 单独选择影响 |
+| `ipwho.is` | 普通代理出口 | `节点选择` | 显示默认代理出口，不受 AI Agent 和公司内网代理影响 |
 | `IP.SB` / `ip.sb` | 前置链路或直连出口 | 有前置代理时指向前置代理；无前置代理时 `DIRECT` | 开启前置代理时显示一级代理 IP；未开启时显示本机直连公网 IP |
 
 简单判定方式：
 
 ```text
 ipapi.is   → 看 AI 相关流量最终走哪里
-ipwho.is   → 看普通代理节点最终走哪里
+ipwho.is   → 看节点选择的默认代理出口
 ip.sb      → 看本机到订阅节点前的第一跳；没前置代理时就是直连公网 IP
 ```
 
@@ -309,7 +367,7 @@ src/
   完全覆写.js           ← 覆写脚本（唯一）
   无订阅基础配置.yaml    ← 无订阅模式的空基础配置
   前置代理_样本.js       ← 前置代理样本（给订阅节点统一加第一跳）
-  出口IP凭证_样本.js     ← 统一出口配置样本（家宽IP + 公司节点 + 自定义出口）
+  出口IP凭证_样本.js     ← 统一出口配置样本（家宽IP + 普通出口 + dedicated 公司代理）
   自定义规则组_样本.js    ← 固定规则指向自定义策略组的样本
   家宽IP-链式代理.js     ← 原始脚本（保留参考）
   MiyaIP 凭证_样本.js    ← MiyaIP 凭证样本（保留参考）
@@ -339,7 +397,7 @@ node scripts/check-claude-rules.js
 
 ### AI 应用（走 🤖 AI Agent）
 
-以下应用和命令行工具会命中 `🤖 AI Agent`。如果 `🤖 AI Agent` 里选择了 `🏠 家宽IP`，这些流量才会继续走家宽 IP；也可以按需切到地区组、自定义出口或订阅节点。
+以下应用和命令行工具会命中 `🤖 AI Agent`。如果 `🤖 AI Agent` 里选择了 `🏠 家宽IP`，这些流量才会继续走家宽 IP；也可以按需切到地区组、普通自定义出口或订阅节点。dedicated 公司代理不会出现在这里。
 
 | 应用 | macOS | Windows |
 |---|---|---|

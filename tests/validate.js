@@ -413,6 +413,29 @@ function testRepeatedRunDoesNotCreateSelfReference() {
   }
 }
 
+function testProxyServerAddressesUseDirectRules() {
+  const { output } = runMain((config) => {
+    config.proxies.push(
+      { name: "订阅IP节点", type: "http", server: "203.0.113.10", port: 443 },
+      { name: "订阅域名节点", type: "http", server: "edge.example.com", port: 443 }
+    );
+  });
+  assert(output.rules.includes("IP-CIDR,203.0.113.10/32,DIRECT,no-resolve"));
+  assert(output.rules.includes("DOMAIN-SUFFIX,edge.example.com,DIRECT"));
+}
+
+function testHostnameProxyServerResolvedIpsUseDirectRules() {
+  const { output } = runMain((config) => {
+    config.proxies.push({ name: "订阅域名节点", type: "http", server: "edge.example.com", port: 443 });
+  }, (sandbox) => {
+    sandbox.USER_OPTIONS.proxyServerResolvedIps = {
+      "edge.example.com": ["203.0.113.11", "2001:db8::11"]
+    };
+  });
+  assert(output.rules.includes("IP-CIDR,203.0.113.11/32,DIRECT,no-resolve"));
+  assert(output.rules.includes("IP-CIDR6,2001:db8::11/128,DIRECT,no-resolve"));
+}
+
 // ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
@@ -430,7 +453,9 @@ const tests = [
   testChainGroupIsNotReusedAsRelayTarget,
   testBadExternalRegionGroupIsNotReused,
   testNodeSelectionKeepsOnlyCurrentRelayGroup,
-  testRepeatedRunDoesNotCreateSelfReference
+  testRepeatedRunDoesNotCreateSelfReference,
+  testProxyServerAddressesUseDirectRules,
+  testHostnameProxyServerResolvedIpsUseDirectRules
 ];
 
 for (const test of tests) {

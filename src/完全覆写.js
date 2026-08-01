@@ -39,6 +39,11 @@ var USER_OPTIONS = {
   autoSelectExcludeKeywords: [], // 只过滤自动选择组；订阅状态信息仍会保留在节点选择里
   urlTestProbeUrl: "http://connect.rom.miui.com/generate_204", // 直连/界面健康检查默认测速地址；单个分组可用 testUrl 覆盖
   proxyProbeUrl: "https://www.gstatic.com/generate_204", // 代理/地区/出海能力默认测速地址
+  overseasDnsTarget: "🤖 AI Agent", // 海外及未知域名的 DoH 连接出口；改为“节点选择”可使用普通出海线路
+  directProxyServerRules: true, // 将最终代理节点的服务器地址在本机规则层直连，避免局域网下游 Clash 再代理一层
+  proxyServerResolvedIps: {}, // 域名代理服务器在下游 Clash 场景下使用的已解析 IP，例如 { "edge.example.com": ["203.0.113.10"] }
+  rejectAiQuic: true, // 拒绝 AI 域名 UDP/443，防止不支持 UDP 的出口被跳过后直连；浏览器会回退 HTTPS/TCP
+  rejectWebRtcUdp: true, // 拒绝常用 STUN UDP 端口，避免 HTTP 出口不支持 UDP 时 WebRTC 暴露本地公网 IP
   enableChainRegionBrowserProcessProxy: false, // 是否让受管浏览器按应用名强制走家宽出口
   enableChainRegionAiCliProcessProxy: true,   // 是否让常见 AI CLI 按应用名强制走家宽出口
   tailscale: {
@@ -71,6 +76,8 @@ var BASE = {
   regionOrder: ["HK", "US", "JP", "SG", "TW", "KR"],
   nodeNames: {
     aiAgent: "🤖 AI Agent",
+    generalEgress: "🌐 通用出海",
+    japanServices: "🇯🇵 日本服务",
     front: "前置代理",
     home: "家宽IP",
     homeChained: "家宽IP链式",
@@ -84,6 +91,7 @@ var BASE = {
   },
   urlTestProbeUrl: "https://www.gstatic.com/generate_204",
   errorPrefix: "[家宽IP-直连] ",
+  webRtcStunPorts: [3478, 5349, 19302],
   dns: {
     overseas: [
       "https://dns.google/dns-query",
@@ -363,7 +371,9 @@ var SOURCE_PATTERNS = {
         "+.perplexitycdn.com"
       ],
       router_and_tools: [
-        "+.openrouter.ai"
+        "+.openrouter.ai",
+        "+.mistral.ai",
+        "+.mistral.com"
       ],
       xai: [
         "+.x.ai",
@@ -385,6 +395,12 @@ var SOURCE_PATTERNS = {
         "+.youtubekids.com",
         "+.youtubegaming.com",
         "+.youtubeeducation.com"
+      ],
+      // YouTube 的部分 API/头像资源位于共享 Google 域名下，必须先于通用 Google 规则匹配。
+      youtube_google_api: [
+        "+.youtubei.googleapis.com",
+        "+.youtube.googleapis.com",
+        "+.yt3.ggpht.com"
       ],
       netflix: [
         "+.netflix.com",
@@ -467,6 +483,55 @@ var SOURCE_PATTERNS = {
         "+.spotifycdn.com",
         "+.spotifycdn.net",
         "+.byspotify.com"
+      ],
+      reddit: [
+        "+.reddit.com",
+        "+.redd.it",
+        "+.redditmedia.com",
+        "+.redditstatic.com"
+      ],
+      tiktok: [
+        "+.tiktok.com",
+        "+.tiktokcdn.com",
+        "+.tiktokv.com",
+        "+.byteoversea.com"
+      ],
+      bbc: [
+        "+.bbc.com",
+        "+.bbc.co.uk",
+        "+.bbci.co.uk"
+      ],
+      japan: [
+        "+.sony.jp",
+        "+.sony.co.jp",
+        "+.nintendo.co.jp",
+        "+.yahoo.co.jp",
+        "+.yimg.jp",
+        "+.line.me",
+        "+.line-apps.com",
+        "+.line-scdn.net",
+        "+.line.naver.jp",
+        "+.linecorp.com"
+      ]
+    },
+    generalEgress: {
+      infrastructure: [
+        "+.cloudflare.com",
+        "+.cloudflareinsights.com"
+      ],
+      globalSites: [
+        "+.oracle.com",
+        "+.takealot.com",
+        "+.pixpix.com",
+        "+.naver.com",
+        "+.noon.com",
+        "+.wikipedia.org",
+        "+.wikimedia.org",
+        "+.wikimediafoundation.org",
+        "+.yandex.com",
+        "+.yandex.ru",
+        "+.yastatic.net",
+        "+.ya.ru"
       ]
     },
     gaming: {
@@ -805,14 +870,23 @@ function buildDerived() {
   var directDomesticOffice = flattenGroupedPatterns(SOURCE_PATTERNS.direct.domestic.office);
   var directOverseasApps   = flattenGroupedPatterns(SOURCE_PATTERNS.direct.overseasApps);
   var directAll            = mergeStringGroups([directDomesticAi, directDomesticOffice, directOverseasApps]);
-  var nodeSelectionDomains = SOURCE_PATTERNS.nodeSelection.slice();
-  var microsoftDomains    = excludeStrings(flattenGroupedPatterns(SOURCE_PATTERNS.microsoft), nodeSelectionDomains);
+  var nodeSelectionDomains = mergeStringGroups([
+    SOURCE_PATTERNS.nodeSelection,
+    SOURCE_PATTERNS.microsoft.developer,
+    SOURCE_PATTERNS.microsoft.search,
+    // 通用 Google 服务不应因为 AI Studio 等产品而被整体送入 AI 出口。
+    flattenGroupedPatterns(SOURCE_PATTERNS.chain.platform)
+  ]);
+  var microsoftDomains     = excludeStrings(flattenGroupedPatterns(SOURCE_PATTERNS.microsoft), nodeSelectionDomains);
 
   var aiPatterns       = flattenGroupedPatterns(SOURCE_PATTERNS.chain.ai);
-  var platformPatterns = flattenGroupedPatterns(SOURCE_PATTERNS.chain.platform);
+  var generalEgressDomains = excludeStrings(
+    flattenGroupedPatterns(SOURCE_PATTERNS.chain.generalEgress),
+    directAll
+  );
   var validationExtra  = uniqueStrings(SOURCE_PATTERNS.policy.dnsFallbackExtra.slice());
   var strictAi         = excludeStrings(aiPatterns, directAll);
-  var strictSupport    = excludeStrings(platformPatterns, directAll);
+  var strictSupport    = [];
   var strictValidation = excludeStrings(validationExtra, directAll);
   var strictAll        = mergeStringGroups([strictAi, strictSupport, strictValidation]);
 
@@ -826,7 +900,10 @@ function buildDerived() {
         SOURCE_PATTERNS.chain.media.twitter,
         SOURCE_PATTERNS.chain.media.facebook,
         SOURCE_PATTERNS.chain.media.disney,
-        SOURCE_PATTERNS.chain.media.spotify
+        SOURCE_PATTERNS.chain.media.spotify,
+        SOURCE_PATTERNS.chain.media.reddit,
+        SOURCE_PATTERNS.chain.media.tiktok,
+        SOURCE_PATTERNS.chain.media.bbc
       ]), directAll),
       dnsPolicy: "overseas"
     },
@@ -853,9 +930,17 @@ function buildDerived() {
     },
     {
       name: "🎮 游戏平台",
-      preference: "direct",
+      preference: "proxy",
       domains: excludeStrings(flattenGroupedPatterns(SOURCE_PATTERNS.chain.gaming), directAll),
       dnsPolicy: "overseas"
+    },
+    {
+      name: BASE.nodeNames.japanServices,
+      preference: "proxy",
+      preferredRegion: "JP",
+      domains: excludeStrings(SOURCE_PATTERNS.chain.media.japan, directAll),
+      dnsPolicy: "overseas",
+      hidden: true
     },
     {
       name: "🍎 Apple",
@@ -895,6 +980,7 @@ function buildDerived() {
         groups: [directDomesticAi, directDomesticOffice, directOverseasApps]
       },
       nodeSelection: excludeStrings(nodeSelectionDomains, directAll),
+      generalEgress: generalEgressDomains,
       apple: flattenGroupedPatterns(SOURCE_PATTERNS.apple),
       sniffer: { force: snifferForce, skip: snifferSkip }
     }
@@ -942,8 +1028,8 @@ function buildStrictValidationTargets() {
     { type: "DOMAIN-SUFFIX", value: "claude.ai" },
     { type: "DOMAIN-SUFFIX", value: "chatgpt.com" },
     { type: "DOMAIN-SUFFIX", value: "gemini.google.com" },
+    { type: "DOMAIN-SUFFIX", value: "aistudio.google.com" },
     { type: "DOMAIN-SUFFIX", value: "perplexity.ai" },
-    { type: "DOMAIN-SUFFIX", value: "google.com" },
     { type: "PROCESS-NAME",  value: "Claude" }
   ];
   if (isChainRegionAiCliProcessProxyEnabled()) {
@@ -985,21 +1071,48 @@ function assignNameserverPolicyDomains(policy, domains, dohServers) {
   }
 }
 
+function routeDnsServers(dnsServers, proxyName) {
+  var routedServers = [];
+  for (var i = 0; i < dnsServers.length; i++) {
+    routedServers.push(dnsServers[i] + "#" + proxyName);
+  }
+  return routedServers;
+}
+
+function getOverseasDnsTarget() {
+  return USER_OPTIONS.overseasDnsTarget || BASE.nodeNames.aiAgent;
+}
+
+function getOverseasDnsServers() {
+  return routeDnsServers(BASE.dns.overseas, getOverseasDnsTarget());
+}
+
+function getFallbackDnsServers() {
+  return routeDnsServers(BASE.dns.fallback, getOverseasDnsTarget());
+}
+
 function buildNameserverPolicy() {
-  var policy = { "geosite:openai": BASE.dns.overseas };
+  var overseasDnsServers = getOverseasDnsServers();
+  var policy = {
+    "geosite:cn": BASE.dns.domestic,
+    "geosite:geolocation-!cn": overseasDnsServers,
+    "geosite:gfw": overseasDnsServers,
+    "geosite:openai": overseasDnsServers
+  };
   var i;
   var spec;
   var dnsServers;
-  assignNameserverPolicyDomains(policy, DERIVED.patterns.strict.ai,              BASE.dns.overseas);
-  assignNameserverPolicyDomains(policy, DERIVED.patterns.strict.support,         BASE.dns.overseas);
-  assignNameserverPolicyDomains(policy, DERIVED.patterns.strict.validation,      BASE.dns.overseas);
+  assignNameserverPolicyDomains(policy, DERIVED.patterns.strict.ai,              overseasDnsServers);
+  assignNameserverPolicyDomains(policy, DERIVED.patterns.strict.support,         overseasDnsServers);
+  assignNameserverPolicyDomains(policy, DERIVED.patterns.strict.validation,      overseasDnsServers);
+  assignNameserverPolicyDomains(policy, DERIVED.patterns.generalEgress,           overseasDnsServers);
   assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.domestic.ai,     BASE.dns.domestic);
   assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.domestic.office, BASE.dns.domestic);
-  assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.overseasApps,    BASE.dns.overseas);
+  assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.overseasApps,    overseasDnsServers);
   for (i = 0; i < DERIVED.specs.length; i++) {
     spec = DERIVED.specs[i];
     if (!spec.domains || spec.domains.length === 0 || !spec.dnsPolicy) continue;
-    dnsServers = spec.dnsPolicy === "overseas" ? BASE.dns.overseas : BASE.dns.domestic;
+    dnsServers = spec.dnsPolicy === "overseas" ? overseasDnsServers : BASE.dns.domestic;
     assignNameserverPolicyDomains(policy, spec.domains, dnsServers);
   }
   return policy;
@@ -1037,7 +1150,11 @@ function buildDnsFakeIpFilter() {
 }
 
 function buildDnsFallbackFilterDomains() {
-  var groups = [DERIVED.patterns.strict.all, DERIVED.patterns.direct.overseasApps];
+  var groups = [
+    DERIVED.patterns.strict.all,
+    DERIVED.patterns.generalEgress,
+    DERIVED.patterns.direct.overseasApps
+  ];
   for (var i = 0; i < DERIVED.specs.length; i++) {
     if (DERIVED.specs[i].domains && DERIVED.specs[i].domains.length > 0) {
       groups.push(DERIVED.specs[i].domains);
@@ -1050,7 +1167,6 @@ function buildDnsFallbackFilter() {
   return {
     geoip: true,
     "geoip-code": "CN",
-    geosite: ["gfw"],
     ipcidr: ["240.0.0.0/4", "0.0.0.0/32"],
     domain: buildDnsFallbackFilterDomains()
   };
@@ -1061,15 +1177,15 @@ function buildDnsBaseConfig() {
     enable: true,
     listen: "0.0.0.0:1053",
     ipv6: true,
-    "respect-rules": false,
+    "respect-rules": true,
     "enhanced-mode": "fake-ip",
     "fake-ip-range": "198.18.0.1/16",
     "default-nameserver": ["223.5.5.5", "119.29.29.29"],
-    nameserver: BASE.dns.domestic,
+    nameserver: getOverseasDnsServers(),
     "proxy-server-nameserver": BASE.dns.domestic,
     "direct-nameserver": BASE.dns.domestic.slice(),
     "direct-nameserver-follow-policy": true,
-    fallback: BASE.dns.fallback
+    fallback: getFallbackDnsServers()
   };
 }
 
@@ -1285,6 +1401,27 @@ function ensureAnchorGroups(config, options) {
   return { allNodeNames: allNodeNames, regionGroups: regionGroups, regionGroupNames: regionGroupNames };
 }
 
+function ensureGeneralEgressGroup(config) {
+  upsertNamedItem(config["proxy-groups"], {
+    name: BASE.nodeNames.generalEgress,
+    type: "select",
+    proxies: ["节点选择"],
+    url: getProxyProbeUrl(),
+    hidden: true
+  });
+  return BASE.nodeNames.generalEgress;
+}
+
+function getPreferredRegionGroupName(spec, regionGroupNames) {
+  var regionMeta;
+  var groupName;
+  if (!spec.preferredRegion) return null;
+  regionMeta = BASE.regions[spec.preferredRegion];
+  if (!regionMeta) return null;
+  groupName = regionMeta.flag + "|" + regionMeta.label;
+  return (regionGroupNames || []).indexOf(groupName) >= 0 ? groupName : null;
+}
+
 // 按 DERIVED.specs 创建所有功能代理组。
 // 地区 url-test 组和自定义出口节点均按 preference 插入到合适位置。
 function buildFunctionalGroups(config, regionGroupNames) {
@@ -1293,16 +1430,29 @@ function buildFunctionalGroups(config, regionGroupNames) {
   var proxies;
   var groupDef;
   var extra = regionGroupNames;
+  var preferredRegionGroup;
   for (i = 0; i < DERIVED.specs.length; i++) {
     spec = DERIVED.specs[i];
+    preferredRegionGroup = getPreferredRegionGroupName(spec, regionGroupNames);
     if (spec.fixedProxies) {
       proxies = spec.fixedProxies;
     } else if (spec.preference === "proxy") {
-      proxies = ["节点选择"].concat(extra).concat(["DIRECT"]);
+      proxies = [];
+      if (preferredRegionGroup) proxies.push(preferredRegionGroup);
+      proxies = proxies
+        .concat(["节点选择"])
+        .concat(extra)
+        .concat(["DIRECT"]);
     } else {
       proxies = ["DIRECT", "节点选择"].concat(extra);
     }
-    groupDef = { name: spec.name, type: "select", proxies: proxies, url: getGroupProbeUrl(spec) };
+    groupDef = {
+      name: spec.name,
+      type: "select",
+      proxies: uniqueStrings(proxies),
+      url: getGroupProbeUrl(spec)
+    };
+    if (spec.hidden === true) groupDef.hidden = true;
     upsertNamedItem(config["proxy-groups"], groupDef);
   }
 }
@@ -1531,6 +1681,74 @@ function takeCustomProxies(config) {
   return Array.isArray(raw) ? raw : [raw];
 }
 
+function partitionCustomProxies(proxyConfigs) {
+  var ordinary = [];
+  var dedicated = [];
+  var configs = proxyConfigs || [];
+  var seenNames = {};
+  for (var i = 0; i < configs.length; i++) {
+    var proxyConfig = configs[i];
+    var scope = proxyConfig.scope || "ordinary";
+    if (!proxyConfig.name) proxyConfig.name = "自定义出口" + (i + 1);
+    if (seenNames[proxyConfig.name]) {
+      throw createUserError("自定义出口名称重复：" + proxyConfig.name);
+    }
+    seenNames[proxyConfig.name] = true;
+    if (scope === "dedicated") {
+      dedicated.push(proxyConfig);
+    } else if (scope === "ordinary") {
+      ordinary.push(proxyConfig);
+    } else {
+      throw createUserError(
+        "自定义出口 " + proxyConfig.name + " 的 scope 无效，仅支持 ordinary 或 dedicated"
+      );
+    }
+  }
+  return { ordinary: ordinary, dedicated: dedicated };
+}
+
+function validateDedicatedProxyNameAvailability(config, proxyConfigs, groupConfigs) {
+  var pendingGroupNames = {};
+  var groups = groupConfigs || [];
+  for (var groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+    if (groups[groupIndex] && groups[groupIndex].name) {
+      pendingGroupNames[groups[groupIndex].name] = true;
+    }
+  }
+  for (var i = 0; i < proxyConfigs.length; i++) {
+    var proxyName = proxyConfigs[i].name;
+    if (findProxyByName(config.proxies, proxyName) ||
+        findProxyGroupByName(config["proxy-groups"], proxyName) ||
+        pendingGroupNames[proxyName]) {
+      throw createUserError(
+        "专用出口 " + proxyName + " 与已有节点或策略组重名，无法保证隔离"
+      );
+    }
+  }
+}
+
+function validateDedicatedProxyReferences(proxyConfigs, groupConfigs) {
+  var referencedNames = {};
+  var groups = groupConfigs || [];
+  var groupProxies;
+  var i;
+  var j;
+  for (i = 0; i < groups.length; i++) {
+    groupProxies = groups[i].proxies || [];
+    for (j = 0; j < groupProxies.length; j++) {
+      referencedNames[groupProxies[j]] = true;
+    }
+  }
+  for (i = 0; i < proxyConfigs.length; i++) {
+    if (!referencedNames[proxyConfigs[i].name]) {
+      throw createUserError(
+        "专用出口 " + proxyConfigs[i].name +
+        " 未被 _customRuleGroups.proxies 引用；dedicated 节点不能进入通用出口"
+      );
+    }
+  }
+}
+
 function buildCustomProxyNode(proxyConfig, frontProxyName) {
   var node = {
     name: proxyConfig.name,
@@ -1561,9 +1779,6 @@ function injectCustomProxies(config, proxyConfigs, frontProxyName) {
       throw createUserError(
         "自定义出口配置不完整（第 " + (i + 1) + " 条），请检查 server 和 port 字段"
       );
-    }
-    if (!proxyConfig.name) {
-      proxyConfig.name = "自定义出口" + (i + 1);
     }
     upsertNamedItem(config.proxies, buildCustomProxyNode(proxyConfig, frontProxyName));
     names.push(proxyConfig.name);
@@ -1652,11 +1867,28 @@ function injectCustomRuleGroups(config, groupConfigs) {
 // ---------------------------------------------------------------------------
 
 function getRuleIdentity(ruleLine) {
-  var firstCommaIndex = ruleLine.indexOf(",");
-  if (firstCommaIndex < 0) return null;
-  var secondCommaIndex = ruleLine.indexOf(",", firstCommaIndex + 1);
-  if (secondCommaIndex < 0) return null;
-  return ruleLine.substring(0, secondCommaIndex);
+  var fields = splitTopLevelRuleFields(ruleLine);
+  if (fields.length < 3) return null;
+  return fields[0] + "," + fields[1];
+}
+
+function splitTopLevelRuleFields(ruleLine) {
+  var fields = [];
+  var depth = 0;
+  var startIndex = 0;
+  for (var i = 0; i < ruleLine.length; i++) {
+    var character = ruleLine.charAt(i);
+    if (character === "(") {
+      depth++;
+    } else if (character === ")" && depth > 0) {
+      depth--;
+    } else if (character === "," && depth === 0) {
+      fields.push(ruleLine.substring(startIndex, i));
+      startIndex = i + 1;
+    }
+  }
+  fields.push(ruleLine.substring(startIndex));
+  return fields;
 }
 
 function buildFunctionalRules() {
@@ -1671,26 +1903,77 @@ function buildFunctionalRules() {
   return rules;
 }
 
+function buildGeneralEgressRules() {
+  var rules = [];
+  var seen = {};
+  addSuffixRulesIfNotExists(
+    rules,
+    seen,
+    DERIVED.patterns.generalEgress,
+    BASE.nodeNames.generalEgress
+  );
+  return rules;
+}
+
+function buildNodeSelectionRules() {
+  var rules = [];
+  var seen = {};
+  addSuffixRulesIfNotExists(rules, seen, DERIVED.patterns.nodeSelection, "节点选择");
+  return rules;
+}
+
 function buildNetworkProbeRules(strictAiTarget, frontProxyName) {
   var ruleLines = [];
   var seenRuleIdentities = {};
   addRuleIfNotExists(ruleLines, seenRuleIdentities, "DOMAIN-SUFFIX", "ipapi.is", strictAiTarget);
-  addRuleIfNotExists(ruleLines, seenRuleIdentities, "DOMAIN-SUFFIX", "ipwho.is", "节点选择");
+  addRuleIfNotExists(
+    ruleLines,
+    seenRuleIdentities,
+    "DOMAIN-SUFFIX",
+    "ipwho.is",
+    "节点选择"
+  );
   addRuleIfNotExists(ruleLines, seenRuleIdentities, "DOMAIN-SUFFIX", "ip.sb", frontProxyName || BASE.ruleTargets.direct);
   return ruleLines;
 }
 
-function buildNodeSelectionRules() {
+function buildProxyServerDirectRules() {
   var ruleLines = [];
   var seenRuleIdentities = {};
-  addSuffixRulesIfNotExists(ruleLines, seenRuleIdentities, DERIVED.patterns.nodeSelection, "节点选择");
+  var proxyServerRules = DERIVED.networkRules.proxyServers || [];
+  addRawRulesIfNotExists(ruleLines, seenRuleIdentities, proxyServerRules);
   return ruleLines;
+}
+
+function buildTailscaleProcessRuleLines() {
+  var ruleLines = [];
+  var seenRuleIdentities = {};
+  addRawRulesIfNotExists(ruleLines, seenRuleIdentities, buildTailscaleProcessRules());
+  return ruleLines;
+}
+
+function buildYoutubeSharedPlatformRules() {
+  var rules = [];
+  var seen = {};
+  addSuffixRulesIfNotExists(
+    rules,
+    seen,
+    SOURCE_PATTERNS.chain.media.youtube_google_api,
+    "🌍 国际媒体"
+  );
+  return rules;
 }
 
 // strictAiTarget 为 null 时跳过 AI 进程和浏览器进程规则（纯分流模式）。
 function buildManagedRules(strictAiTarget, frontProxyName) {
   var rules = [];
+  rules = rules.concat(buildProxyServerDirectRules());
+  // Tailscale 的 STUN 也会使用 UDP/3478，必须先于通用 WebRTC 防泄漏规则匹配。
+  rules = rules.concat(buildTailscaleProcessRuleLines());
+  rules = rules.concat(buildWebRtcUdpRejectRules());
   if (strictAiTarget) {
+    rules = rules.concat(buildYoutubeSharedPlatformRules());
+    rules = rules.concat(buildAiQuicRejectRules());
     rules = rules.concat(buildNetworkProbeRules(strictAiTarget, frontProxyName));
   }
   if (strictAiTarget) {
@@ -1699,6 +1982,7 @@ function buildManagedRules(strictAiTarget, frontProxyName) {
   }
   return rules
     .concat(buildNodeSelectionRules())
+    .concat(buildGeneralEgressRules())
     .concat(buildFunctionalRules())
     .concat(buildDirectRules());
 }
@@ -1738,8 +2022,20 @@ function injectManagedRules(config, strictAiTarget, frontProxyName) {
 
 function injectCustomRuleGroupRules(config, ruleLines) {
   var ruleIdentities = buildRuleIdentityLookup(ruleLines);
+  var protectedIdentities = buildRuleIdentityLookup(buildProxyServerDirectRules());
+  var protectedRules = [];
+  var remainingRules = [];
+  var ruleIdentity;
   config.rules = filterConflictingRules(config.rules, ruleIdentities);
-  prependRules(config.rules, ruleLines);
+  for (var i = 0; i < config.rules.length; i++) {
+    ruleIdentity = getRuleIdentity(config.rules[i]);
+    if (ruleIdentity && protectedIdentities[ruleIdentity]) {
+      protectedRules.push(config.rules[i]);
+    } else {
+      remainingRules.push(config.rules[i]);
+    }
+  }
+  config.rules = protectedRules.concat(ruleLines).concat(remainingRules);
 }
 
 function addRuleIfNotExists(ruleLines, seenRuleIdentities, type, value, target) {
@@ -1773,6 +2069,39 @@ function addSuffixRulesIfNotExists(ruleLines, seenRuleIdentities, domains, targe
     suffixes.push(toSuffix(domains[i]));
   }
   addTypedRulesIfNotExists(ruleLines, seenRuleIdentities, suffixes, "DOMAIN-SUFFIX", target);
+}
+
+function buildQuicRejectRules(domainPatterns) {
+  var ruleLines = [];
+  var seenRuleIdentities = {};
+  for (var i = 0; i < domainPatterns.length; i++) {
+    var condition = "((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX," +
+      toSuffix(domainPatterns[i]) + "))";
+    var ruleIdentity = "AND," + condition;
+    if (seenRuleIdentities[ruleIdentity]) continue;
+    seenRuleIdentities[ruleIdentity] = true;
+    ruleLines.push(ruleIdentity + ",REJECT");
+  }
+  return ruleLines;
+}
+
+function buildAiQuicRejectRules() {
+  if (USER_OPTIONS.rejectAiQuic === false) return [];
+  return buildQuicRejectRules(DERIVED.patterns.strict.all);
+}
+
+function buildWebRtcUdpRejectRules() {
+  var ruleLines = [];
+  var seenRuleIdentities = {};
+  if (USER_OPTIONS.rejectWebRtcUdp === false) return ruleLines;
+  for (var i = 0; i < BASE.webRtcStunPorts.length; i++) {
+    var condition = "((NETWORK,udp),(DST-PORT," + BASE.webRtcStunPorts[i] + "))";
+    var ruleIdentity = "AND," + condition;
+    if (seenRuleIdentities[ruleIdentity]) continue;
+    seenRuleIdentities[ruleIdentity] = true;
+    ruleLines.push(ruleIdentity + ",REJECT");
+  }
+  return ruleLines;
 }
 
 function addProcessRulesIfNotExists(ruleLines, seenRuleIdentities, processNames, target) {
@@ -1857,6 +2186,75 @@ function collectProxyServerRouteExcludeCidrs(proxyConfigs) {
     cidrs.push(proxyConfig.server + "/32");
   }
   return uniqueStrings(cidrs);
+}
+
+function isIpv4Literal(value) {
+  return !!parseIpv4Address(value);
+}
+
+function normalizeProxyServerValue(value) {
+  var server = String(value || "").trim();
+  if (server.charAt(0) === "[" && server.charAt(server.length - 1) === "]") {
+    server = server.substring(1, server.length - 1);
+  }
+  if (server.indexOf("+.") === 0) server = server.substring(2);
+  if (server.indexOf("*.") === 0) server = server.substring(2);
+  return server;
+}
+
+function getProxyServerResolvedIps(server) {
+  var configured = USER_OPTIONS.proxyServerResolvedIps || {};
+  var values = configured[server] || configured[String(server).toLowerCase()] || [];
+  return Array.isArray(values) ? values : [values];
+}
+
+function addProxyServerDirectRule(rules, seen, server) {
+  var type;
+  var value;
+  server = normalizeProxyServerValue(server);
+  if (!server || server === "localhost" || server === "127.0.0.1" || server === "::1") return;
+  if (isIpv4Literal(server)) {
+    type = "IP-CIDR";
+    value = server + "/32";
+  } else if (server.indexOf(":") >= 0) {
+    type = "IP-CIDR6";
+    value = server + "/128";
+  } else {
+    type = "DOMAIN-SUFFIX";
+    value = server;
+  }
+  if (seen[type + "," + value]) return;
+  seen[type + "," + value] = true;
+  rules.push({
+    type: type,
+    value: value,
+    target: BASE.ruleTargets.direct,
+    option: type.indexOf("IP-CIDR") === 0 ? "no-resolve" : null
+  });
+}
+
+function collectProxyServerDirectRules(config) {
+  var rules = [];
+  var seen = {};
+  var proxies = config.proxies || [];
+  var server;
+  var resolvedIps;
+  for (var i = 0; i < proxies.length; i++) {
+    server = normalizeProxyServerValue(proxies[i] && proxies[i].server);
+    addProxyServerDirectRule(rules, seen, server);
+    if (isIpv4Literal(server) || server.indexOf(":") >= 0) continue;
+    resolvedIps = getProxyServerResolvedIps(server);
+    for (var j = 0; j < resolvedIps.length; j++) {
+      addProxyServerDirectRule(rules, seen, resolvedIps[j]);
+    }
+  }
+  return rules;
+}
+
+function applyProxyServerDirectRules(config) {
+  DERIVED.networkRules.proxyServers = USER_OPTIONS.directProxyServerRules
+    ? collectProxyServerDirectRules(config)
+    : [];
 }
 
 function applyTunRouteExcludes(config, customProxies, frontProxy, homeProxy) {
@@ -1971,7 +2369,7 @@ function ensureTailscaleMonitorGroups(config) {
   }
 }
 
-function buildTailscaleRules() {
+function buildTailscaleRules(includeProcessRules) {
   var options = getTailscaleOptions();
   var targets = getTailscaleRuleTargets(options);
   var rules = [];
@@ -2009,7 +2407,18 @@ function buildTailscaleRules() {
       target: targets.controlPlaneTarget
     });
   }
-  for (i = 0; i < SOURCE_TAILSCALE_RULES.processNames.length; i++) {
+  if (includeProcessRules !== false) {
+    rules = rules.concat(buildTailscaleProcessRules());
+  }
+  return rules;
+}
+
+function buildTailscaleProcessRules() {
+  var options = getTailscaleOptions();
+  var targets = getTailscaleRuleTargets(options);
+  var rules = [];
+  if (!options.enable) return rules;
+  for (var i = 0; i < SOURCE_TAILSCALE_RULES.processNames.length; i++) {
     rules.push({
       type: "PROCESS-NAME",
       value: SOURCE_TAILSCALE_RULES.processNames[i],
@@ -2035,7 +2444,7 @@ function buildDirectRules() {
     });
   }
   addRawRulesIfNotExists(ruleLines, seenRuleIdentities, directNetworkRules);
-  addRawRulesIfNotExists(ruleLines, seenRuleIdentities, buildTailscaleRules());
+  addRawRulesIfNotExists(ruleLines, seenRuleIdentities, buildTailscaleRules(false));
   for (i = 0; i < directPatternGroups.length; i++) {
     addSuffixRulesIfNotExists(ruleLines, seenRuleIdentities, directPatternGroups[i], BASE.ruleTargets.direct);
   }
@@ -2044,7 +2453,7 @@ function buildDirectRules() {
   ruleLines.push("GEOSITE,cn,DIRECT");
   ruleLines.push("GEOIP,cn,DIRECT,no-resolve");
 
-  ruleLines.push("MATCH,节点选择");
+  ruleLines.push("MATCH," + BASE.nodeNames.generalEgress);
   return ruleLines;
 }
 
@@ -2144,6 +2553,9 @@ function main(config) {
   var credentials    = takeHomeProxyCredentials(config); // 可选：取出家宽IP凭证
   var customProxies  = takeCustomProxies(config);        // 可选：取出自定义出口配置
   var customRuleGroups = takeCustomRuleGroups(config);   // 可选：取出自定义规则组配置
+  var customProxySets = partitionCustomProxies(customProxies);
+  var ordinaryCustomProxies = customProxySets.ordinary;
+  var dedicatedCustomProxies = customProxySets.dedicated;
   var anchorResult;
   var regionGroupNames;
   var routingTargets;
@@ -2157,6 +2569,7 @@ function main(config) {
   var customRuleGroupRules = [];
 
   ensureProxyContainers(config);
+  validateDedicatedProxyReferences(dedicatedCustomProxies, customRuleGroups);
   subscriptionNodeNames = collectProxyNames(config.proxies);
   hasSubscriptionNodes = subscriptionNodeNames.length > 0;
   standaloneMode = !hasSubscriptionNodes;
@@ -2170,7 +2583,9 @@ function main(config) {
     frontProxyName = injectFrontProxy(config, frontProxy, subscriptionNodeNames);
     bindFrontProxyToSubscriptionNodes(config, frontProxyName, subscriptionNodeNames);
   }
-  if (customProxies) customProxyNames = injectCustomProxies(config, customProxies, frontProxyName);
+  if (ordinaryCustomProxies.length > 0) {
+    customProxyNames = injectCustomProxies(config, ordinaryCustomProxies, frontProxyName);
+  }
   resetSubscriptionGroupsAndRules(config);
 
   // ① 自动选择组（最上面）：订阅有就用，没有就自建 url-test
@@ -2182,10 +2597,12 @@ function main(config) {
     enableRegions: !standaloneMode
   });
   regionGroupNames = anchorResult.regionGroupNames;
+  ensureGeneralEgressGroup(config);
 
-  // ③ GLOBAL（第三位，成员 = [节点选择] + 节点选择的全部成员）
+  // ③ GLOBAL（用户可见的第三个主入口）
   var nodeSelGroup = findProxyGroupByName(config["proxy-groups"], "节点选择");
-  var globalProxies = ["节点选择"].concat(nodeSelGroup ? nodeSelGroup.proxies.slice() : []);
+  var globalProxies = ["节点选择"]
+    .concat(nodeSelGroup ? nodeSelGroup.proxies.slice() : []);
   upsertNamedItem(config["proxy-groups"], {
     name: "GLOBAL",
     type: "select",
@@ -2200,6 +2617,10 @@ function main(config) {
   // ④ 功能组
   buildFunctionalGroups(config, regionGroupNames);
   ensureTailscaleMonitorGroups(config);
+  if (dedicatedCustomProxies.length > 0) {
+    validateDedicatedProxyNameAvailability(config, dedicatedCustomProxies, customRuleGroups);
+    injectCustomProxies(config, dedicatedCustomProxies, frontProxyName);
+  }
   if (customRuleGroups) customRuleGroupRules = injectCustomRuleGroups(config, customRuleGroups);
 
   // ⑤ 家宽出口 + 跳板组（有凭证时）
@@ -2234,6 +2655,7 @@ function main(config) {
   // ⑧ DNS / Sniffer / 规则注入
   applyDnsAndSniffer(config);
   applyTunRouteExcludes(config, customProxies, frontProxy, credentials);
+  applyProxyServerDirectRules(config);
   if (hasHomeProxy) {
     injectManagedRules(config, aiAgentTarget, frontProxyName);
     if (customRuleGroupRules.length > 0) injectCustomRuleGroupRules(config, customRuleGroupRules);

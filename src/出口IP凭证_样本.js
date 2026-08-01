@@ -1,6 +1,6 @@
 /**
  * 出口IP凭证注入脚本
- * 将家宽IP、公司节点和自定义出口的凭证注入到 config，供完全覆写脚本读取。
+ * 将家宽IP和自定义出口的凭证注入到 config，供完全覆写脚本读取。
  * 所有配置项均为可选，按需取消注释即可。
  * 有订阅和无订阅模式都使用这个文件维护出口节点。
  *
@@ -26,8 +26,9 @@ function main(config) {
   //   // password: ""
   // };
 
-  // ── 自定义出口 / 公司节点（可选，数组）──────────────────────────────────
+  // ── 普通自定义出口（可选，数组）──────────────────────────────────────────
   // 注入后，所有节点会出现在「节点选择」和各功能组中，可按组单独选择出口。
+  // 只允许固定公司域名或网段使用的代理不要放在这里，见下方 dedicated 样本。
   // 支持单个节点或多个节点。
   //
   // useFrontProxy:
@@ -37,13 +38,13 @@ function main(config) {
   //
   // interfaceName:
   //   - 可选：指定这个节点从哪个网卡发起连接
-  //   - 如果公司代理在 Tailscale subnet 内，且虚拟网卡模式下全局开启
+  //   - 如果普通出口在 Tailscale subnet 内，且虚拟网卡模式下全局开启
   //     「自动选择流量出口接口」会导致该节点超时，可以填 Tailscale 网卡名
   //   - macOS 可用 `route -n get 代理IP` 查看 interface，例如 utun4
 
   // config._customProxies = [
   //   {
-  //     name: "公司代理",      // 节点显示名称，可自定义
+  //     name: "普通备用出口",  // 节点显示名称，可自定义
   //     type: "http",          // http 或 socks5
   //     server: "",            // 代理服务器地址（IP 或域名）
   //     port: 3128,            // 代理端口
@@ -61,6 +62,32 @@ function main(config) {
   //   //   port: 1080,
   //   //   useFrontProxy: true
   //   // }
+  // ];
+
+  // ── 公司内网专用代理（可选）──────────────────────────────────────────────
+  // dedicated 节点不会进入节点选择、通用出海、AI、媒体、GitHub 或家宽跳板。
+  // 它必须由 _customRuleGroups.proxies 显式引用，否则主脚本会拒绝生成配置。
+
+  // config._customProxies = [
+  //   {
+  //     name: "公司代理",
+  //     scope: "dedicated",
+  //     type: "http",
+  //     server: "",
+  //     port: 3128,
+  //     interfaceName: ""
+  //   }
+  // ];
+  //
+  // config._customRuleGroups = [
+  //   {
+  //     name: "公司内网",
+  //     proxies: ["公司代理"],
+  //     rules: [
+  //       "DOMAIN-SUFFIX,example.corp",
+  //       { type: "IP-CIDR", value: "10.0.0.0/8", option: "no-resolve" }
+  //     ]
+  //   }
   // ];
 
   return config;

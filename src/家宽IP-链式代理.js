@@ -49,7 +49,9 @@ var USER_OPTIONS = {
   chainRegion: "SG", // AI 家宽出口前一跳地区，可选 US / JP / HK / SG
   mediaRegion: "US", // 媒体默认地区，可选 US / JP / HK / SG
   routeBrowserToChain: true, // 是否让受管浏览器按应用名继续强制走 chainRegion
-  routeAiCliToChain: true // 是否让常见 AI CLI 按应用名继续强制走 chainRegion
+  routeAiCliToChain: true, // 是否让常见 AI CLI 按应用名继续强制走 chainRegion
+  directProxyServerRules: true, // 将代理节点服务器地址直连，避免局域网下游 Clash 重复代理
+  proxyServerResolvedIps: {} // 域名代理服务器在下游 Clash 场景下使用的已解析 IP，例如 { "edge.example.com": ["203.0.113.10"] }
 };
 
 // ---------------------------------------------------------------------------
@@ -1339,11 +1341,87 @@ function dedupeRulesByIdentity(ruleLines) {
 // 按固定优先级拼出直连保留项、严格 AI 规则、链式浏览器规则和媒体组选区规则。
 // 段内各自去重，段间顺序即优先级——首次出现的目标胜出。
 function buildManagedRules(strictAiTarget, mediaTarget, derived) {
-  var concatenated = buildStrictChainRules(strictAiTarget, derived)
+  var concatenated = buildProxyServerDirectRules(derived)
+    .concat(buildStrictChainRules(strictAiTarget, derived))
     .concat(buildBrowserChainRules(strictAiTarget, derived))
     .concat(buildMediaRules(mediaTarget, derived))
     .concat(buildDirectRules(derived));
   return dedupeRulesByIdentity(concatenated);
+}
+
+function buildProxyServerDirectRules(derived) {
+  var ruleLines = [];
+  appendRawRules(ruleLines, derived.networkRules.proxyServers || []);
+  return ruleLines;
+}
+
+function isIpv4Literal(value) {
+  if (typeof value !== "string") return false;
+  var parts = value.split(".");
+  if (parts.length !== 4) return false;
+  for (var i = 0; i < parts.length; i++) {
+    if (!/^\d+$/.test(parts[i]) || parseInt(parts[i], 10) > 255) return false;
+  }
+  return true;
+}
+
+function normalizeProxyServerValue(value) {
+  var server = String(value || "").trim();
+  if (server.charAt(0) === "[" && server.charAt(server.length - 1) === "]") {
+    server = server.substring(1, server.length - 1);
+  }
+  if (server.indexOf("+.") === 0) server = server.substring(2);
+  if (server.indexOf("*.") === 0) server = server.substring(2);
+  return server;
+}
+
+function getProxyServerResolvedIps(server) {
+  var configured = USER_OPTIONS.proxyServerResolvedIps || {};
+  var values = configured[server] || configured[String(server).toLowerCase()] || [];
+  return Array.isArray(values) ? values : [values];
+}
+
+function addProxyServerDirectRule(rules, seen, server) {
+  var type;
+  var value;
+  server = normalizeProxyServerValue(server);
+  if (!server || server === "localhost" || server === "127.0.0.1" || server === "::1") return;
+  if (isIpv4Literal(server)) {
+    type = "IP-CIDR";
+    value = server + "/32";
+  } else if (server.indexOf(":") >= 0) {
+    type = "IP-CIDR6";
+    value = server + "/128";
+  } else {
+    type = "DOMAIN-SUFFIX";
+    value = server;
+  }
+  if (seen[type + "," + value]) return;
+  seen[type + "," + value] = true;
+  rules.push({
+    type: type,
+    value: value,
+    target: BASE.ruleTargets.direct,
+    option: type.indexOf("IP-CIDR") === 0 ? "no-resolve" : null
+  });
+}
+
+function collectProxyServerDirectRules(config) {
+  var rules = [];
+  var seen = {};
+  var proxies = config.proxies || [];
+  var server;
+  var resolvedIps;
+  for (var i = 0; i < proxies.length; i++) {
+    server = normalizeProxyServerValue(proxies[i] && proxies[i].server);
+    addProxyServerDirectRule(rules, seen, server);
+    if (isIpv4Literal(server) || server.indexOf(":") >= 0) continue;
+    resolvedIps = getProxyServerResolvedIps(server);
+    for (var j = 0; j < resolvedIps.length; j++) {
+      addProxyServerDirectRule(rules, seen, resolvedIps[j]);
+    }
+  }
+  return rules;
 }
 
 // 把规则数组转换成便于查询的规则标识表。
@@ -1651,6 +1729,9 @@ function main(config, derivedOverride) {
   ensureNodeSelectionGroup(config); // 生成兜底节点选择组
   writeDnsAndSniffer(config, derived); // 先写 DNS 与 Sniffer
   writeMiyaProxies(config, miyaCredentials); // 注入 MiyaIP 节点
+  derived.networkRules.proxyServers = USER_OPTIONS.directProxyServerRules
+    ? collectProxyServerDirectRules(config)
+    : [];
 
   routingTargets = resolveRoutingTargets(
     config,

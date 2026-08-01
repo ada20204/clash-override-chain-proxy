@@ -23,6 +23,8 @@ const EXPECTED = {
   homeChainedNodeName: "家宽IP链式",
   relayGroupName:  "自动选择(Smart Group)",
   mediaGroupName:  "🌍 国际媒体",
+  generalEgressGroupName: "🌐 通用出海",
+  japanServicesGroupName: "🇯🇵 日本服务",
   microsoftGroupName: "Ⓜ️ 微软服务",
   tailscaleControlGroupName: "🧩 Tailscale 控制面",
   tailscaleProcessGroupName: "🧩 Tailscale 进程",
@@ -44,11 +46,16 @@ function createBaseConfig() {
     proxies: [
       { name: "🇸🇬 SG Auto 01", type: "ss" },
       { name: "🇭🇰 HK Auto 01", type: "ss" },
-      { name: "🇺🇸 US Auto 01", type: "ss" }
+      { name: "🇺🇸 US Auto 01", type: "ss" },
+      { name: "🇯🇵 JP Auto 01", type: "ss" }
     ],
     "proxy-groups": [
       { name: "节点选择", type: "select", proxies: ["🇸🇬 SG Auto 01"] },
-      { name: "自动选择(Smart Group)", type: "smart", proxies: ["🇸🇬 SG Auto 01", "🇭🇰 HK Auto 01", "🇺🇸 US Auto 01"] }
+      {
+        name: "自动选择(Smart Group)",
+        type: "smart",
+        proxies: ["🇸🇬 SG Auto 01", "🇭🇰 HK Auto 01", "🇺🇸 US Auto 01", "🇯🇵 JP Auto 01"]
+      }
     ],
     rules: [
       "DOMAIN-SUFFIX,claude.ai,DIRECT",
@@ -99,13 +106,36 @@ function assertRulesMissing(rules, ruleLines) {
 function assertNoDuplicateRuleIdentities(rules) {
   const seen = {};
   for (const rule of rules) {
-    const firstComma  = rule.indexOf(",");
-    const secondComma = rule.indexOf(",", firstComma + 1);
-    if (firstComma < 0 || secondComma < 0) continue;
-    const identity = rule.substring(0, secondComma);
+    const fields = splitTopLevelRuleFields(rule);
+    if (fields.length < 3) continue;
+    const identity = fields[0] + "," + fields[1];
     if (seen[identity]) throw new Error("Duplicate rule identity: " + identity);
     seen[identity] = true;
   }
+}
+
+function splitTopLevelRuleFields(rule) {
+  const fields = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < rule.length; i++) {
+    if (rule[i] === "(") depth++;
+    else if (rule[i] === ")" && depth > 0) depth--;
+    else if (rule[i] === "," && depth === 0) {
+      fields.push(rule.slice(start, i));
+      start = i + 1;
+    }
+  }
+  fields.push(rule.slice(start));
+  return fields;
+}
+
+function aiQuicRejectRule(domain) {
+  return "AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX," + domain + ")),REJECT";
+}
+
+function webRtcUdpRejectRule(port) {
+  return "AND,((NETWORK,udp),(DST-PORT," + port + ")),REJECT";
 }
 
 function assertSingleProxy(group, proxyName, message) {
@@ -122,7 +152,7 @@ function assertHiddenGroup(group, message) {
 // ─── tests ───────────────────────────────────────────────────────────────────
 
 function testDefaultConfig() {
-  const { output } = runMain();
+  const { sandbox, output } = runMain();
 
   // 凭证不输出到最终配置
   assert.strictEqual(output._homeProxy, undefined);
@@ -151,6 +181,16 @@ function testDefaultConfig() {
   assert(nodeSelGroup, "节点选择组应存在");
   assert(nodeSelGroup.proxies.indexOf(EXPECTED.homeNodeName) < 0, "家宽IP不应在节点选择中");
 
+  const generalEgressGroup = output["proxy-groups"].find(function (g) {
+    return g.name === EXPECTED.generalEgressGroupName;
+  });
+  assert(generalEgressGroup, "通用出海组应存在");
+  assert.strictEqual(generalEgressGroup.proxies.length, 1,
+    "通用出海不应保留额外出口选项");
+  assert.strictEqual(generalEgressGroup.proxies[0], "节点选择",
+    "通用出海只应复用人工选择结果");
+  assert.strictEqual(generalEgressGroup.hidden, true, "通用出海应作为内部兜底组隐藏");
+
   // 家宽IP出口组存在且成员正确
   const chainGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.chainGroupName; });
   assert(chainGroup, "家宽IP出口组应存在");
@@ -172,7 +212,11 @@ function testDefaultConfig() {
   const mediaGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.mediaGroupName; });
   assert(mediaGroup, "国际媒体组应存在");
   assert.strictEqual(mediaGroup.type, "select");
+  assert.strictEqual(mediaGroup.proxies[0], "节点选择",
+    "国际媒体默认应走节点选择");
   assert(mediaGroup.proxies.indexOf("节点选择") >= 0, "国际媒体应包含节点选择");
+  assert(mediaGroup.proxies.indexOf(EXPECTED.generalEgressGroupName) < 0,
+    "国际媒体不应暴露内部通用出海组");
   assert(mediaGroup.proxies.indexOf(EXPECTED.homeNodeName) < 0, "媒体组不应含家宽IP节点");
   assert(mediaGroup.proxies.indexOf(EXPECTED.homeChainedNodeName) < 0, "媒体组不应含家宽IP链式节点");
 
@@ -187,9 +231,33 @@ function testDefaultConfig() {
 
   // 功能分组存在
   const groupNames = output["proxy-groups"].map(function (g) { return g.name; });
-  ["🐙 GitHub", "📲 Telegram", "🌍 国际媒体", "🎮 游戏平台", "🍎 Apple", "🎯 直连"].forEach(function (name) {
+  [
+    EXPECTED.generalEgressGroupName,
+    EXPECTED.japanServicesGroupName,
+    "🐙 GitHub",
+    "📲 Telegram",
+    "🌍 国际媒体",
+    "🎮 游戏平台",
+    "🍎 Apple",
+    "🎯 直连"
+  ].forEach(function (name) {
     assert(groupNames.indexOf(name) >= 0, name + " 组应存在");
   });
+  assert(groupNames.indexOf("🧰 开发服务") < 0, "不应创建独立开发服务组");
+  const gamingGroup = output["proxy-groups"].find(function (g) { return g.name === "🎮 游戏平台"; });
+  assert.strictEqual(gamingGroup.proxies[0], "节点选择",
+    "国际游戏平台默认应走节点选择");
+  const japanGroup = output["proxy-groups"].find(function (g) {
+    return g.name === EXPECTED.japanServicesGroupName;
+  });
+  assert.strictEqual(japanGroup.proxies[0], "🇯🇵|日本",
+    "存在日本地区节点时，日本服务应优先选择日本组");
+  assertHiddenGroup(japanGroup, "日本服务应作为内部功能组隐藏");
+
+  const globalGroup = output["proxy-groups"].find(function (g) { return g.name === "GLOBAL"; });
+  assert(globalGroup, "GLOBAL 组应存在");
+  assert(globalGroup.proxies.indexOf(EXPECTED.generalEgressGroupName) < 0,
+    "GLOBAL 不应暴露内部通用出海组");
 
   // 关键 AI 规则统一指向 AI Agent 策略组
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,claude.ai,"   + EXPECTED.aiGroupName);
@@ -202,7 +270,11 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "IP-CIDR,160.79.104.0/21," + EXPECTED.aiGroupName + ",no-resolve");
   assertRuleExists(output.rules, "IP-CIDR6,2607:6bc0::/32," + EXPECTED.aiGroupName + ",no-resolve");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,chatgpt.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,aistudio.google.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,antigravity.google," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,generativelanguage.googleapis.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,grokipedia.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,mistral.ai," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,oaistatsig.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ct.sendgrid.net," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,openaimerge.com," + EXPECTED.aiGroupName);
@@ -213,13 +285,28 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,js.stripe.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,rum.browser-intake-datadoghq.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,humb.apple.com," + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com,"  + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.ca,"   + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com,节点选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.ca,节点选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,googleapis.com,节点选择");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,cloudcode-pa.googleapis.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,daily-cloudcode-pa.googleapis.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,agy,"          + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,Claude,"       + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,claude,"       + EXPECTED.aiGroupName);
+
+  // AI QUIC 先拒绝再回退 TCP，避免 HTTP 家宽出口不支持 UDP 时继续匹配到 DIRECT。
+  ["openai.com", "chatgpt.com", "anthropic.com", "claude.ai", "aistudio.google.com"].forEach(function (domain) {
+    const rejectRule = aiQuicRejectRule(domain);
+    const proxyRule = "DOMAIN-SUFFIX," + domain + "," + EXPECTED.aiGroupName;
+    assertRuleExists(output.rules, rejectRule);
+    assert(output.rules.indexOf(rejectRule) < output.rules.indexOf(proxyRule),
+      domain + " 的 QUIC 拒绝规则应位于 AI 代理规则之前");
+  });
+  const generatedAiQuicRules = output.rules.filter(function (rule) {
+    return rule.indexOf("AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX,") === 0;
+  });
+  assert.strictEqual(generatedAiQuicRules.length, sandbox.DERIVED.patterns.strict.all.length,
+    "每个 AI Agent 域名都应自动生成一条 QUIC 拒绝规则");
 
   // 网络信息检测源：AI / 普通代理 / 前置或直连，各司其职
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
@@ -229,6 +316,16 @@ function testDefaultConfig() {
   // 媒体规则指向媒体组
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com," + EXPECTED.mediaGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,netflix.com," + EXPECTED.mediaGroupName);
+  ["youtubei.googleapis.com", "youtube.googleapis.com", "yt3.ggpht.com"].forEach(function (domain) {
+    var mediaRule = "DOMAIN-SUFFIX," + domain + "," + EXPECTED.mediaGroupName;
+    assertRuleExists(output.rules, mediaRule);
+    assert(output.rules.indexOf(mediaRule) < output.rules.indexOf("DOMAIN-SUFFIX,googleapis.com,节点选择"),
+      domain + " 应优先于通用 Google 规则进入国际媒体");
+  });
+  assertRulesMissing(output.rules, [aiQuicRejectRule("googleapis.com")]);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,reddit.com," + EXPECTED.mediaGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,tiktok.com," + EXPECTED.mediaGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,bbc.com," + EXPECTED.mediaGroupName);
 
   // Telegram / GitHub / Steam 各走专用组
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,telegram.org,📲 Telegram");
@@ -242,12 +339,65 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,gallerycdn.vsassets.io,节点选择");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,vscode-cdn.net,节点选择");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,vscode-unpkg.net,节点选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,npmjs.com,节点选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,bing.com,节点选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,line.me," + EXPECTED.japanServicesGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,yahoo.co.jp," + EXPECTED.japanServicesGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,sony.jp," + EXPECTED.japanServicesGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,nintendo.co.jp," + EXPECTED.japanServicesGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,rivotek.com,DIRECT");
 
-  // 兜底 MATCH
-  assertRuleExists(output.rules, "MATCH,节点选择");
+  [
+    "cloudflare.com",
+    "oracle.com",
+    "takealot.com",
+    "pixpix.com",
+    "naver.com",
+    "noon.com",
+    "wikipedia.org",
+    "yastatic.net"
+  ].forEach(function (domain) {
+    const rule = "DOMAIN-SUFFIX," + domain + "," + EXPECTED.generalEgressGroupName;
+    assertRuleExists(output.rules, rule);
+    assert(output.rules.indexOf(rule) < output.rules.indexOf("GEOSITE,cn,DIRECT"),
+      domain + " 应在 GeoSite 国内直连规则之前固定进入通用出海");
+  });
 
-  // Tailscale 自身和 Tailnet 地址进入可见监控组，组内默认直连，避免 Exit Node / DERP / WireGuard 套娃
+  // 兜底 MATCH
+  assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
+
+  // 海外解析器默认经 AI Agent，国内和代理节点解析仍使用国内 DNS，避免解析链路套娃。
+  assert.strictEqual(output.dns["respect-rules"], true);
+  assert(output.dns.nameserver.every(function (server) {
+    return server.indexOf("#" + EXPECTED.aiGroupName) > 0;
+  }), "默认 DNS 应固定经 AI Agent，避免未知海外域名使用国内递归 DNS");
+  assert.deepEqual(output.dns["proxy-server-nameserver"], [
+    "https://dns.alidns.com/dns-query",
+    "https://doh.pub/dns-query"
+  ]);
+  assert.deepEqual(output.dns["direct-nameserver"], output.dns["proxy-server-nameserver"]);
+  assert(output.dns.fallback.every(function (server) {
+    return server.indexOf("#" + EXPECTED.aiGroupName) > 0;
+  }), "海外 fallback DNS 应固定经 AI Agent");
+  assert.deepEqual(
+    output.dns["nameserver-policy"]["geosite:cn"],
+    output.dns["direct-nameserver"]
+  );
+  assert(output.dns["nameserver-policy"]["geosite:geolocation-!cn"].every(function (server) {
+    return server.indexOf("#" + EXPECTED.aiGroupName) > 0;
+  }), "海外 nameserver-policy 应固定经 AI Agent");
+  assert.deepEqual(
+    output.dns["nameserver-policy"]["geosite:gfw"],
+    output.dns["nameserver-policy"]["geosite:geolocation-!cn"]
+  );
+  assert.strictEqual(output.dns["fallback-filter"].geosite, undefined,
+    "已迁移到 nameserver-policy 后不应继续使用即将废弃的 fallback-filter.geosite");
+
+  [3478, 5349, 19302].forEach(function (port) {
+    assertRuleExists(output.rules, webRtcUdpRejectRule(port));
+  });
+
+  // Tailscale 自身和 Tailnet 地址进入隐藏监控组，组内默认直连，避免 Exit Node / DERP / WireGuard 套娃
   assertRuleExists(output.rules, "PROCESS-NAME,tailscaled," + EXPECTED.tailscaleProcessGroupName + ",no-resolve");
   assertRuleExists(output.rules, "PROCESS-NAME,tailscaled.exe," + EXPECTED.tailscaleProcessGroupName + ",no-resolve");
   assertRuleExists(output.rules, "PROCESS-NAME,IPNExtension," + EXPECTED.tailscaleProcessGroupName + ",no-resolve");
@@ -284,7 +434,16 @@ function testNoCredentialPureOverwrite() {
 
   // 功能组仍正常存在
   const groupNames = output["proxy-groups"].map(function (g) { return g.name; });
-  ["🐙 GitHub", "📲 Telegram", "🌍 国际媒体", "🎮 游戏平台", "🍎 Apple", "🎯 直连"].forEach(function (name) {
+  [
+    EXPECTED.generalEgressGroupName,
+    EXPECTED.japanServicesGroupName,
+    "🐙 GitHub",
+    "📲 Telegram",
+    "🌍 国际媒体",
+    "🎮 游戏平台",
+    "🍎 Apple",
+    "🎯 直连"
+  ].forEach(function (name) {
     assert(groupNames.indexOf(name) >= 0, name + " 组应存在");
   });
 
@@ -309,11 +468,41 @@ function testNoCredentialPureOverwrite() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com,🌍 国际媒体");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,github.com,🐙 GitHub");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,microsoft.com," + EXPECTED.microsoftGroupName);
-  assertRuleExists(output.rules, "MATCH,节点选择");
+  assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
 
   const microsoftGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.microsoftGroupName; });
   assert(microsoftGroup, "微软服务组应存在");
   assert.strictEqual(microsoftGroup.proxies[0], "DIRECT", "微软服务默认应走直连");
+}
+
+function testAiQuicRejectCanBeDisabled() {
+  const { output } = runMain(null, function (sandbox) {
+    sandbox.USER_OPTIONS.rejectAiQuic = false;
+  });
+  assert.strictEqual(output.rules.filter(function (rule) {
+    return rule.indexOf("AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX,") === 0;
+  }).length, 0, "关闭 rejectAiQuic 后不应生成 AI QUIC 拒绝规则");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,openai.com," + EXPECTED.aiGroupName);
+}
+
+function testWebRtcUdpRejectCanBeDisabled() {
+  const { output } = runMain(null, function (sandbox) {
+    sandbox.USER_OPTIONS.rejectWebRtcUdp = false;
+  });
+  [3478, 5349, 19302].forEach(function (port) {
+    assertRulesMissing(output.rules, [webRtcUdpRejectRule(port)]);
+  });
+}
+
+function testOverseasDnsTargetCanBeConfigured() {
+  const { output } = runMain(null, function (sandbox) {
+    sandbox.USER_OPTIONS.overseasDnsTarget = "节点选择";
+  });
+  [output.dns.nameserver, output.dns.fallback, output.dns["nameserver-policy"]["geosite:geolocation-!cn"]].forEach(function (servers) {
+    assert(servers.every(function (server) {
+      return server.indexOf("#节点选择") > 0;
+    }), "overseasDnsTarget 应控制海外 DNS 的连接出口");
+  });
 }
 
 function testAuthCredentials() {
@@ -361,6 +550,132 @@ function testNoCredentialAiAgentIncludesCustomAndRawNodes() {
   assert(aiGroup, "无家宽时 AI Agent 组应存在");
   assert(aiGroup.proxies.indexOf("公司代理") >= 0, "无家宽时 AI Agent 应包含自定义出口");
   assert(aiGroup.proxies.indexOf("🇺🇸 US Auto 01") >= 0, "无家宽时 AI Agent 应包含订阅裸节点");
+}
+
+function testDedicatedCustomProxyOnlyAppearsInExplicitRuleGroup() {
+  const { output } = runMain(function (config) {
+    config._customProxies = [
+      {
+        name: "公司代理",
+        scope: "dedicated",
+        type: "http",
+        server: "10.96.0.100",
+        port: 3456
+      },
+      {
+        name: "普通备用出口",
+        type: "socks5",
+        server: "203.0.113.20",
+        port: 1080
+      }
+    ];
+    config._customRuleGroups = [
+      {
+        name: "公司内网",
+        proxies: ["公司代理"],
+        rules: [
+          "DOMAIN-SUFFIX,gxatek.com",
+          { type: "IP-CIDR", value: "10.0.0.0/8", option: "no-resolve" }
+        ]
+      }
+    ];
+  });
+
+  assert(output.proxies.find(function (p) { return p.name === "公司代理"; }),
+    "专用公司代理节点应被注入");
+  assert(output.proxies.find(function (p) { return p.name === "普通备用出口"; }),
+    "普通自定义出口应继续被注入");
+
+  const companyGroup = output["proxy-groups"].find(function (g) { return g.name === "公司内网"; });
+  assert(companyGroup, "公司内网规则组应存在");
+  assert(companyGroup.proxies.indexOf("公司代理") >= 0, "公司内网规则组应引用专用节点");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,gxatek.com,公司内网");
+  assertRuleExists(output.rules, "IP-CIDR,10.0.0.0/8,公司内网,no-resolve");
+  assert(output.rules.indexOf("IP-CIDR,10.96.0.100/32,DIRECT,no-resolve") <
+      output.rules.indexOf("IP-CIDR,10.0.0.0/8,公司内网,no-resolve"),
+    "专用代理服务器直连规则必须优先于公司内网的宽网段规则");
+
+  output["proxy-groups"].forEach(function (group) {
+    if (group.name === "公司内网") return;
+    assert(group.proxies.indexOf("公司代理") < 0,
+      "专用公司代理不应进入通用组：" + group.name);
+  });
+
+  const nodeSelGroup = output["proxy-groups"].find(function (g) { return g.name === "节点选择"; });
+  const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
+  assert(nodeSelGroup.proxies.indexOf("普通备用出口") >= 0,
+    "普通自定义出口应保持向后兼容，继续进入节点选择");
+  assert(aiGroup.proxies.indexOf("普通备用出口") >= 0,
+    "普通自定义出口应保持向后兼容，继续进入 AI Agent");
+}
+
+function testDedicatedCustomProxyMustBeReferenced() {
+  assert.throws(function () {
+    runMain(function (config) {
+      config._customProxies = [
+        {
+          name: "未使用公司代理",
+          scope: "dedicated",
+          type: "http",
+          server: "10.96.0.100",
+          port: 3456
+        }
+      ];
+    });
+  }, /未被 _customRuleGroups\.proxies 引用/);
+}
+
+function testDedicatedCustomProxyRejectsNameCollisions() {
+  assert.throws(function () {
+    runMain(function (config) {
+      config._customProxies = [
+        {
+          name: "🇺🇸 US Auto 01",
+          scope: "dedicated",
+          type: "http",
+          server: "10.96.0.100",
+          port: 3456
+        }
+      ];
+      config._customRuleGroups = [
+        {
+          name: "公司内网",
+          proxies: ["🇺🇸 US Auto 01"],
+          rules: ["DOMAIN-SUFFIX,example.corp"]
+        }
+      ];
+    });
+  }, /与已有节点或策略组重名/);
+
+  assert.throws(function () {
+    runMain(function (config) {
+      config._customProxies = [
+        {
+          name: "公司内网",
+          scope: "dedicated",
+          type: "http",
+          server: "10.96.0.100",
+          port: 3456
+        }
+      ];
+      config._customRuleGroups = [
+        {
+          name: "公司内网",
+          proxies: ["公司内网"],
+          rules: ["DOMAIN-SUFFIX,example.corp"]
+        }
+      ];
+    });
+  }, /与已有节点或策略组重名/);
+
+  assert.throws(function () {
+    runMain(function (config) {
+      config._customProxies = [
+        { name: "重复出口", type: "http", server: "10.0.0.1", port: 3128 },
+        { name: "重复出口", type: "http", server: "10.0.0.2", port: 3128 }
+      ];
+    });
+  }, /自定义出口名称重复/);
 }
 
 function testFrontProxyAppliesOnlyToSubscriptionNodes() {
@@ -439,7 +754,7 @@ function testStandaloneCustomProxiesWithoutSubscription() {
   assert(aiGroup.proxies.indexOf("自动选择") < 0, "AI Agent 不应包含自动选择");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
-  assertRuleExists(output.rules, "MATCH,节点选择");
+  assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
 }
 
 function testCustomRuleGroupsRouteOnlyMatchedDomains() {
@@ -548,7 +863,7 @@ function testStandaloneCustomRuleGroupsWithoutSubscription() {
   assert(nodeSelGroup, "只有自定义规则组时仍应创建基础节点选择");
   assert(nodeSelGroup.proxies.indexOf("DIRECT") >= 0, "基础节点选择应保留 DIRECT");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,internal.example.test,自定义业务");
-  assertRuleExists(output.rules, "MATCH,节点选择");
+  assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
 }
 
 function testStandaloneHomeOnlyWithoutSubscription() {
@@ -608,6 +923,56 @@ function testTailnetCustomProxyServerBypassesTunRoute() {
   assert(routeExcludes.indexOf("8.8.8.8/32") < 0, "公网自定义节点服务器不应自动绕过 TUN");
   assert.strictEqual(companyNode["interface-name"], "utun4",
     "Tailnet 自定义节点应支持按节点绑定 Tailscale 出口接口");
+}
+
+function testProxyServerAddressesUseDirectRules() {
+  const config = createBaseConfig();
+  config.proxies = config.proxies.concat([
+    { name: "订阅IP节点", type: "http", server: "203.0.113.10", port: 443 },
+    { name: "订阅域名节点", type: "http", server: "edge.example.com", port: 443 }
+  ]);
+  const { output } = runMainWithConfig(config);
+
+  assertRuleExists(output.rules, "IP-CIDR,203.0.113.10/32,DIRECT,no-resolve");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,edge.example.com,DIRECT");
+  assert(output.rules.indexOf("IP-CIDR,203.0.113.10/32,DIRECT,no-resolve") <
+      output.rules.indexOf("MATCH," + EXPECTED.generalEgressGroupName),
+    "代理服务器直连规则应在兜底规则之前");
+}
+
+function testHostnameProxyServerResolvedIpsUseDirectRules() {
+  const config = createBaseConfig();
+  config.proxies.push({ name: "订阅域名节点", type: "http", server: "edge.example.com", port: 443 });
+  const { output } = runMainWithConfig(config, function (sandbox) {
+    sandbox.USER_OPTIONS.proxyServerResolvedIps = {
+      "edge.example.com": ["203.0.113.11", "2001:db8::11"]
+    };
+  });
+
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,edge.example.com,DIRECT");
+  assertRuleExists(output.rules, "IP-CIDR,203.0.113.11/32,DIRECT,no-resolve");
+  assertRuleExists(output.rules, "IP-CIDR6,2001:db8::11/128,DIRECT,no-resolve");
+}
+
+function testTailscaleProcessRulesTakePriorityOverWebRtcReject() {
+  const { output } = runMain(function (config) {
+    delete config._homeProxy;
+  });
+  assert(output.rules.indexOf("PROCESS-NAME,tailscaled,🧩 Tailscale 进程,no-resolve") <
+      output.rules.indexOf(webRtcUdpRejectRule(3478)),
+    "Tailscale 进程规则必须优先于通用 STUN UDP 拒绝规则");
+}
+
+function testProxyServerDirectRulesCanBeDisabled() {
+  const config = createBaseConfig();
+  config.proxies = config.proxies.concat([
+    { name: "订阅IP节点", type: "http", server: "203.0.113.10", port: 443 }
+  ]);
+  const { output } = runMainWithConfig(config, function (sandbox) {
+    sandbox.USER_OPTIONS.directProxyServerRules = false;
+  });
+
+  assertRulesMissing(output.rules, ["IP-CIDR,203.0.113.10/32,DIRECT,no-resolve"]);
 }
 
 function testTailnetExistingProxyServerBypassesTunRoute() {
@@ -820,6 +1185,9 @@ function testAutoSelectFiltersSubscriptionInfoNodes() {
 // ─── run ─────────────────────────────────────────────────────────────────────
 
 testDefaultConfig();
+testAiQuicRejectCanBeDisabled();
+testWebRtcUdpRejectCanBeDisabled();
+testOverseasDnsTargetCanBeConfigured();
 testNoCredentialPureOverwrite();
 testFallbackToUrlTestGroup();
 testAutoCreateUrlTestGroup();
@@ -827,6 +1195,9 @@ testAutoSelectFiltersSubscriptionInfoNodes();
 testAuthCredentials();
 testCustomProxiesAppearInGlobal();
 testNoCredentialAiAgentIncludesCustomAndRawNodes();
+testDedicatedCustomProxyOnlyAppearsInExplicitRuleGroup();
+testDedicatedCustomProxyMustBeReferenced();
+testDedicatedCustomProxyRejectsNameCollisions();
 testFrontProxyAppliesOnlyToSubscriptionNodes();
 testFrontProxyDoesNotOverrideHomeProxyDialer();
 testStandaloneCustomProxiesWithoutSubscription();
@@ -836,9 +1207,13 @@ testStandaloneCustomRuleGroupsWithoutSubscription();
 testStandaloneHomeOnlyWithoutSubscription();
 testStandaloneFrontProxyOnlyAppliesWhenRequested();
 testTailnetCustomProxyServerBypassesTunRoute();
+testProxyServerAddressesUseDirectRules();
+testHostnameProxyServerResolvedIpsUseDirectRules();
+testProxyServerDirectRulesCanBeDisabled();
 testTailnetExistingProxyServerBypassesTunRoute();
 testTunRouteExcludesAreMergedAndConfigurable();
 testTailscaleCgnatRangeBypassesTunByDefault();
+testTailscaleProcessRulesTakePriorityOverWebRtcReject();
 testTailscaleRulesAreConfigurableAndExitNodeUsesNormalRules();
 testTailscaleExitNodeCanBeForced();
 testTailscaleMonitorGroupsCanBeDisabled();
