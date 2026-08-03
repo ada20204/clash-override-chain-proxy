@@ -71,8 +71,8 @@ AI 进程规则           → 🤖 AI Agent
 浏览器进程规则        → 🤖 AI Agent（enableChainRegionBrowserProcessProxy 开启时）
 功能组域名规则        → 各功能组（媒体/Telegram/GitHub/日本服务/微软/游戏/Apple）
 公司域名和网段        → dedicated 自定义规则组
-Tailscale 目的地址     → 🧩 Tailnet 内部直连 → DIRECT
-Tailscale 域名+进程    → Tailscale 监控组 → USER_OPTIONS.tailscale 配置的目标
+Tailnet 目的地址和 MagicDNS → 🧩 Tailnet 内部直连 → DIRECT
+Tailscale 控制面域名+进程  → Tailscale 监控组 → USER_OPTIONS.tailscale 配置的目标
 国内域名/IP直连       → DIRECT（手动列表 + GEOSITE,cn + GEOIP,cn）
 兜底                  → 隐藏的 🌐 通用出海 → 节点选择
 ```
@@ -81,20 +81,23 @@ Tailscale 域名+进程    → Tailscale 监控组 → USER_OPTIONS.tailscale �
 
 脚本默认按标准 Tailscale 方式共存。远程设备把本机作为 Exit Node 时，默认不会用一条 `SRC-IP-CIDR` 把转发流量提前截获，因此这类公网访问仍会继续走完整分流规则，最后才落到 `MATCH → 🌐 通用出海 → 节点选择`。
 
-最终直连的 Tailnet 目的地址：
+最终直连的 Tailnet 目的地址和 MagicDNS 域名：
 
 ```text
 100.64.0.0/10 → 🧩 Tailnet 内部直连 → DIRECT
 100.100.100.100/32 → 🧩 Tailnet 内部直连 → DIRECT
 fd7a:115c:a1e0::/48 → 🧩 Tailnet 内部直连 → DIRECT
+*.ts.net → 🧩 Tailnet 内部直连 → DIRECT
 ```
 
-Tailscale 官方域名和 App 进程默认直连，但规则会先进入隐藏监控组，便于在 Clash Party 的连接图里确认流向：
+`*.ts.net` 是 MagicDNS 专用后缀。脚本将它排除 Fake-IP，不为它添加显式的上游 `nameserver-policy` 或 hosts；开启 MagicDNS 后，由 Tailscale 的 scoped resolver 直接查询 `100.100.100.100`。`100.64.0.0/10` 与 `100.100.100.100/32` 都已排除 TUN 路由，因此这条查询和最终 Tailnet 连接不会被 Mihomo 再次接管或形成 DNS 回环。
+
+Tailscale 控制面域名和 App 进程默认直连，但规则会先进入隐藏监控组，便于在 Clash Party 的连接图里确认流向：
 
 | 监控组 | 默认成员 | 用途 |
 |---|---|---|
-| `🧩 Tailnet 内部直连` | `DIRECT` | `100.64.0.0/10`、MagicDNS 等 Tailnet 目的地址 |
-| `🧩 Tailscale 控制面` | `DIRECT` | `tailscale.com`、`tailscale.io`、`ts.net` |
+| `🧩 Tailnet 内部直连` | `DIRECT` | `100.64.0.0/10`、`*.ts.net` 与其他 Tailnet 目的地址 |
+| `🧩 Tailscale 控制面` | `DIRECT` | `tailscale.com`、`tailscale.io` |
 | `🧩 Tailscale 进程` | `DIRECT` | Tailscale App / 服务进程 |
 | `🧩 Tailscale Exit Node` | `forceExitNodeTrafficTarget` | 仅在强制接管 Exit Node 转发流量时出现 |
 
@@ -135,6 +138,8 @@ proxyServerResolvedIps: {
 `rejectAiQuic` 默认开启：脚本会复用 AI Agent 的域名清单，在普通 AI 代理规则之前自动生成 UDP/443 `REJECT`。这适合 HTTP 家宽代理等运行时显示 `udp=false` 的出口，可防止 Mihomo 跳过不支持 UDP 的策略后继续向下匹配到直连。`rejectWebRtcUdp` 也默认开启，会拒绝浏览器常用的 STUN UDP 端口 `3478`、`5349`、`19302`，避免 WebRTC 暴露本地公网 IP。需要实时语音/视频，且所选代理链已验证支持 UDP 时，再将相应开关改为 `false`。
 
 DNS 默认开启 `respect-rules`。`geosite:cn` 和直连/代理节点启动解析使用 AliDNS / DNSPod；未知域名与海外策略默认使用 Google、Cloudflare、Quad9，并通过 `🤖 AI Agent` 建立 DoH 连接，所以会随你为 AI 选择的家宽或指定节点出站。将 `overseasDnsTarget` 改为 `"节点选择"`，则恢复使用普通出海线路。DNS 检测页展示的是 Google、Cloudflare 等递归 DNS 的地址，不会等于你的家宽出口 IP；关键是它不再显示中国大陆递归 DNS。
+
+完全覆写会在 TUN 已存在时保留原有 DNS 劫持项，并补齐 UDP `any:53` 与 TCP `tcp://any:53`。不要同时启用 Clash Party 的独立「DNS 覆写」作为第二个 DNS 配置入口，它会在脚本之后覆盖 `respect-rules`、上游 DNS 和策略；需要统一行为时应关闭该功能并重载覆写。此设置只管理进入 Mihomo 的 DNS 请求；macOS 若仍将系统 DNS 绑定到物理网卡，仍须让 Clash Party 的「自动设置系统 DNS」实际生效。
 
 如果本机网络访问 `tailscale.com` 官方域名也受污染，可以把 `controlPlaneTarget` 改成前置代理名称或 `节点选择`。如果启用了 Tailscale subnet route，并希望这些内网段也在连接图里归到 `🧩 Tailnet 内部直连`，把网段写入 `subnetCidrs`，例如 `["192.168.88.0/24"]`。`monitorGroups` 只影响界面可观测性，设为 `false` 后规则会直接指向配置目标。`hideMonitorGroups` 默认隐藏这些监控组，避免它们在代理组列表里显示 DIRECT 测速超时；临时排查时可改成 `false`。`processTarget` 默认不建议改；进程级代理可能影响 WireGuard、DERP 或 STUN 行为。只有明确需要一刀切接管 Exit Node 转发公网流量时，才把 `forceExitNodeTraffic` 改成 `true`。
 
@@ -317,6 +322,7 @@ var USER_OPTIONS = {
 
 | 检测源 | 用来判断什么 | 规则目标 | 预期结果 |
 |---|---|---|---|
+| `ip.net.coffee` | AI Agent 的完整网络表现 | `🤖 AI Agent` | 显示 AI Agent 当前出口，并用于观察页面资源、DNS、协议等端到端结果 |
 | `ipapi.is` | AI 专用出口 | `🤖 AI Agent` | 显示 AI Agent 当前选择的出口；如果选了 `🏠 家宽IP`，就显示家宽 IP |
 | `ipwho.is` | 普通代理出口 | `节点选择` | 显示默认代理出口，不受 AI Agent 和公司内网代理影响 |
 | `IP.SB` / `ip.sb` | 前置链路或直连出口 | 有前置代理时指向前置代理；无前置代理时 `DIRECT` | 开启前置代理时显示一级代理 IP；未开启时显示本机直连公网 IP |
@@ -324,6 +330,7 @@ var USER_OPTIONS = {
 简单判定方式：
 
 ```text
+ip.net.coffee → 看 AI Agent 的完整网络行为
 ipapi.is   → 看 AI 相关流量最终走哪里
 ipwho.is   → 看节点选择的默认代理出口
 ip.sb      → 看本机到订阅节点前的第一跳；没前置代理时就是直连公网 IP

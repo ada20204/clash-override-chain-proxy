@@ -52,7 +52,7 @@ var USER_OPTIONS = {
     hideMonitorGroups: true,
     subnetCidrs: [],
     excludeProxyServerFromTun: true,
-    routeExcludeCidrs: ["100.64.0.0/10"],
+    routeExcludeCidrs: ["100.64.0.0/10", "100.100.100.100/32"],
     controlPlaneTarget: "DIRECT",
     processTarget: "DIRECT",
     forceExitNodeTraffic: false,
@@ -656,7 +656,8 @@ var SOURCE_PATTERNS = {
     dnsFallbackExtra: [
       "+.cdn.cloudflare.net",
       "ping0.cc",
-      "ipinfo.io"
+      "ipinfo.io",
+      "+.ip.net.coffee"
     ],
     snifferForceBase: [
       "+.cloudflare.com",
@@ -760,7 +761,8 @@ var SOURCE_TAILSCALE_RULES = {
     { type: "IP-CIDR",  value: "100.100.100.100/32",   target: BASE.ruleTargets.direct },
     { type: "IP-CIDR6", value: "fd7a:115c:a1e0::/48",  target: BASE.ruleTargets.direct }
   ],
-  controlPlaneDomains: ["tailscale.com"],
+  controlPlaneDomains: ["tailscale.com", "tailscale.io"],
+  magicDnsDomains: ["ts.net"],
   processNames: [
     "tailscaled.exe",
     "tailscaled",
@@ -1065,6 +1067,18 @@ function applyDnsAndSniffer(config) {
   config.sniffer = buildSnifferConfig();
 }
 
+function ensureTunDnsHijack(config) {
+  var hijacks;
+  if (!config.tun) return;
+  hijacks = Array.isArray(config.tun["dns-hijack"])
+    ? config.tun["dns-hijack"]
+    : [];
+  config.tun["dns-hijack"] = uniqueStrings(hijacks.concat([
+    "any:53",
+    "tcp://any:53"
+  ]));
+}
+
 function assignNameserverPolicyDomains(policy, domains, dohServers) {
   for (var i = 0; i < domains.length; i++) {
     policy[domains[i]] = dohServers;
@@ -1140,13 +1154,18 @@ function buildDnsFakeIpFilter() {
   var homeRouterDomains = [
     "+.router.asus.com", "+.linksys.com", "+.tplinkwifi.net", "*.xiaoqiang.net"
   ];
+  var magicDnsDomains = [];
+  for (var i = 0; i < SOURCE_TAILSCALE_RULES.magicDnsDomains.length; i++) {
+    magicDnsDomains.push("+." + SOURCE_TAILSCALE_RULES.magicDnsDomains[i]);
+  }
   return localNetworkDomains
     .concat(timeSyncDomains)
     .concat(connectivityTestDomains)
     .concat(DERIVED.patterns.apple)
     .concat(gamingRealtimeDomains)
     .concat(stunRealtimeDomains)
-    .concat(homeRouterDomains);
+    .concat(homeRouterDomains)
+    .concat(magicDnsDomains);
 }
 
 function buildDnsFallbackFilterDomains() {
@@ -2384,6 +2403,13 @@ function buildTailscaleRules(includeProcessRules) {
       option: "no-resolve"
     });
   }
+  for (i = 0; i < SOURCE_TAILSCALE_RULES.magicDnsDomains.length; i++) {
+    rules.push({
+      type: "DOMAIN-SUFFIX",
+      value: SOURCE_TAILSCALE_RULES.magicDnsDomains[i],
+      target: targets.destinationTarget
+    });
+  }
   for (i = 0; i < options.subnetCidrs.length; i++) {
     rules.push({
       type: options.subnetCidrs[i].indexOf(":") >= 0 ? "IP-CIDR6" : "IP-CIDR",
@@ -2655,6 +2681,7 @@ function main(config) {
   // ⑧ DNS / Sniffer / 规则注入
   applyDnsAndSniffer(config);
   applyTunRouteExcludes(config, customProxies, frontProxy, credentials);
+  ensureTunDnsHijack(config);
   applyProxyServerDirectRules(config);
   if (hasHomeProxy) {
     injectManagedRules(config, aiAgentTarget, frontProxyName);

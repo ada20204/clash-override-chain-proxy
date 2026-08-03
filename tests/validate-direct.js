@@ -309,6 +309,7 @@ function testDefaultConfig() {
     "每个 AI Agent 域名都应自动生成一条 QUIC 拒绝规则");
 
   // 网络信息检测源：AI / 普通代理 / 前置或直连，各司其职
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.net.coffee," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,DIRECT");
@@ -392,6 +393,11 @@ function testDefaultConfig() {
   );
   assert.strictEqual(output.dns["fallback-filter"].geosite, undefined,
     "已迁移到 nameserver-policy 后不应继续使用即将废弃的 fallback-filter.geosite");
+  assert.deepEqual(
+    output.tun["dns-hijack"],
+    ["any:53", "tcp://any:53"],
+    "TUN 应同时劫持 UDP 与 TCP 的 53 端口 DNS 请求"
+  );
 
   [3478, 5349, 19302].forEach(function (port) {
     assertRuleExists(output.rules, webRtcUdpRejectRule(port));
@@ -405,6 +411,15 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "IP-CIDR,100.64.0.0/10," + EXPECTED.tailnetDirectGroupName + ",no-resolve");
   assertRuleExists(output.rules, "IP-CIDR,100.100.100.100/32," + EXPECTED.tailnetDirectGroupName + ",no-resolve");
   assertRuleExists(output.rules, "IP-CIDR6,fd7a:115c:a1e0::/48," + EXPECTED.tailnetDirectGroupName + ",no-resolve");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ts.net," + EXPECTED.tailnetDirectGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,tailscale.com," + EXPECTED.tailscaleControlGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,tailscale.io," + EXPECTED.tailscaleControlGroupName);
+  assert(output.dns["fake-ip-filter"].indexOf("+.ts.net") >= 0,
+    "MagicDNS 域名必须排除 Fake-IP，交给系统 scoped resolver 解析");
+  assert.strictEqual(output.dns["nameserver-policy"]["+.ts.net"], undefined,
+    "Mihomo 不应将 MagicDNS 域名转发给任何上游 DNS");
+  assert(output.dns["fallback-filter"].domain.indexOf("+.ts.net") < 0,
+    "MagicDNS 域名不应进入海外 fallback DNS");
 
   const tailnetGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailnetDirectGroupName; });
   const tsControlGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailscaleControlGroupName; });
@@ -418,6 +433,21 @@ function testDefaultConfig() {
 
   // 无重复规则
   assertNoDuplicateRuleIdentities(output.rules);
+}
+
+function testTunDnsHijackPreservesExistingEntries() {
+  const { output } = runMain(function (config) {
+    config.tun = {
+      enable: true,
+      "dns-hijack": ["udp://10.0.0.53:53"]
+    };
+  });
+
+  assert.deepEqual(
+    output.tun["dns-hijack"],
+    ["udp://10.0.0.53:53", "any:53", "tcp://any:53"],
+    "DNS 劫持补齐不应删除用户已有的 TUN 劫持项"
+  );
 }
 
 function testNoCredentialPureOverwrite() {
@@ -460,6 +490,7 @@ function testNoCredentialPureOverwrite() {
   // 无家宽时 AI 进程规则也指向 AI Agent
   assertRuleExists(output.rules, "PROCESS-NAME,Claude," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,claude.ai," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.net.coffee," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,DIRECT");
@@ -709,6 +740,7 @@ function testFrontProxyAppliesOnlyToSubscriptionNodes() {
   const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
   assert(aiGroup.proxies.indexOf("一级前置代理") < 0, "前置代理不应作为最终出口出现在 AI Agent");
 
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.net.coffee," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,一级前置代理");
@@ -752,6 +784,7 @@ function testStandaloneCustomProxiesWithoutSubscription() {
   assert(aiGroup.proxies.indexOf("公司代理") >= 0, "AI Agent 应包含自定义节点");
   assert(aiGroup.proxies.indexOf("美国固定IP") >= 0, "AI Agent 应包含固定 IP 节点");
   assert(aiGroup.proxies.indexOf("自动选择") < 0, "AI Agent 不应包含自动选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.net.coffee," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
   assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
@@ -1017,6 +1050,8 @@ function testTailscaleCgnatRangeBypassesTunByDefault() {
   assert(routeExcludes, "默认配置应生成 tun.route-exclude-address");
   assert(routeExcludes.indexOf("100.64.0.0/10") >= 0,
     "默认应将整个 Tailscale CGNAT 网段排除出 Clash TUN，避免 Tailnet 地址被 utun1500 截获");
+  assert(routeExcludes.indexOf("100.100.100.100/32") >= 0,
+    "默认应将 Tailscale MagicDNS 地址排除出 Clash TUN，避免 dns-hijack 截获 scoped resolver 查询");
 }
 
 function testTailscaleRulesAreConfigurableAndExitNodeUsesNormalRules() {
@@ -1028,6 +1063,7 @@ function testTailscaleRulesAreConfigurableAndExitNodeUsesNormalRules() {
   });
 
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,tailscale.com," + EXPECTED.tailscaleControlGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,tailscale.io," + EXPECTED.tailscaleControlGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,tailscaled," + EXPECTED.tailscaleProcessGroupName + ",no-resolve");
   assertRuleExists(output.rules, "PROCESS-NAME,Tailscale," + EXPECTED.tailscaleProcessGroupName + ",no-resolve");
   assertRuleExists(output.rules, "IP-CIDR,100.64.0.0/10," + EXPECTED.tailnetDirectGroupName + ",no-resolve");
@@ -1071,6 +1107,8 @@ function testTailscaleMonitorGroupsCanBeDisabled() {
   });
 
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,tailscale.com,节点选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,tailscale.io,节点选择");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ts.net,DIRECT");
   assertRuleExists(output.rules, "PROCESS-NAME,tailscaled,节点选择,no-resolve");
   assertRuleExists(output.rules, "IP-CIDR,100.64.0.0/10,DIRECT,no-resolve");
   assert(!output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailscaleControlGroupName; }),
@@ -1185,6 +1223,7 @@ function testAutoSelectFiltersSubscriptionInfoNodes() {
 // ─── run ─────────────────────────────────────────────────────────────────────
 
 testDefaultConfig();
+testTunDnsHijackPreservesExistingEntries();
 testAiQuicRejectCanBeDisabled();
 testWebRtcUdpRejectCanBeDisabled();
 testOverseasDnsTargetCanBeConfigured();
