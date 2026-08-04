@@ -366,6 +366,11 @@ var SOURCE_PATTERNS = {
         "+.antigravity.google",
         "+.antigravity-ide.com"
       ],
+      kiro: [
+        "+.prod.us-east-1.auth.desktop.kiro.dev",
+        "+.management.us-east-1.kiro.dev",
+        "+.q.us-east-1.amazonaws.com"
+      ],
       perplexity: [
         "+.perplexity.ai",
         "+.perplexitycdn.com"
