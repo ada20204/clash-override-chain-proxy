@@ -44,6 +44,7 @@ var USER_OPTIONS = {
   proxyServerResolvedIps: {}, // 域名代理服务器在下游 Clash 场景下使用的已解析 IP，例如 { "edge.example.com": ["203.0.113.10"] }
   rejectAiQuic: true, // 拒绝 AI 域名 UDP/443，防止不支持 UDP 的出口被跳过后直连；浏览器会回退 HTTPS/TCP
   rejectWebRtcUdp: true, // 拒绝常用 STUN UDP 端口，避免 HTTP 出口不支持 UDP 时 WebRTC 暴露本地公网 IP
+  fullProtocolFallback: true, // HTTP 出口保留给 TCP/443；其余流量回退到支持完整隧道的订阅节点
   enableChainRegionBrowserProcessProxy: false, // 是否让受管浏览器按应用名强制走家宽出口
   enableChainRegionAiCliProcessProxy: true,   // 是否让常见 AI CLI 按应用名强制走家宽出口
   tailscale: {
@@ -77,6 +78,7 @@ var BASE = {
   nodeNames: {
     aiAgent: "🤖 AI Agent",
     generalEgress: "🌐 通用出海",
+    fullProtocolFallback: "🔌 全协议回退",
     japanServices: "🇯🇵 日本服务",
     front: "前置代理",
     home: "家宽IP",
@@ -118,6 +120,14 @@ function getGroupProbeUrl(groupConfig) {
     return getProxyProbeUrl();
   }
   return getDefaultProbeUrl();
+}
+
+function isFullProtocolFallbackEnabled() {
+  return USER_OPTIONS.fullProtocolFallback !== false;
+}
+
+function resolveProxyUdp(proxyConfig) {
+  return proxyConfig.udp === true;
 }
 
 BASE.dns.fallback = BASE.dns.overseas.concat(["https://dns.quad9.net/dns-query"]);
@@ -1436,6 +1446,99 @@ function ensureGeneralEgressGroup(config) {
   return BASE.nodeNames.generalEgress;
 }
 
+function buildProxyNameLookup(proxies) {
+  var lookup = {};
+  for (var i = 0; i < proxies.length; i++) {
+    if (proxies[i] && proxies[i].name) lookup[proxies[i].name] = proxies[i];
+  }
+  return lookup;
+}
+
+function buildProxyGroupNameLookup(proxyGroups) {
+  var lookup = {};
+  for (var i = 0; i < proxyGroups.length; i++) {
+    if (proxyGroups[i] && proxyGroups[i].name) lookup[proxyGroups[i].name] = proxyGroups[i];
+  }
+  return lookup;
+}
+
+function isFullProtocolReference(name, proxyLookup, groupLookup, visitedProxyNames, visitedGroupNames) {
+  if (name === "DIRECT") return true;
+  if (proxyLookup[name]) {
+    return isFullProtocolProxy(proxyLookup[name], proxyLookup, groupLookup, visitedProxyNames, visitedGroupNames);
+  }
+  if (groupLookup[name]) {
+    return isFullProtocolProxyGroup(groupLookup[name], proxyLookup, groupLookup, visitedProxyNames, visitedGroupNames);
+  }
+  return false;
+}
+
+function isFullProtocolProxyGroup(group, proxyLookup, groupLookup, visitedProxyNames, visitedGroupNames) {
+  var proxyNames;
+  var visited;
+  var isSupported = true;
+  if (!group || group["disable-udp"] === true) return false;
+  proxyNames = group.proxies || [];
+  if (proxyNames.length === 0) return false;
+  visited = visitedGroupNames || {};
+  if (visited[group.name]) return false;
+  visited[group.name] = true;
+  for (var i = 0; i < proxyNames.length; i++) {
+    if (!isFullProtocolReference(proxyNames[i], proxyLookup, groupLookup, visitedProxyNames, visited)) {
+      isSupported = false;
+      break;
+    }
+  }
+  delete visited[group.name];
+  return isSupported;
+}
+
+function isFullProtocolProxy(proxy, proxyLookup, groupLookup, visitedProxyNames, visitedGroupNames) {
+  var dialerProxyName;
+  var visited;
+  var isSupported;
+  if (!proxy || String(proxy.type || "").toLowerCase() === "http") return false;
+  if (proxy.udp !== true) return false;
+
+  dialerProxyName = proxy["dialer-proxy"];
+  if (!dialerProxyName) return true;
+  visited = visitedProxyNames || {};
+  if (visited[proxy.name]) return false;
+  visited[proxy.name] = true;
+  isSupported = isFullProtocolReference(dialerProxyName, proxyLookup, groupLookup, visited, visitedGroupNames);
+  delete visited[proxy.name];
+  return isSupported;
+}
+
+function collectFullProtocolProxyNames(config, candidateNames) {
+  var candidateLookup = buildStringLookup(candidateNames || []);
+  var proxyLookup = buildProxyNameLookup(config.proxies);
+  var groupLookup = buildProxyGroupNameLookup(config["proxy-groups"]);
+  var names = [];
+  for (var i = 0; i < config.proxies.length; i++) {
+    var proxy = config.proxies[i];
+    if (!candidateLookup[proxy.name] || !isFullProtocolProxy(proxy, proxyLookup, groupLookup)) continue;
+    names.push(proxy.name);
+  }
+  return uniqueStrings(names);
+}
+
+function ensureFullProtocolFallbackGroup(config, candidateNames) {
+  if (!isFullProtocolFallbackEnabled()) return null;
+  var proxies = collectFullProtocolProxyNames(config, candidateNames);
+  if (proxies.length === 0) return null;
+  upsertNamedItem(config["proxy-groups"], {
+    name: BASE.nodeNames.fullProtocolFallback,
+    type: "url-test",
+    proxies: proxies,
+    url: getProxyProbeUrl(),
+    interval: 300,
+    tolerance: 50,
+    hidden: true
+  });
+  return BASE.nodeNames.fullProtocolFallback;
+}
+
 function getPreferredRegionGroupName(spec, regionGroupNames) {
   var regionMeta;
   var groupName;
@@ -1545,12 +1648,13 @@ function takeHomeProxyCredentials(config) {
 
 // 把家宽IP凭证转成 Clash 代理节点对象。
 function buildHomeProxy(credentials, proxyName, relayGroupName) {
+  var proxyType = credentials.type || "http";
   var node = {
     name: proxyName,
-    type: credentials.type || "http",
+    type: proxyType,
     server: credentials.server,
     port: credentials.port,
-    udp: true
+    udp: resolveProxyUdp(credentials)
   };
   if (credentials.username) node.username = credentials.username;
   if (credentials.password) node.password = credentials.password;
@@ -1583,12 +1687,13 @@ function buildFrontProxy(credentials) {
   if (!credentials.server || !credentials.port) {
     throw createUserError("前置代理配置不完整，请检查 server 和 port 字段");
   }
+  var proxyType = credentials.type || "socks5";
   var node = {
     name: credentials.name || BASE.nodeNames.front,
-    type: credentials.type || "socks5",
+    type: proxyType,
     server: credentials.server,
     port: credentials.port,
-    udp: true
+    udp: resolveProxyUdp(credentials)
   };
   if (credentials.username) node.username = credentials.username;
   if (credentials.password) node.password = credentials.password;
@@ -1774,12 +1879,13 @@ function validateDedicatedProxyReferences(proxyConfigs, groupConfigs) {
 }
 
 function buildCustomProxyNode(proxyConfig, frontProxyName) {
+  var proxyType = proxyConfig.type || "http";
   var node = {
     name: proxyConfig.name,
-    type: proxyConfig.type || "http",
+    type: proxyType,
     server: proxyConfig.server,
     port: proxyConfig.port,
-    udp: true
+    udp: resolveProxyUdp(proxyConfig)
   };
   if (proxyConfig.username) node.username = proxyConfig.username;
   if (proxyConfig.password) node.password = proxyConfig.password;
@@ -1927,22 +2033,58 @@ function buildFunctionalRules() {
   return rules;
 }
 
-function buildGeneralEgressRules() {
+function addTransportAwareSuffixRulesIfNotExists(
+  ruleLines,
+  seenRuleIdentities,
+  domains,
+  tlsTarget,
+  fallbackTarget
+) {
+  if (!fallbackTarget) {
+    addSuffixRulesIfNotExists(ruleLines, seenRuleIdentities, domains, tlsTarget);
+    return;
+  }
+  for (var i = 0; i < domains.length; i++) {
+    var domain = toSuffix(domains[i]);
+    var condition = "((NETWORK,tcp),(DST-PORT,443),(DOMAIN-SUFFIX," + domain + "))";
+    var ruleIdentity = "AND," + condition;
+    if (!seenRuleIdentities[ruleIdentity]) {
+      seenRuleIdentities[ruleIdentity] = true;
+      ruleLines.push(ruleIdentity + "," + tlsTarget);
+    }
+    addRuleIfNotExists(
+      ruleLines,
+      seenRuleIdentities,
+      "DOMAIN-SUFFIX",
+      domain,
+      fallbackTarget
+    );
+  }
+}
+
+function buildGeneralEgressRules(fullProtocolTarget) {
   var rules = [];
   var seen = {};
-  addSuffixRulesIfNotExists(
+  addTransportAwareSuffixRulesIfNotExists(
     rules,
     seen,
     DERIVED.patterns.generalEgress,
-    BASE.nodeNames.generalEgress
+    BASE.nodeNames.generalEgress,
+    fullProtocolTarget
   );
   return rules;
 }
 
-function buildNodeSelectionRules() {
+function buildNodeSelectionRules(fullProtocolTarget) {
   var rules = [];
   var seen = {};
-  addSuffixRulesIfNotExists(rules, seen, DERIVED.patterns.nodeSelection, "节点选择");
+  addTransportAwareSuffixRulesIfNotExists(
+    rules,
+    seen,
+    DERIVED.patterns.nodeSelection,
+    "节点选择",
+    fullProtocolTarget
+  );
   return rules;
 }
 
@@ -1989,7 +2131,7 @@ function buildYoutubeSharedPlatformRules() {
 }
 
 // strictAiTarget 为 null 时跳过 AI 进程和浏览器进程规则（纯分流模式）。
-function buildManagedRules(strictAiTarget, frontProxyName) {
+function buildManagedRules(strictAiTarget, frontProxyName, fullProtocolTarget) {
   var rules = [];
   rules = rules.concat(buildProxyServerDirectRules());
   // Tailscale 的 STUN 也会使用 UDP/3478，必须先于通用 WebRTC 防泄漏规则匹配。
@@ -2005,10 +2147,10 @@ function buildManagedRules(strictAiTarget, frontProxyName) {
     rules = rules.concat(buildBrowserChainRules(strictAiTarget));
   }
   return rules
-    .concat(buildNodeSelectionRules())
-    .concat(buildGeneralEgressRules())
+    .concat(buildNodeSelectionRules(fullProtocolTarget))
+    .concat(buildGeneralEgressRules(fullProtocolTarget))
     .concat(buildFunctionalRules())
-    .concat(buildDirectRules());
+    .concat(buildDirectRules(fullProtocolTarget));
 }
 
 function buildRuleIdentityLookup(ruleLines) {
@@ -2037,8 +2179,8 @@ function prependRules(targetRules, rulesToPrepend) {
   }
 }
 
-function injectManagedRules(config, strictAiTarget, frontProxyName) {
-  var managedRules = buildManagedRules(strictAiTarget, frontProxyName);
+function injectManagedRules(config, strictAiTarget, frontProxyName, fullProtocolTarget) {
+  var managedRules = buildManagedRules(strictAiTarget, frontProxyName, fullProtocolTarget);
   var managedRuleIdentities = buildRuleIdentityLookup(managedRules);
   config.rules = filterConflictingRules(config.rules, managedRuleIdentities);
   prependRules(config.rules, managedRules);
@@ -2460,7 +2602,7 @@ function buildTailscaleProcessRules() {
   return rules;
 }
 
-function buildDirectRules() {
+function buildDirectRules(fullProtocolTarget) {
   var ruleLines = [];
   var seenRuleIdentities = {};
   var directNetworkRules = [];
@@ -2484,7 +2626,14 @@ function buildDirectRules() {
   ruleLines.push("GEOSITE,cn,DIRECT");
   ruleLines.push("GEOIP,cn,DIRECT,no-resolve");
 
-  ruleLines.push("MATCH," + BASE.nodeNames.generalEgress);
+  if (fullProtocolTarget) {
+    ruleLines.push(
+      "AND,((NETWORK,tcp),(DST-PORT,443))," + BASE.nodeNames.generalEgress
+    );
+    ruleLines.push("MATCH," + fullProtocolTarget);
+  } else {
+    ruleLines.push("MATCH," + BASE.nodeNames.generalEgress);
+  }
   return ruleLines;
 }
 
@@ -2598,6 +2747,7 @@ function main(config) {
 
   var customProxyNames = [];
   var customRuleGroupRules = [];
+  var fullProtocolTarget = null;
 
   ensureProxyContainers(config);
   validateDedicatedProxyReferences(dedicatedCustomProxies, customRuleGroups);
@@ -2629,6 +2779,10 @@ function main(config) {
   });
   regionGroupNames = anchorResult.regionGroupNames;
   ensureGeneralEgressGroup(config);
+  fullProtocolTarget = ensureFullProtocolFallbackGroup(
+    config,
+    subscriptionNodeNames.concat(customProxyNames)
+  );
 
   // ③ GLOBAL（用户可见的第三个主入口）
   var nodeSelGroup = findProxyGroupByName(config["proxy-groups"], "节点选择");
@@ -2689,12 +2843,12 @@ function main(config) {
   ensureTunDnsHijack(config);
   applyProxyServerDirectRules(config);
   if (hasHomeProxy) {
-    injectManagedRules(config, aiAgentTarget, frontProxyName);
+    injectManagedRules(config, aiAgentTarget, frontProxyName, fullProtocolTarget);
     if (customRuleGroupRules.length > 0) injectCustomRuleGroupRules(config, customRuleGroupRules);
     validateManagedRouting(config, routingTargets);
   } else {
     // 无家宽凭证：AI 规则指向 AI Agent，用户可在组内选择支持 AI 的订阅节点。
-    injectManagedRules(config, aiAgentTarget, frontProxyName);
+    injectManagedRules(config, aiAgentTarget, frontProxyName, fullProtocolTarget);
     if (customRuleGroupRules.length > 0) injectCustomRuleGroupRules(config, customRuleGroupRules);
   }
 

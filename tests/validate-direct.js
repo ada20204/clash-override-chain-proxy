@@ -24,6 +24,7 @@ const EXPECTED = {
   relayGroupName:  "自动选择(Smart Group)",
   mediaGroupName:  "🌍 国际媒体",
   generalEgressGroupName: "🌐 通用出海",
+  fullProtocolFallbackGroupName: "🔌 全协议回退",
   japanServicesGroupName: "🇯🇵 日本服务",
   microsoftGroupName: "Ⓜ️ 微软服务",
   tailscaleControlGroupName: "🧩 Tailscale 控制面",
@@ -44,10 +45,10 @@ function loadSandbox() {
 function createBaseConfig() {
   return {
     proxies: [
-      { name: "🇸🇬 SG Auto 01", type: "ss" },
-      { name: "🇭🇰 HK Auto 01", type: "ss" },
-      { name: "🇺🇸 US Auto 01", type: "ss" },
-      { name: "🇯🇵 JP Auto 01", type: "ss" }
+      { name: "🇸🇬 SG Auto 01", type: "ss", udp: true },
+      { name: "🇭🇰 HK Auto 01", type: "ss", udp: true },
+      { name: "🇺🇸 US Auto 01", type: "ss", udp: true },
+      { name: "🇯🇵 JP Auto 01", type: "ss", udp: true }
     ],
     "proxy-groups": [
       { name: "节点选择", type: "select", proxies: ["🇸🇬 SG Auto 01"] },
@@ -95,6 +96,28 @@ function createEmptyConfig() {
 
 function assertRuleExists(rules, ruleLine) {
   assert(rules.indexOf(ruleLine) >= 0, "Expected rule not found: " + ruleLine);
+}
+
+function tcp443DomainRule(domain, target) {
+  return "AND,((NETWORK,tcp),(DST-PORT,443),(DOMAIN-SUFFIX," + domain + "))," + target;
+}
+
+function assertTransportAwareDomainRules(rules, domain, tlsTarget) {
+  const tlsRule = tcp443DomainRule(domain, tlsTarget);
+  const fallbackRule = "DOMAIN-SUFFIX," + domain + "," + EXPECTED.fullProtocolFallbackGroupName;
+  assertRuleExists(rules, tlsRule);
+  assertRuleExists(rules, fallbackRule);
+  assert(rules.indexOf(tlsRule) < rules.indexOf(fallbackRule),
+    domain + " 的 TCP/443 规则应优先于全协议回退规则");
+}
+
+function assertTransportAwareFallbackRules(rules) {
+  const tlsRule = "AND,((NETWORK,tcp),(DST-PORT,443))," + EXPECTED.generalEgressGroupName;
+  const fallbackRule = "MATCH," + EXPECTED.fullProtocolFallbackGroupName;
+  assertRuleExists(rules, tlsRule);
+  assertRuleExists(rules, fallbackRule);
+  assert(rules.indexOf(tlsRule) < rules.indexOf(fallbackRule),
+    "TCP/443 兜底应优先于其余协议的全协议回退");
 }
 
 function assertRulesMissing(rules, ruleLines) {
@@ -163,12 +186,14 @@ function testDefaultConfig() {
   assert.strictEqual(homeNode.type,   TEST_HOME_CREDENTIALS.type);
   assert.strictEqual(homeNode.server, TEST_HOME_CREDENTIALS.server);
   assert.strictEqual(homeNode.port,   TEST_HOME_CREDENTIALS.port);
+  assert.strictEqual(homeNode.udp, false, "HTTP 家宽节点不应声明 UDP 能力");
   assert.strictEqual(homeNode["dialer-proxy"], undefined, "家宽IP节点应是真直连，不应挂 dialer-proxy");
 
   const homeChainedNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeChainedNodeName; });
   assert(homeChainedNode, "存在可用跳板时应额外创建家宽IP链式节点");
   assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 家宽跳板",
     "家宽IP链式节点的 dialer-proxy 应指向家宽跳板组");
+  assert.strictEqual(homeChainedNode.udp, false, "HTTP 家宽链式节点不应声明 UDP 能力");
 
   // 家宽跳板组存在
   const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 家宽跳板"; });
@@ -190,6 +215,21 @@ function testDefaultConfig() {
   assert.strictEqual(generalEgressGroup.proxies[0], "节点选择",
     "通用出海只应复用人工选择结果");
   assert.strictEqual(generalEgressGroup.hidden, true, "通用出海应作为内部兜底组隐藏");
+
+  const fullProtocolFallbackGroup = output["proxy-groups"].find(function (g) {
+    return g.name === EXPECTED.fullProtocolFallbackGroupName;
+  });
+  assert(fullProtocolFallbackGroup, "存在全协议订阅节点时应创建全协议回退组");
+  assert.strictEqual(fullProtocolFallbackGroup.type, "url-test");
+  assertHiddenGroup(fullProtocolFallbackGroup, "全协议回退组");
+  ["🇸🇬 SG Auto 01", "🇭🇰 HK Auto 01", "🇺🇸 US Auto 01", "🇯🇵 JP Auto 01"].forEach(function (name) {
+    assert(fullProtocolFallbackGroup.proxies.indexOf(name) >= 0,
+      "全协议回退组应包含订阅节点：" + name);
+  });
+  [EXPECTED.homeNodeName, EXPECTED.homeChainedNodeName].forEach(function (name) {
+    assert(fullProtocolFallbackGroup.proxies.indexOf(name) < 0,
+      "全协议回退组不应包含 HTTP 家宽节点：" + name);
+  });
 
   // 家宽IP出口组存在且成员正确
   const chainGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.chainGroupName; });
@@ -285,9 +325,9 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,js.stripe.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,rum.browser-intake-datadoghq.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,humb.apple.com," + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com,节点选择");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.ca,节点选择");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,googleapis.com,节点选择");
+  assertTransportAwareDomainRules(output.rules, "google.com", "节点选择");
+  assertTransportAwareDomainRules(output.rules, "google.ca", "节点选择");
+  assertTransportAwareDomainRules(output.rules, "googleapis.com", "节点选择");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,cloudcode-pa.googleapis.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,daily-cloudcode-pa.googleapis.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,agy,"          + EXPECTED.aiGroupName);
@@ -301,7 +341,13 @@ function testDefaultConfig() {
     assertRuleExists(output.rules, rejectRule);
     assert(output.rules.indexOf(rejectRule) < output.rules.indexOf(proxyRule),
       domain + " 的 QUIC 拒绝规则应位于 AI 代理规则之前");
+    assertRulesMissing(output.rules, [
+      "DOMAIN-SUFFIX," + domain + "," + EXPECTED.fullProtocolFallbackGroupName
+    ]);
   });
+  assert(output.rules.indexOf("DOMAIN-SUFFIX,generativelanguage.googleapis.com," + EXPECTED.aiGroupName) <
+      output.rules.indexOf("DOMAIN-SUFFIX,googleapis.com," + EXPECTED.fullProtocolFallbackGroupName),
+    "Gemini API 精确规则必须先命中 AI Agent，不能落入 Google 全协议回退");
   const generatedAiQuicRules = output.rules.filter(function (rule) {
     return rule.indexOf("AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX,") === 0;
   });
@@ -320,7 +366,9 @@ function testDefaultConfig() {
   ["youtubei.googleapis.com", "youtube.googleapis.com", "yt3.ggpht.com"].forEach(function (domain) {
     var mediaRule = "DOMAIN-SUFFIX," + domain + "," + EXPECTED.mediaGroupName;
     assertRuleExists(output.rules, mediaRule);
-    assert(output.rules.indexOf(mediaRule) < output.rules.indexOf("DOMAIN-SUFFIX,googleapis.com,节点选择"),
+    assert(output.rules.indexOf(mediaRule) < output.rules.indexOf(
+      tcp443DomainRule("googleapis.com", "节点选择")
+    ),
       domain + " 应优先于通用 Google 规则进入国际媒体");
   });
   assertRulesMissing(output.rules, [aiQuicRejectRule("googleapis.com")]);
@@ -335,13 +383,13 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,apple.com,🍎 Apple");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,icloud.com.cn,🍎 Apple");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,microsoft.com," + EXPECTED.microsoftGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,marketplace.visualstudio.com,节点选择");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,gallery.vsassets.io,节点选择");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,gallerycdn.vsassets.io,节点选择");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,vscode-cdn.net,节点选择");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,vscode-unpkg.net,节点选择");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,npmjs.com,节点选择");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,bing.com,节点选择");
+  assertTransportAwareDomainRules(output.rules, "marketplace.visualstudio.com", "节点选择");
+  assertTransportAwareDomainRules(output.rules, "gallery.vsassets.io", "节点选择");
+  assertTransportAwareDomainRules(output.rules, "gallerycdn.vsassets.io", "节点选择");
+  assertTransportAwareDomainRules(output.rules, "vscode-cdn.net", "节点选择");
+  assertTransportAwareDomainRules(output.rules, "vscode-unpkg.net", "节点选择");
+  assertTransportAwareDomainRules(output.rules, "npmjs.com", "节点选择");
+  assertTransportAwareDomainRules(output.rules, "bing.com", "节点选择");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,line.me," + EXPECTED.japanServicesGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,yahoo.co.jp," + EXPECTED.japanServicesGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,sony.jp," + EXPECTED.japanServicesGroupName);
@@ -358,14 +406,14 @@ function testDefaultConfig() {
     "wikipedia.org",
     "yastatic.net"
   ].forEach(function (domain) {
-    const rule = "DOMAIN-SUFFIX," + domain + "," + EXPECTED.generalEgressGroupName;
-    assertRuleExists(output.rules, rule);
-    assert(output.rules.indexOf(rule) < output.rules.indexOf("GEOSITE,cn,DIRECT"),
+    const tlsRule = tcp443DomainRule(domain, EXPECTED.generalEgressGroupName);
+    assertTransportAwareDomainRules(output.rules, domain, EXPECTED.generalEgressGroupName);
+    assert(output.rules.indexOf(tlsRule) < output.rules.indexOf("GEOSITE,cn,DIRECT"),
       domain + " 应在 GeoSite 国内直连规则之前固定进入通用出海");
   });
 
-  // 兜底 MATCH
-  assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
+  // TCP/443 保留当前节点选择；HTTP、IMAP、UDP 等其余协议走全协议回退。
+  assertTransportAwareFallbackRules(output.rules);
 
   // 海外解析器默认经 AI Agent，国内和代理节点解析仍使用国内 DNS，避免解析链路套娃。
   assert.strictEqual(output.dns["respect-rules"], true);
@@ -499,7 +547,7 @@ function testNoCredentialPureOverwrite() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com,🌍 国际媒体");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,github.com,🐙 GitHub");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,microsoft.com," + EXPECTED.microsoftGroupName);
-  assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
+  assertTransportAwareFallbackRules(output.rules);
 
   const microsoftGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.microsoftGroupName; });
   assert(microsoftGroup, "微软服务组应存在");
@@ -514,6 +562,81 @@ function testAiQuicRejectCanBeDisabled() {
     return rule.indexOf("AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX,") === 0;
   }).length, 0, "关闭 rejectAiQuic 后不应生成 AI QUIC 拒绝规则");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,openai.com," + EXPECTED.aiGroupName);
+}
+
+function testFullProtocolFallbackCanBeDisabled() {
+  const { output } = runMain(null, function (sandbox) {
+    sandbox.USER_OPTIONS.fullProtocolFallback = false;
+  });
+  assert(!output["proxy-groups"].find(function (group) {
+    return group.name === EXPECTED.fullProtocolFallbackGroupName;
+  }), "关闭 fullProtocolFallback 后不应创建全协议回退组");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com,节点选择");
+  assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
+  assertRulesMissing(output.rules, [
+    tcp443DomainRule("google.com", "节点选择"),
+    "MATCH," + EXPECTED.fullProtocolFallbackGroupName
+  ]);
+}
+
+function testFullProtocolFallbackRequiresExplicitUdp() {
+  const { output } = runMain(function (config) {
+    delete config.proxies[1].udp;
+    config.proxies[2].udp = false;
+  });
+  const fallbackGroup = output["proxy-groups"].find(function (group) {
+    return group.name === EXPECTED.fullProtocolFallbackGroupName;
+  });
+  assert(fallbackGroup, "至少一个显式 UDP 节点时应创建全协议回退组");
+  assert(fallbackGroup.proxies.indexOf("🇸🇬 SG Auto 01") >= 0,
+    "明确 udp: true 的订阅节点应进入全协议回退组");
+  assert(fallbackGroup.proxies.indexOf("🇯🇵 JP Auto 01") >= 0,
+    "明确 udp: true 的订阅节点应进入全协议回退组");
+  assert(fallbackGroup.proxies.indexOf("🇭🇰 HK Auto 01") < 0,
+    "未声明 udp 的订阅节点不应被推断为全协议节点");
+  assert(fallbackGroup.proxies.indexOf("🇺🇸 US Auto 01") < 0,
+    "udp: false 的订阅节点不应进入全协议回退组");
+}
+
+function testHttpFrontProxyExcludesChainedSubscriptionFromFallback() {
+  const { output } = runMain(function (config) {
+    delete config._homeProxy;
+    config._frontProxy = { name: "HTTP 前置代理", type: "http", server: "10.0.0.8", port: 8080 };
+  });
+  const frontNode = output.proxies.find(function (proxy) { return proxy.name === "HTTP 前置代理"; });
+  const fallbackGroup = output["proxy-groups"].find(function (group) {
+    return group.name === EXPECTED.fullProtocolFallbackGroupName;
+  });
+  assert.strictEqual(frontNode.udp, false, "HTTP 前置代理不应声明 UDP 能力");
+  assert.strictEqual(fallbackGroup, undefined,
+    "所有订阅节点经 HTTP 前置代理时不应创建全协议回退组");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,gstatic.com,节点选择");
+  assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
+}
+
+function testFullProtocolFallbackChecksDialerProxyGroupsRecursively() {
+  const { output } = runMain(function (config) {
+    config.proxies[0]["dialer-proxy"] = "自动选择(Smart Group)";
+    config.proxies[1]["dialer-proxy"] = "HTTP 末跳";
+    config.proxies[2]["dialer-proxy"] = "循环跳板 A";
+    config.proxies.push(
+      { name: "UDP 中继", type: "socks5", server: "10.0.0.11", port: 1080, udp: true, "dialer-proxy": "UDP 末跳" },
+      { name: "UDP 末跳", type: "socks5", server: "10.0.0.12", port: 1080, udp: true },
+      { name: "HTTP 末跳", type: "http", server: "10.0.0.13", port: 8080, udp: false },
+      { name: "循环跳板 A", type: "socks5", server: "10.0.0.14", port: 1080, udp: true, "dialer-proxy": "循环跳板 B" },
+      { name: "循环跳板 B", type: "socks5", server: "10.0.0.15", port: 1080, udp: true, "dialer-proxy": "循环跳板 A" }
+    );
+    config["proxy-groups"][1].proxies = ["UDP 中继"];
+  });
+  const fallbackGroup = output["proxy-groups"].find(function (group) {
+    return group.name === EXPECTED.fullProtocolFallbackGroupName;
+  });
+  assert(fallbackGroup.proxies.indexOf("🇸🇬 SG Auto 01") >= 0,
+    "经 UDP 策略组和 UDP 多跳链路的节点应进入全协议回退组");
+  assert(fallbackGroup.proxies.indexOf("🇭🇰 HK Auto 01") < 0,
+    "经 HTTP 策略组的节点不应进入全协议回退组");
+  assert(fallbackGroup.proxies.indexOf("🇺🇸 US Auto 01") < 0,
+    "循环 dialer-proxy 链路不应进入全协议回退组");
 }
 
 function testWebRtcUdpRejectCanBeDisabled() {
@@ -555,7 +678,9 @@ function testCustomProxiesAppearInGlobal() {
     ];
   });
   // 自定义出口应存在于 proxies 中
-  assert(output.proxies.find(function (p) { return p.name === "自定义出口A"; }), "自定义出口应在 proxies 中");
+  const customHttpNode = output.proxies.find(function (p) { return p.name === "自定义出口A"; });
+  assert(customHttpNode, "自定义出口应在 proxies 中");
+  assert.strictEqual(customHttpNode.udp, false, "HTTP 自定义出口不应声明 UDP 能力");
   const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
   assert(aiGroup.proxies.indexOf("自定义出口A") >= 0, "AI Agent 应包含自定义出口");
 
@@ -566,8 +691,12 @@ function testCustomProxiesAppearInGlobal() {
       { type: "socks5", server: "10.0.0.2", port: 1080 }
     ];
   });
-  assert(output2.proxies.find(function (p) { return p.name === "自定义出口1"; }), "第1个应自动命名为 自定义出口1");
-  assert(output2.proxies.find(function (p) { return p.name === "自定义出口2"; }), "第2个应自动命名为 自定义出口2");
+  const generatedHttpNode = output2.proxies.find(function (p) { return p.name === "自定义出口1"; });
+  const generatedSocksNode = output2.proxies.find(function (p) { return p.name === "自定义出口2"; });
+  assert(generatedHttpNode, "第1个应自动命名为 自定义出口1");
+  assert(generatedSocksNode, "第2个应自动命名为 自定义出口2");
+  assert.strictEqual(generatedHttpNode.udp, false, "自动命名的 HTTP 节点不应声明 UDP 能力");
+  assert.strictEqual(generatedSocksNode.udp, false, "未声明 UDP 的 SOCKS5 节点不应被推断为支持 UDP");
 }
 
 function testNoCredentialAiAgentIncludesCustomAndRawNodes() {
@@ -581,6 +710,26 @@ function testNoCredentialAiAgentIncludesCustomAndRawNodes() {
   assert(aiGroup, "无家宽时 AI Agent 组应存在");
   assert(aiGroup.proxies.indexOf("公司代理") >= 0, "无家宽时 AI Agent 应包含自定义出口");
   assert(aiGroup.proxies.indexOf("🇺🇸 US Auto 01") >= 0, "无家宽时 AI Agent 应包含订阅裸节点");
+
+  const companyNode = output.proxies.find(function (p) { return p.name === "公司代理"; });
+  assert.strictEqual(companyNode.udp, false, "公司 HTTP 代理不应声明 UDP 能力");
+  const fallbackGroup = output["proxy-groups"].find(function (g) {
+    return g.name === EXPECTED.fullProtocolFallbackGroupName;
+  });
+  assert(fallbackGroup, "订阅节点应形成全协议回退组");
+  assert(fallbackGroup.proxies.indexOf("公司代理") < 0,
+    "公司 HTTP 代理不应进入全协议回退组");
+  assert(fallbackGroup.proxies.indexOf("🇺🇸 US Auto 01") >= 0,
+    "支持完整隧道的订阅节点应进入全协议回退组");
+
+  // 3080 实际故障样本：443 仍可走公司代理所在的节点选择，80/993 和 UDP 则进入全协议节点。
+  assertTransportAwareDomainRules(output.rules, "gstatic.com", "节点选择");
+  assertTransportAwareDomainRules(output.rules, "gmail.com", "节点选择");
+  assertTransportAwareFallbackRules(output.rules);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,chatgpt.com," + EXPECTED.aiGroupName);
+  assertRulesMissing(output.rules, [
+    "DOMAIN-SUFFIX,chatgpt.com," + EXPECTED.fullProtocolFallbackGroupName
+  ]);
 }
 
 function testDedicatedCustomProxyOnlyAppearsInExplicitRuleGroup() {
@@ -720,6 +869,7 @@ function testFrontProxyAppliesOnlyToSubscriptionNodes() {
 
   const frontNode = output.proxies.find(function (p) { return p.name === "一级前置代理"; });
   assert(frontNode, "前置代理节点应被注入");
+  assert.strictEqual(frontNode.udp, false, "未声明 UDP 的 SOCKS5 前置代理不应被推断为支持 UDP");
 
   ["🇸🇬 SG Auto 01", "🇭🇰 HK Auto 01", "🇺🇸 US Auto 01"].forEach(function (name) {
     const node = output.proxies.find(function (p) { return p.name === name; });
@@ -728,6 +878,7 @@ function testFrontProxyAppliesOnlyToSubscriptionNodes() {
 
   const customNode = output.proxies.find(function (p) { return p.name === "公司代理"; });
   assert.strictEqual(customNode["dialer-proxy"], undefined, "自定义出口不应被前置代理覆盖");
+  assert.strictEqual(customNode.udp, false, "HTTP 自定义出口不应声明 UDP 能力");
 
   const nodeSelGroup = output["proxy-groups"].find(function (g) { return g.name === "节点选择"; });
   assert(nodeSelGroup.proxies.indexOf("一级前置代理") < 0, "前置代理不应作为最终出口出现在节点选择");
@@ -765,7 +916,7 @@ function testStandaloneCustomProxiesWithoutSubscription() {
   const config = createEmptyConfig();
   config._customProxies = [
     { name: "公司代理", type: "http", server: "10.0.0.9", port: 8080 },
-    { name: "美国固定IP", type: "socks5", server: "20.0.0.1", port: 1080 }
+    { name: "美国固定IP", type: "socks5", server: "20.0.0.1", port: 1080, udp: true }
   ];
   const { output } = runMainWithConfig(config);
 
@@ -787,7 +938,18 @@ function testStandaloneCustomProxiesWithoutSubscription() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.net.coffee," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
-  assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
+  assertTransportAwareFallbackRules(output.rules);
+
+  const companyNode = output.proxies.find(function (p) { return p.name === "公司代理"; });
+  const fixedIpNode = output.proxies.find(function (p) { return p.name === "美国固定IP"; });
+  assert.strictEqual(companyNode.udp, false, "HTTP 公司代理不应声明 UDP 能力");
+  assert.strictEqual(fixedIpNode.udp, true, "明确 udp: true 的 SOCKS5 固定 IP 节点应保留 UDP 能力");
+  const fallbackGroup = output["proxy-groups"].find(function (g) {
+    return g.name === EXPECTED.fullProtocolFallbackGroupName;
+  });
+  assert(fallbackGroup, "SOCKS5 自定义节点应形成全协议回退组");
+  assert.deepEqual(fallbackGroup.proxies, ["美国固定IP"],
+    "全协议回退组应排除 HTTP 公司代理，只保留 SOCKS5 节点");
 }
 
 function testCustomRuleGroupsRouteOnlyMatchedDomains() {
@@ -969,7 +1131,7 @@ function testProxyServerAddressesUseDirectRules() {
   assertRuleExists(output.rules, "IP-CIDR,203.0.113.10/32,DIRECT,no-resolve");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,edge.example.com,DIRECT");
   assert(output.rules.indexOf("IP-CIDR,203.0.113.10/32,DIRECT,no-resolve") <
-      output.rules.indexOf("MATCH," + EXPECTED.generalEgressGroupName),
+      output.rules.indexOf("MATCH," + EXPECTED.fullProtocolFallbackGroupName),
     "代理服务器直连规则应在兜底规则之前");
 }
 
@@ -994,6 +1156,22 @@ function testTailscaleProcessRulesTakePriorityOverWebRtcReject() {
   assert(output.rules.indexOf("PROCESS-NAME,tailscaled,🧩 Tailscale 进程,no-resolve") <
       output.rules.indexOf(webRtcUdpRejectRule(3478)),
     "Tailscale 进程规则必须优先于通用 STUN UDP 拒绝规则");
+}
+
+function testTailnetDestinationRulesTakePriorityOverFullProtocolFallback() {
+  const { output } = runMain(null, function (sandbox) {
+    sandbox.USER_OPTIONS.tailscale.subnetCidrs = ["192.168.88.0/24", "fd00:abcd::/64"];
+  });
+  const fallbackIndex = output.rules.indexOf("MATCH," + EXPECTED.fullProtocolFallbackGroupName);
+  [
+    "IP-CIDR,100.64.0.0/10," + EXPECTED.tailnetDirectGroupName + ",no-resolve",
+    "IP-CIDR6,fd7a:115c:a1e0::/48," + EXPECTED.tailnetDirectGroupName + ",no-resolve",
+    "IP-CIDR,192.168.88.0/24," + EXPECTED.tailnetDirectGroupName + ",no-resolve",
+    "IP-CIDR6,fd00:abcd::/64," + EXPECTED.tailnetDirectGroupName + ",no-resolve"
+  ].forEach(function (rule) {
+    assert(output.rules.indexOf(rule) >= 0 && output.rules.indexOf(rule) < fallbackIndex,
+      "Tailnet 目的地址规则必须优先于全协议回退：" + rule);
+  });
 }
 
 function testProxyServerDirectRulesCanBeDisabled() {
@@ -1225,6 +1403,10 @@ function testAutoSelectFiltersSubscriptionInfoNodes() {
 testDefaultConfig();
 testTunDnsHijackPreservesExistingEntries();
 testAiQuicRejectCanBeDisabled();
+testFullProtocolFallbackCanBeDisabled();
+testFullProtocolFallbackRequiresExplicitUdp();
+testHttpFrontProxyExcludesChainedSubscriptionFromFallback();
+testFullProtocolFallbackChecksDialerProxyGroupsRecursively();
 testWebRtcUdpRejectCanBeDisabled();
 testOverseasDnsTargetCanBeConfigured();
 testNoCredentialPureOverwrite();
@@ -1253,6 +1435,7 @@ testTailnetExistingProxyServerBypassesTunRoute();
 testTunRouteExcludesAreMergedAndConfigurable();
 testTailscaleCgnatRangeBypassesTunByDefault();
 testTailscaleProcessRulesTakePriorityOverWebRtcReject();
+testTailnetDestinationRulesTakePriorityOverFullProtocolFallback();
 testTailscaleRulesAreConfigurableAndExitNodeUsesNormalRules();
 testTailscaleExitNodeCanBeForced();
 testTailscaleMonitorGroupsCanBeDisabled();
