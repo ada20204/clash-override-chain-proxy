@@ -364,6 +364,9 @@ var SOURCE_PATTERNS = {
         "+.cloudcode-pa.googleapis.com",
         "+.daily-cloudcode-pa.googleapis.com",
         "+.gemini.google.com",
+        "+.gemini.gstatic.com",
+        "+.assistant.google.com",
+        "+.accounts.google.com",
         "+.aistudio.google.com",
         "+.ai.google.dev",
         "+.generativelanguage.googleapis.com",
@@ -1045,6 +1048,7 @@ function buildStrictValidationTargets() {
     { type: "DOMAIN-SUFFIX", value: "claude.ai" },
     { type: "DOMAIN-SUFFIX", value: "chatgpt.com" },
     { type: "DOMAIN-SUFFIX", value: "gemini.google.com" },
+    { type: "DOMAIN-SUFFIX", value: "assistant.google.com" },
     { type: "DOMAIN-SUFFIX", value: "aistudio.google.com" },
     { type: "DOMAIN-SUFFIX", value: "perplexity.ai" },
     { type: "PROCESS-NAME",  value: "Claude" }
@@ -2130,12 +2134,28 @@ function buildYoutubeSharedPlatformRules() {
   return rules;
 }
 
+function buildGooglePlayMtalkRules() {
+  return [
+    "AND,((NETWORK,tcp),(DST-PORT,5228),(DOMAIN-SUFFIX,mtalk.google.com)),🌍 国际媒体"
+  ];
+}
+
+function buildGeminiChallengeRules(strictAiTarget) {
+  if (!strictAiTarget) return [];
+  return [
+    "AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN,www.google.com)),REJECT",
+    "DOMAIN,www.google.com," + strictAiTarget
+  ];
+}
+
 // strictAiTarget 为 null 时跳过 AI 进程和浏览器进程规则（纯分流模式）。
 function buildManagedRules(strictAiTarget, frontProxyName, fullProtocolTarget) {
   var rules = [];
   rules = rules.concat(buildProxyServerDirectRules());
   // Tailscale 的 STUN 也会使用 UDP/3478，必须先于通用 WebRTC 防泄漏规则匹配。
   rules = rules.concat(buildTailscaleProcessRuleLines());
+  rules = rules.concat(buildGooglePlayMtalkRules());
+  rules = rules.concat(buildGeminiChallengeRules(strictAiTarget));
   rules = rules.concat(buildWebRtcUdpRejectRules());
   if (strictAiTarget) {
     rules = rules.concat(buildYoutubeSharedPlatformRules());

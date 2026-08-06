@@ -102,6 +102,14 @@ function tcp443DomainRule(domain, target) {
   return "AND,((NETWORK,tcp),(DST-PORT,443),(DOMAIN-SUFFIX," + domain + "))," + target;
 }
 
+function googlePlayMtalkRule() {
+  return "AND,((NETWORK,tcp),(DST-PORT,5228),(DOMAIN-SUFFIX,mtalk.google.com)),🌍 国际媒体";
+}
+
+function geminiChallengeQuicRejectRule() {
+  return "AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN,www.google.com)),REJECT";
+}
+
 function assertTransportAwareDomainRules(rules, domain, tlsTarget) {
   const tlsRule = tcp443DomainRule(domain, tlsTarget);
   const fallbackRule = "DOMAIN-SUFFIX," + domain + "," + EXPECTED.fullProtocolFallbackGroupName;
@@ -311,6 +319,9 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "IP-CIDR6,2607:6bc0::/32," + EXPECTED.aiGroupName + ",no-resolve");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,chatgpt.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,aistudio.google.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,gemini.gstatic.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,assistant.google.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,accounts.google.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,antigravity.google," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,generativelanguage.googleapis.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,grokipedia.com," + EXPECTED.aiGroupName);
@@ -335,7 +346,7 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "PROCESS-NAME,claude,"       + EXPECTED.aiGroupName);
 
   // AI QUIC 先拒绝再回退 TCP，避免 HTTP 家宽出口不支持 UDP 时继续匹配到 DIRECT。
-  ["openai.com", "chatgpt.com", "anthropic.com", "claude.ai", "aistudio.google.com"].forEach(function (domain) {
+  ["openai.com", "chatgpt.com", "anthropic.com", "claude.ai", "gemini.gstatic.com", "assistant.google.com", "accounts.google.com", "aistudio.google.com"].forEach(function (domain) {
     const rejectRule = aiQuicRejectRule(domain);
     const proxyRule = "DOMAIN-SUFFIX," + domain + "," + EXPECTED.aiGroupName;
     assertRuleExists(output.rules, rejectRule);
@@ -348,6 +359,23 @@ function testDefaultConfig() {
   assert(output.rules.indexOf("DOMAIN-SUFFIX,generativelanguage.googleapis.com," + EXPECTED.aiGroupName) <
       output.rules.indexOf("DOMAIN-SUFFIX,googleapis.com," + EXPECTED.fullProtocolFallbackGroupName),
     "Gemini API 精确规则必须先命中 AI Agent，不能落入 Google 全协议回退");
+  assert(output.rules.indexOf("DOMAIN-SUFFIX,assistant.google.com," + EXPECTED.aiGroupName) <
+      output.rules.indexOf("DOMAIN-SUFFIX,google.com," + EXPECTED.fullProtocolFallbackGroupName),
+    "Gemini 助手域名必须先命中 AI Agent，不能落入通用 Google 全协议回退");
+  assert(output.rules.indexOf("DOMAIN-SUFFIX,gemini.gstatic.com," + EXPECTED.aiGroupName) <
+      output.rules.indexOf("DOMAIN-SUFFIX,gstatic.com," + EXPECTED.fullProtocolFallbackGroupName),
+    "Gemini 静态资源域名必须先命中 AI Agent，不能落入通用 GStatic 规则");
+  assert(output.rules.indexOf("DOMAIN-SUFFIX,accounts.google.com," + EXPECTED.aiGroupName) <
+      output.rules.indexOf("DOMAIN-SUFFIX,google.com," + EXPECTED.fullProtocolFallbackGroupName),
+    "Gemini 登录域名必须先命中 AI Agent，不能落入通用 Google 规则");
+  assertRuleExists(output.rules, geminiChallengeQuicRejectRule());
+  assertRuleExists(output.rules, "DOMAIN,www.google.com," + EXPECTED.aiGroupName);
+  assert(output.rules.indexOf(geminiChallengeQuicRejectRule()) < output.rules.indexOf(
+    "DOMAIN,www.google.com," + EXPECTED.aiGroupName
+  ), "Gemini 挑战域名的 QUIC 拒绝规则必须先于 AI Agent 路由");
+  assert(output.rules.indexOf("DOMAIN,www.google.com," + EXPECTED.aiGroupName) <
+      output.rules.indexOf("DOMAIN-SUFFIX,google.com," + EXPECTED.fullProtocolFallbackGroupName),
+    "Gemini 挑战域名必须先命中 AI Agent，不能落入通用 Google 规则");
   const generatedAiQuicRules = output.rules.filter(function (rule) {
     return rule.indexOf("AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX,") === 0;
   });
@@ -372,6 +400,10 @@ function testDefaultConfig() {
       domain + " 应优先于通用 Google 规则进入国际媒体");
   });
   assertRulesMissing(output.rules, [aiQuicRejectRule("googleapis.com")]);
+  assertRuleExists(output.rules, googlePlayMtalkRule());
+  assert(output.rules.indexOf(googlePlayMtalkRule()) < output.rules.indexOf(
+    tcp443DomainRule("google.com", "节点选择")
+  ), "Google Play Services 的 5228 规则必须优先于通用 Google 规则");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,reddit.com," + EXPECTED.mediaGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,tiktok.com," + EXPECTED.mediaGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,bbc.com," + EXPECTED.mediaGroupName);
