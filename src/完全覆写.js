@@ -367,6 +367,7 @@ var SOURCE_PATTERNS = {
         "+.gemini.gstatic.com",
         "+.assistant.google.com",
         "+.accounts.google.com",
+        "+.accounts.google.ca",
         "+.aistudio.google.com",
         "+.ai.google.dev",
         "+.generativelanguage.googleapis.com",
@@ -378,6 +379,11 @@ var SOURCE_PATTERNS = {
         "+.labs.google",
         "+.antigravity.google",
         "+.antigravity-ide.com"
+      ],
+      cursor: [
+        "+.cursor.sh",
+        "+.cursor.com",
+        "+.cursorapi.com"
       ],
       kiro: [
         "+.prod.us-east-1.auth.desktop.kiro.dev",
@@ -708,6 +714,10 @@ var SOURCE_PROCESSES = {
         "Claude Helper (Renderer)",
         "Claude Helper (GPU)",
         "Claude Helper (Plugin)",
+        "Cursor Helper (Renderer)",
+        "Cursor Helper (GPU)",
+        "Cursor Helper (Plugin)",
+        "Cursor Helper (Alerts)",
         "Claude Code",
         "Claude Code URL Handler",
         "Antigravity.app",
@@ -1049,6 +1059,8 @@ function buildStrictValidationTargets() {
     { type: "DOMAIN-SUFFIX", value: "chatgpt.com" },
     { type: "DOMAIN-SUFFIX", value: "gemini.google.com" },
     { type: "DOMAIN-SUFFIX", value: "assistant.google.com" },
+    { type: "DOMAIN-SUFFIX", value: "accounts.google.ca" },
+    { type: "DOMAIN-SUFFIX", value: "cursor.sh" },
     { type: "DOMAIN-SUFFIX", value: "aistudio.google.com" },
     { type: "DOMAIN-SUFFIX", value: "perplexity.ai" },
     { type: "PROCESS-NAME",  value: "Claude" }

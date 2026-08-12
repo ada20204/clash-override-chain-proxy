@@ -322,6 +322,10 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,gemini.gstatic.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,assistant.google.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,accounts.google.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,accounts.google.ca," + EXPECTED.aiGroupName);
+  ["cursor.sh", "cursor.com", "cursorapi.com"].forEach(function (domain) {
+    assertRuleExists(output.rules, "DOMAIN-SUFFIX," + domain + "," + EXPECTED.aiGroupName);
+  });
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,antigravity.google," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,generativelanguage.googleapis.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,grokipedia.com," + EXPECTED.aiGroupName);
@@ -344,9 +348,13 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "PROCESS-NAME,agy,"          + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,Claude,"       + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,claude,"       + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "PROCESS-NAME,Cursor Helper (Plugin)," + EXPECTED.aiGroupName);
+  assert(output.rules.indexOf("PROCESS-NAME,Cursor Helper (Plugin)," + EXPECTED.aiGroupName) <
+      output.rules.indexOf("AND,((NETWORK,tcp),(DST-PORT,443))," + EXPECTED.generalEgressGroupName),
+    "Cursor 插件进程必须优先于通用 TCP/443 回退规则进入 AI Agent");
 
   // AI QUIC 先拒绝再回退 TCP，避免 HTTP 家宽出口不支持 UDP 时继续匹配到 DIRECT。
-  ["openai.com", "chatgpt.com", "anthropic.com", "claude.ai", "gemini.gstatic.com", "assistant.google.com", "accounts.google.com", "aistudio.google.com"].forEach(function (domain) {
+  ["openai.com", "chatgpt.com", "anthropic.com", "claude.ai", "gemini.gstatic.com", "assistant.google.com", "accounts.google.com", "accounts.google.ca", "cursor.sh", "cursor.com", "cursorapi.com", "aistudio.google.com"].forEach(function (domain) {
     const rejectRule = aiQuicRejectRule(domain);
     const proxyRule = "DOMAIN-SUFFIX," + domain + "," + EXPECTED.aiGroupName;
     assertRuleExists(output.rules, rejectRule);
@@ -368,6 +376,9 @@ function testDefaultConfig() {
   assert(output.rules.indexOf("DOMAIN-SUFFIX,accounts.google.com," + EXPECTED.aiGroupName) <
       output.rules.indexOf("DOMAIN-SUFFIX,google.com," + EXPECTED.fullProtocolFallbackGroupName),
     "Gemini 登录域名必须先命中 AI Agent，不能落入通用 Google 规则");
+  assert(output.rules.indexOf("DOMAIN-SUFFIX,accounts.google.ca," + EXPECTED.aiGroupName) <
+      output.rules.indexOf("DOMAIN-SUFFIX,google.ca," + EXPECTED.fullProtocolFallbackGroupName),
+    "Gemini 加拿大登录域名必须先命中 AI Agent，不能落入通用 Google 规则");
   assertRuleExists(output.rules, geminiChallengeQuicRejectRule());
   assertRuleExists(output.rules, "DOMAIN,www.google.com," + EXPECTED.aiGroupName);
   assert(output.rules.indexOf(geminiChallengeQuicRejectRule()) < output.rules.indexOf(
