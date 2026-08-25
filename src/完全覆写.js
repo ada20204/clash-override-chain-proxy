@@ -36,7 +36,7 @@
 
 var USER_OPTIONS = {
   autoSelectGroupName: "自动选择", // 订阅中的自动选择组名（url-test），Smart 内核会自动追加 "(Smart Group)" 后缀
-  autoSelectExcludeKeywords: [], // 只过滤自动选择组；订阅状态信息仍会保留在节点选择里
+  autoSelectExcludeKeywords: ["公司代理"], // 只过滤自动选择组；公司代理仍会保留在节点选择里供手动使用
   urlTestProbeUrl: "http://connect.rom.miui.com/generate_204", // 直连/界面健康检查默认测速地址；单个分组可用 testUrl 覆盖
   proxyProbeUrl: "https://www.gstatic.com/generate_204", // 代理/地区/出海能力默认测速地址
   overseasDnsTarget: "🤖 AI Agent", // 海外及未知域名的 DoH 连接出口；改为“节点选择”可使用普通出海线路
@@ -338,15 +338,7 @@ var SOURCE_PATTERNS = {
         "+.clau.de",
         "+.anthropic.com.cdn.cloudflare.net",
         "+.anthropic.auth0.com",
-        "+.anthropic-com.ghost.io",
-        "+.intercom.io",         // Claude 应用内嵌客服
-        "+.intercomcdn.com",
-        "+.cdn.usefathom.com",
-        "+.sentry.io",
-        "+.datadoghq.com",       // Claude 应用内嵌监控
-        "+.browser-intake-us5-datadoghq.com",
-        "+.statsigapi.net",      // AI 应用常用的 feature flag 服务
-        "+.statsig.com"
+        "+.anthropic-com.ghost.io"
       ],
       openai: [
         "+.openai.com",
@@ -355,15 +347,7 @@ var SOURCE_PATTERNS = {
         "+.oaiusercontent.com",
         "+.oaistatic.com",
         "+.oaistatsig.com",
-        "+.ct.sendgrid.net",
-        "+.openaimerge.com",
-        "+.workos.com",
-        "+.workoscdn.com",
-        "+.workos.imgix.net",
-        "+.challenges.cloudflare.com",
-        "+.js.stripe.com",
-        "+.rum.browser-intake-datadoghq.com",
-        "+.humb.apple.com"
+        "+.openaimerge.com"
       ],
       google_ai: [
         "+.cloudcode-pa.googleapis.com",
@@ -410,6 +394,28 @@ var SOURCE_PATTERNS = {
         "+.grokipedia.com",
         "+.console.x.ai",
         "+.api.x.ai"
+      ]
+    },
+    aiSharedInfrastructure: {
+      support_and_analytics: [
+        "+.intercom.io",
+        "+.intercomcdn.com",
+        "+.cdn.usefathom.com",
+        "+.sentry.io",
+        "+.datadoghq.com",
+        "+.browser-intake-us5-datadoghq.com",
+        "+.statsigapi.net",
+        "+.statsig.com",
+        "+.rum.browser-intake-datadoghq.com"
+      ],
+      auth_and_payments: [
+        "+.ct.sendgrid.net",
+        "+.workos.com",
+        "+.workoscdn.com",
+        "+.workos.imgix.net",
+        "+.challenges.cloudflare.com",
+        "+.js.stripe.com",
+        "+.humb.apple.com"
       ]
     },
     media: {
@@ -546,7 +552,8 @@ var SOURCE_PATTERNS = {
     generalEgress: {
       infrastructure: [
         "+.cloudflare.com",
-        "+.cloudflareinsights.com"
+        "+.cloudflareinsights.com",
+        "+.workers.dev"
       ],
       globalSites: [
         "+.oracle.com",
@@ -916,6 +923,7 @@ function buildDerived() {
   var microsoftDomains     = excludeStrings(flattenGroupedPatterns(SOURCE_PATTERNS.microsoft), nodeSelectionDomains);
 
   var aiPatterns       = flattenGroupedPatterns(SOURCE_PATTERNS.chain.ai);
+  var aiSharedInfrastructure = flattenGroupedPatterns(SOURCE_PATTERNS.chain.aiSharedInfrastructure);
   var generalEgressDomains = excludeStrings(
     flattenGroupedPatterns(SOURCE_PATTERNS.chain.generalEgress),
     directAll
@@ -1005,7 +1013,13 @@ function buildDerived() {
   return {
     specs: specs,
     patterns: {
-      strict: { ai: strictAi, support: strictSupport, validation: strictValidation, all: strictAll },
+      strict: {
+        ai: strictAi,
+        sharedInfrastructure: aiSharedInfrastructure,
+        support: strictSupport,
+        validation: strictValidation,
+        all: strictAll
+      },
       direct: {
         domestic: {
           ai: directDomesticAi,
@@ -2258,12 +2272,51 @@ function injectManagedRules(config, strictAiTarget, frontProxyName, fullProtocol
   prependRules(config.rules, managedRules);
 }
 
-function injectCustomRuleGroupRules(config, ruleLines) {
+function buildProtectedManagedRuleLines(strictAiTarget, fullProtocolTarget) {
+  var rules = [];
+  var tailscaleRuleLines = [];
+  var seenTailscaleRuleIdentities = {};
+  addRawRulesIfNotExists(
+    tailscaleRuleLines,
+    seenTailscaleRuleIdentities,
+    buildTailscaleRules(false)
+  );
+  rules = rules
+    .concat(buildProxyServerDirectRules())
+    .concat(buildTailscaleProcessRuleLines())
+    .concat(tailscaleRuleLines)
+    .concat(buildGooglePlayMtalkRules(fullProtocolTarget))
+    .concat(buildGeminiChallengeRules(strictAiTarget))
+    .concat(buildGoogleConsistencyRules(strictAiTarget, fullProtocolTarget))
+    .concat(buildWebRtcUdpRejectRules());
+  if (strictAiTarget) {
+    rules = rules
+      .concat(buildAiQuicRejectRules())
+      .concat(buildStrictChainRules(strictAiTarget));
+  }
+  return rules;
+}
+
+function assertCustomRulesDoNotOverrideProtectedRules(ruleLines, protectedIdentities) {
+  for (var i = 0; i < ruleLines.length; i++) {
+    var ruleIdentity = getRuleIdentity(ruleLines[i]);
+    if (ruleIdentity && protectedIdentities[ruleIdentity]) {
+      throw createUserError(
+        "自定义规则与受保护的基础路由或安全规则冲突：" + ruleIdentity
+      );
+    }
+  }
+}
+
+function injectCustomRuleGroupRules(config, ruleLines, strictAiTarget, fullProtocolTarget) {
   var ruleIdentities = buildRuleIdentityLookup(ruleLines);
-  var protectedIdentities = buildRuleIdentityLookup(buildProxyServerDirectRules());
+  var protectedIdentities = buildRuleIdentityLookup(
+    buildProtectedManagedRuleLines(strictAiTarget, fullProtocolTarget)
+  );
   var protectedRules = [];
   var remainingRules = [];
   var ruleIdentity;
+  assertCustomRulesDoNotOverrideProtectedRules(ruleLines, protectedIdentities);
   config.rules = filterConflictingRules(config.rules, ruleIdentities);
   for (var i = 0; i < config.rules.length; i++) {
     ruleIdentity = getRuleIdentity(config.rules[i]);
@@ -2916,12 +2969,16 @@ function main(config) {
   applyProxyServerDirectRules(config);
   if (hasHomeProxy) {
     injectManagedRules(config, aiAgentTarget, frontProxyName, fullProtocolTarget);
-    if (customRuleGroupRules.length > 0) injectCustomRuleGroupRules(config, customRuleGroupRules);
+    if (customRuleGroupRules.length > 0) {
+      injectCustomRuleGroupRules(config, customRuleGroupRules, aiAgentTarget, fullProtocolTarget);
+    }
     validateManagedRouting(config, routingTargets);
   } else {
     // 无家宽凭证：AI 规则指向 AI Agent，用户可在组内选择支持 AI 的订阅节点。
     injectManagedRules(config, aiAgentTarget, frontProxyName, fullProtocolTarget);
-    if (customRuleGroupRules.length > 0) injectCustomRuleGroupRules(config, customRuleGroupRules);
+    if (customRuleGroupRules.length > 0) {
+      injectCustomRuleGroupRules(config, customRuleGroupRules, aiAgentTarget, fullProtocolTarget);
+    }
   }
 
   delete config._frontProxyName;

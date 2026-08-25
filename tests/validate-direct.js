@@ -317,9 +317,6 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,claudemcpcontent.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,anthropic.auth0.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,anthropic.com.cdn.cloudflare.net," + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,browser-intake-us5-datadoghq.com," + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,cdn.usefathom.com," + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,sentry.io," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "IP-CIDR,160.79.104.0/21," + EXPECTED.aiGroupName + ",no-resolve");
   assertRuleExists(output.rules, "IP-CIDR6,2607:6bc0::/32," + EXPECTED.aiGroupName + ",no-resolve");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,chatgpt.com," + EXPECTED.aiGroupName);
@@ -336,15 +333,33 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,grokipedia.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,mistral.ai," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,oaistatsig.com," + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ct.sendgrid.net," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,openaimerge.com," + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,workos.com," + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,workoscdn.com," + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,workos.imgix.net," + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,challenges.cloudflare.com," + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,js.stripe.com," + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,rum.browser-intake-datadoghq.com," + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,humb.apple.com," + EXPECTED.aiGroupName);
+  const sharedAiInfrastructureDomains = [
+    "intercom.io",
+    "intercomcdn.com",
+    "cdn.usefathom.com",
+    "sentry.io",
+    "datadoghq.com",
+    "browser-intake-us5-datadoghq.com",
+    "statsigapi.net",
+    "statsig.com",
+    "rum.browser-intake-datadoghq.com",
+    "ct.sendgrid.net",
+    "workos.com",
+    "workoscdn.com",
+    "workos.imgix.net",
+    "challenges.cloudflare.com",
+    "js.stripe.com",
+    "humb.apple.com"
+  ];
+  sharedAiInfrastructureDomains.forEach(function (domain) {
+    assert(sandbox.DERIVED.patterns.strict.sharedInfrastructure.indexOf("+." + domain) >= 0,
+      "共享基础设施域名应保留在独立清单中：" + domain);
+    assertRulesMissing(output.rules, [
+      "DOMAIN-SUFFIX," + domain + "," + EXPECTED.aiGroupName,
+      aiQuicRejectRule(domain)
+    ]);
+  });
   assertTransportAwareDomainRules(output.rules, "google.com", "节点选择");
   assertTransportAwareDomainRules(output.rules, "google.ca", "节点选择");
   assertTransportAwareDomainRules(output.rules, "googleapis.com", "节点选择");
@@ -486,6 +501,7 @@ function testDefaultConfig() {
 
   [
     "cloudflare.com",
+    "workers.dev",
     "oracle.com",
     "takealot.com",
     "pixpix.com",
@@ -905,6 +921,53 @@ function testDedicatedCustomProxyOnlyAppearsInExplicitRuleGroup() {
     "普通自定义出口应保持向后兼容，继续进入节点选择");
   assert(aiGroup.proxies.indexOf("普通备用出口") >= 0,
     "普通自定义出口应保持向后兼容，继续进入 AI Agent");
+}
+
+function testCustomRuleGroupsCannotOverrideProtectedRules() {
+  const protectedCases = [
+    {
+      rule: "DOMAIN-SUFFIX,chatgpt.com",
+      identity: "DOMAIN-SUFFIX,chatgpt.com"
+    },
+    {
+      rule: { type: "PROCESS-NAME", value: "Codex (Service)" },
+      identity: "PROCESS-NAME,Codex (Service)"
+    },
+    {
+      rule: { type: "GEOSITE", value: "google" },
+      identity: "GEOSITE,google"
+    },
+    {
+      rule: { type: "IP-CIDR", value: "100.64.0.0/10", option: "no-resolve" },
+      identity: "IP-CIDR,100.64.0.0/10"
+    },
+    {
+      rule: { type: "AND", value: "((NETWORK,udp),(DST-PORT,3478))" },
+      identity: "AND,((NETWORK,udp),(DST-PORT,3478))"
+    }
+  ];
+
+  protectedCases.forEach(function (testCase) {
+    assert.throws(function () {
+      runMain(function (config) {
+        config._customRuleGroups = [{
+          name: "冲突业务组",
+          rules: [testCase.rule]
+        }];
+      });
+    }, function (error) {
+      return error.message.indexOf("自定义规则与受保护") >= 0 &&
+        error.message.indexOf(testCase.identity) >= 0;
+    }, "自定义规则不得覆盖受保护规则：" + testCase.identity);
+  });
+
+  const { output } = runMain(function (config) {
+    config._customRuleGroups = [{
+      name: "普通共享服务",
+      rules: ["DOMAIN-SUFFIX,sentry.io"]
+    }];
+  });
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,sentry.io,普通共享服务");
 }
 
 function testDedicatedCustomProxyMustBeReferenced() {
@@ -1496,6 +1559,8 @@ function testAutoSelectFiltersSubscriptionInfoNodes() {
       return g.name === EXPECTED.relayGroupName;
     });
     autoGroup.proxies = autoGroup.proxies.concat(infoNodeNames);
+    config.proxies.push({ name: "公司代理", type: "http", server: "10.0.0.9", port: 8080 });
+    autoGroup.proxies.push("公司代理");
   });
 
   const autoGroup = output["proxy-groups"].find(function (g) {
@@ -1514,6 +1579,10 @@ function testAutoSelectFiltersSubscriptionInfoNodes() {
       "信息节点不应进入自动选择测速组: " + infoNodeNames[i]);
   }
   assert(autoGroup.proxies.indexOf("🇸🇬 SG Auto 01") >= 0, "真实节点应保留在自动选择中");
+  assert(nodeSelGroup.proxies.indexOf("公司代理") >= 0,
+    "公司代理应保留在节点选择中供手动使用");
+  assert(autoGroup.proxies.indexOf("公司代理") < 0,
+    "公司代理不应进入自动选择测速组");
 }
 
 // ─── run ─────────────────────────────────────────────────────────────────────
@@ -1536,6 +1605,7 @@ testAuthCredentials();
 testCustomProxiesAppearInGlobal();
 testNoCredentialAiAgentIncludesCustomAndRawNodes();
 testDedicatedCustomProxyOnlyAppearsInExplicitRuleGroup();
+testCustomRuleGroupsCannotOverrideProtectedRules();
 testDedicatedCustomProxyMustBeReferenced();
 testDedicatedCustomProxyRejectsNameCollisions();
 testFrontProxyAppliesOnlyToSubscriptionNodes();
