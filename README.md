@@ -45,7 +45,9 @@
 3. AI 域名的 UDP/443 与常见 WebRTC STUN UDP 被拒绝，浏览器会回退到 TCP，不把本地 UDP 出口暴露出去。
 4. Claude、OpenAI、Gemini、AI Studio、Antigravity、Kiro、Perplexity、Mistral、xAI 及已覆盖的 AI 进程进入 `🤖 AI Agent`。
 5. 开发服务、通用 Google 服务和未分类国际流量再进入 `节点选择` 或隐藏的 `🌐 通用出海`。
-6. 国内域名/IP 最后按手动直连、GeoSite 与 GeoIP 直连；其余流量才进入最终兜底。
+6. 国内域名/IP 最后按少量显式例外、GeoSite 与 GeoIP 直连；其余流量才进入最终兜底。
+
+国内直连以 Mihomo 的 `GEOSITE,cn` 和 `GEOIP,cn` 为主，不重复维护腾讯、阿里、WPS 等整套域名清单。脚本只显式保留 `rivotek.com`、`larksuite.com`、`larkoffice.com`、`dashscope.aliyuncs.com`、`feishu.net`、`feishucdn.com`、`dingtalkapps.com` 和 `typeless.com`，用于提前兜底或指定合适的 DNS；其中 `typeless.com` 使用海外 DNS，但业务流量仍保持直连。
 
 ### 可选：全协议回退
 

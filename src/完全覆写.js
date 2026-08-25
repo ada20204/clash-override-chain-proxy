@@ -623,67 +623,17 @@ var SOURCE_PATTERNS = {
     }
   },
   direct: {
-    domestic: {
-      ai: {
-        tongyi: [
-          "+.tongyi.aliyun.com",
-          "+.qianwen.aliyun.com",
-          "+.dashscope.aliyuncs.com"
-        ],
-        moonshot: [
-          "+.moonshot.cn"
-        ],
-        zhipu: [
-          "+.chatglm.cn",
-          "+.zhipuai.cn",
-          "+.bigmodel.cn"
-        ],
-        siliconflow: [
-          "+.siliconflow.cn"
-        ]
-      },
-      office: {
-        tencent_messaging_and_collab: [
-          "+.qq.com",
-          "+.qqmail.com",
-          "+.exmail.qq.com",
-          "+.weixin.qq.com",
-          "+.work.weixin.qq.com",
-          "+.docs.qq.com",
-          "+.meeting.tencent.com",
-          "+.tencentcloud.com",
-          "+.cloud.tencent.com"
-        ],
-        alibaba_productivity: [
-          "+.dingtalk.com",
-          "+.dingtalkapps.com",
-          "+.aliyundrive.com",
-          "+.quark.cn",
-          "+.teambition.com",
-          "+.aliyun.com",
-          "+.aliyuncs.com",
-          "+.alibabacloud.com"
-        ],
-        bytedance_productivity: [
-          "+.feishu.cn",
-          "+.feishu.net",
-          "+.feishucdn.com",
-          "+.larksuite.com",
-          "+.larkoffice.com"
-        ],
-        rivotek_internal: [
-          "+.rivotek.com"
-        ],
-        wps_productivity: [
-          "+.wps.cn",
-          "+.wps.com",
-          "+.kdocs.cn",
-          "+.kdocs.com"
-        ]
-      }
-    },
-    overseasApps: {
-      typeless: [
+    overrides: {
+      domesticDns: [
+        "+.rivotek.com",
+        "+.larksuite.com",
+        "+.larkoffice.com",
+        "+.dashscope.aliyuncs.com",
+        "+.feishu.net",
+        "+.feishucdn.com",
+        "+.dingtalkapps.com"
+      ],
+      overseasDns: [
         "+.typeless.com"
       ]
     }
@@ -909,10 +859,9 @@ function isChainRegionBrowserProcessProxyEnabled() {
 // ---------------------------------------------------------------------------
 
 function buildDerived() {
-  var directDomesticAi     = flattenGroupedPatterns(SOURCE_PATTERNS.direct.domestic.ai);
-  var directDomesticOffice = flattenGroupedPatterns(SOURCE_PATTERNS.direct.domestic.office);
-  var directOverseasApps   = flattenGroupedPatterns(SOURCE_PATTERNS.direct.overseasApps);
-  var directAll            = mergeStringGroups([directDomesticAi, directDomesticOffice, directOverseasApps]);
+  var directDomesticOverrides = uniqueStrings(SOURCE_PATTERNS.direct.overrides.domesticDns.slice());
+  var directOverseasOverrides = uniqueStrings(SOURCE_PATTERNS.direct.overrides.overseasDns.slice());
+  var directAll = mergeStringGroups([directDomesticOverrides, directOverseasOverrides]);
   var nodeSelectionDomains = mergeStringGroups([
     SOURCE_PATTERNS.nodeSelection,
     SOURCE_PATTERNS.microsoft.developer,
@@ -1007,7 +956,7 @@ function buildDerived() {
     strictAll
   ]);
   var snifferSkip = uniqueStrings(
-    SOURCE_PATTERNS.policy.snifferSkipBase.concat(directOverseasApps)
+    SOURCE_PATTERNS.policy.snifferSkipBase.concat(directOverseasOverrides)
   );
 
   return {
@@ -1021,13 +970,11 @@ function buildDerived() {
         all: strictAll
       },
       direct: {
-        domestic: {
-          ai: directDomesticAi,
-          office: directDomesticOffice,
-          groups: [directDomesticAi, directDomesticOffice]
+        overrides: {
+          domesticDns: directDomesticOverrides,
+          overseasDns: directOverseasOverrides
         },
-        overseasApps: directOverseasApps,
-        groups: [directDomesticAi, directDomesticOffice, directOverseasApps]
+        groups: [directDomesticOverrides, directOverseasOverrides]
       },
       nodeSelection: excludeStrings(nodeSelectionDomains, directAll),
       generalEgress: generalEgressDomains,
@@ -1172,9 +1119,8 @@ function buildNameserverPolicy() {
   assignNameserverPolicyDomains(policy, DERIVED.patterns.strict.support,         overseasDnsServers);
   assignNameserverPolicyDomains(policy, DERIVED.patterns.strict.validation,      overseasDnsServers);
   assignNameserverPolicyDomains(policy, DERIVED.patterns.generalEgress,           overseasDnsServers);
-  assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.domestic.ai,     BASE.dns.domestic);
-  assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.domestic.office, BASE.dns.domestic);
-  assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.overseasApps,    overseasDnsServers);
+  assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.overrides.domesticDns, BASE.dns.domestic);
+  assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.overrides.overseasDns, overseasDnsServers);
   if (isGoogleTrafficConsistencyEnabled()) {
     policy["geosite:google-deepmind"] = overseasDnsServers;
     policy["geosite:youtube"] = routeDnsServers(BASE.dns.overseas, "🌍 国际媒体");
@@ -1231,7 +1177,7 @@ function buildDnsFallbackFilterDomains() {
   var groups = [
     DERIVED.patterns.strict.all,
     DERIVED.patterns.generalEgress,
-    DERIVED.patterns.direct.overseasApps
+    DERIVED.patterns.direct.overrides.overseasDns
   ];
   for (var i = 0; i < DERIVED.specs.length; i++) {
     if (DERIVED.specs[i].domains && DERIVED.specs[i].domains.length > 0) {

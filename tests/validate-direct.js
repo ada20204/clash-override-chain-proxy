@@ -497,7 +497,46 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,yahoo.co.jp," + EXPECTED.japanServicesGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,sony.jp," + EXPECTED.japanServicesGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,nintendo.co.jp," + EXPECTED.japanServicesGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,rivotek.com,DIRECT");
+
+  const domesticDnsDirectOverrides = [
+    "rivotek.com",
+    "larksuite.com",
+    "larkoffice.com",
+    "dashscope.aliyuncs.com",
+    "feishu.net",
+    "feishucdn.com",
+    "dingtalkapps.com"
+  ];
+  const overseasDnsDirectOverrides = ["typeless.com"];
+  domesticDnsDirectOverrides.concat(overseasDnsDirectOverrides).forEach(function (domain) {
+    assertRuleExists(output.rules, "DOMAIN-SUFFIX," + domain + ",DIRECT");
+  });
+  domesticDnsDirectOverrides.forEach(function (domain) {
+    assert.deepEqual(
+      output.dns["nameserver-policy"]["+." + domain],
+      output.dns["direct-nameserver"],
+      domain + " 应使用国内 DNS 并保持直连"
+    );
+  });
+  overseasDnsDirectOverrides.forEach(function (domain) {
+    assert(output.dns["nameserver-policy"]["+." + domain].every(function (server) {
+      return server.indexOf("#" + EXPECTED.aiGroupName) > 0;
+    }), domain + " 应使用海外 DNS，但业务流量保持直连");
+  });
+  [
+    "qq.com",
+    "moonshot.cn",
+    "aliyun.com",
+    "aliyuncs.com",
+    "feishu.cn",
+    "wps.com",
+    "kdocs.com",
+    "alibabacloud.com"
+  ].forEach(function (domain) {
+    assertRulesMissing(output.rules, ["DOMAIN-SUFFIX," + domain + ",DIRECT"]);
+  });
+  assertRuleExists(output.rules, "GEOSITE,cn,DIRECT");
+  assertRuleExists(output.rules, "GEOIP,cn,DIRECT,no-resolve");
 
   [
     "cloudflare.com",
