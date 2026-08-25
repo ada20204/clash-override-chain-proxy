@@ -108,7 +108,11 @@ fullProtocolFallback: false
 
 ### AI Agent
 
-AI 服务与普通 Google/YouTube 分开处理：YouTube 共享 API 优先进入国际媒体，通用 Google 服务进入节点选择，Gemini、AI Studio、Antigravity 与 Kiro 明确进入 `🤖 AI Agent`。这避免“为了 AI 把整站 Google 都送进家宽出口”。
+Google 账号与 AI 服务默认使用统一出口：Gemini、AI Studio、Antigravity、账号登录和其余 Google 服务进入 `🤖 AI Agent`；YouTube 内容、Google Play 和 FCM 则按媒体与协议能力优先分流，Kiro 等非 Google AI 服务继续使用各自的精确规则。
+
+Codex CLI 的 `codex` 与桌面端后台进程 `Codex (Service)` 都固定进入 `🤖 AI Agent`，避免同一桌面会话因请求域名不同而分散到 GitHub、Google 或通用出海出口。
+
+`USER_OPTIONS.googleTrafficConsistency` 默认开启。脚本使用 Mihomo 内置的 `GEOSITE,google-deepmind` 和 `GEOSITE,google` 补齐 Google 账号、Gemini、Antigravity 等共享端点，并统一到 `🤖 AI Agent`；YouTube、Google Play 和 FCM 仍优先进入国际媒体或全协议出口。这样登录与 AI 请求保持同一出口，同时避免 Play 长连接和视频流量误走仅支持 HTTP 的家宽节点。设为 `false` 可恢复原来的精确域名分流。
 
 当 `rejectAiQuic: true` 时，每一个 AI 域名都会生成一条 UDP/443 `REJECT` 规则，再匹配对应的 TCP/HTTPS AI 规则。对于不支持 UDP 的 HTTP 固定出口，这是防止回退到直连的必要边界。
 

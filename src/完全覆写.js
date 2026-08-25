@@ -40,6 +40,7 @@ var USER_OPTIONS = {
   urlTestProbeUrl: "http://connect.rom.miui.com/generate_204", // 直连/界面健康检查默认测速地址；单个分组可用 testUrl 覆盖
   proxyProbeUrl: "https://www.gstatic.com/generate_204", // 代理/地区/出海能力默认测速地址
   overseasDnsTarget: "🤖 AI Agent", // 海外及未知域名的 DoH 连接出口；改为“节点选择”可使用普通出海线路
+  googleTrafficConsistency: true, // 统一 Google 账号与 AI 出口；YouTube、Play 和 FCM 仍按协议能力分流
   directProxyServerRules: true, // 将最终代理节点的服务器地址在本机规则层直连，避免局域网下游 Clash 再代理一层
   proxyServerResolvedIps: {}, // 域名代理服务器在下游 Clash 场景下使用的已解析 IP，例如 { "edge.example.com": ["203.0.113.10"] }
   rejectAiQuic: true, // 拒绝 AI 域名 UDP/443，防止不支持 UDP 的出口被跳过后直连；浏览器会回退 HTTPS/TCP
@@ -124,6 +125,10 @@ function getGroupProbeUrl(groupConfig) {
 
 function isFullProtocolFallbackEnabled() {
   return USER_OPTIONS.fullProtocolFallback !== false;
+}
+
+function isGoogleTrafficConsistencyEnabled() {
+  return USER_OPTIONS.googleTrafficConsistency !== false;
 }
 
 function resolveProxyUdp(proxyConfig) {
@@ -718,6 +723,7 @@ var SOURCE_PROCESSES = {
         "Cursor Helper (GPU)",
         "Cursor Helper (Plugin)",
         "Cursor Helper (Alerts)",
+        "Codex (Service)",
         "Claude Code",
         "Claude Code URL Handler",
         "Antigravity.app",
@@ -904,7 +910,7 @@ function buildDerived() {
     SOURCE_PATTERNS.nodeSelection,
     SOURCE_PATTERNS.microsoft.developer,
     SOURCE_PATTERNS.microsoft.search,
-    // 通用 Google 服务不应因为 AI Studio 等产品而被整体送入 AI 出口。
+    // 保留通用 Google 精确规则，关闭 googleTrafficConsistency 时恢复原有节点选择行为。
     flattenGroupedPatterns(SOURCE_PATTERNS.chain.platform)
   ]);
   var microsoftDomains     = excludeStrings(flattenGroupedPatterns(SOURCE_PATTERNS.microsoft), nodeSelectionDomains);
@@ -1063,7 +1069,8 @@ function buildStrictValidationTargets() {
     { type: "DOMAIN-SUFFIX", value: "cursor.sh" },
     { type: "DOMAIN-SUFFIX", value: "aistudio.google.com" },
     { type: "DOMAIN-SUFFIX", value: "perplexity.ai" },
-    { type: "PROCESS-NAME",  value: "Claude" }
+    { type: "PROCESS-NAME",  value: "Claude" },
+    { type: "PROCESS-NAME",  value: "Codex (Service)" }
   ];
   if (isChainRegionAiCliProcessProxyEnabled()) {
     validationTargets.push({ type: "PROCESS-NAME", value: "claude" });
@@ -1154,6 +1161,13 @@ function buildNameserverPolicy() {
   assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.domestic.ai,     BASE.dns.domestic);
   assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.domestic.office, BASE.dns.domestic);
   assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.overseasApps,    overseasDnsServers);
+  if (isGoogleTrafficConsistencyEnabled()) {
+    policy["geosite:google-deepmind"] = overseasDnsServers;
+    policy["geosite:youtube"] = routeDnsServers(BASE.dns.overseas, "🌍 国际媒体");
+    policy["geosite:google-play"] = routeDnsServers(BASE.dns.overseas, "🌍 国际媒体");
+    policy["geosite:googlefcm"] = routeDnsServers(BASE.dns.overseas, "🌍 国际媒体");
+    policy["geosite:google"] = overseasDnsServers;
+  }
   for (i = 0; i < DERIVED.specs.length; i++) {
     spec = DERIVED.specs[i];
     if (!spec.domains || spec.domains.length === 0 || !spec.dnsPolicy) continue;
@@ -2146,10 +2160,33 @@ function buildYoutubeSharedPlatformRules() {
   return rules;
 }
 
-function buildGooglePlayMtalkRules() {
+function buildGooglePlayMtalkRules(fullProtocolTarget) {
   return [
-    "AND,((NETWORK,tcp),(DST-PORT,5228),(DOMAIN-SUFFIX,mtalk.google.com)),🌍 国际媒体"
+    "AND,((NETWORK,tcp),(DST-PORT,5228),(DOMAIN-SUFFIX,mtalk.google.com))," +
+      (fullProtocolTarget || "🌍 国际媒体")
   ];
+}
+
+function buildGoogleConsistencyRules(strictAiTarget, fullProtocolTarget) {
+  if (!strictAiTarget || !isGoogleTrafficConsistencyEnabled()) return [];
+  var fcmTarget = fullProtocolTarget || "🌍 国际媒体";
+  var rules = [
+    "DOMAIN-REGEX,^accounts\\.google\\..+$," + strictAiTarget,
+    "DOMAIN,accounts.gstatic.com," + strictAiTarget,
+    "DOMAIN,accounts.youtube.com," + strictAiTarget,
+    "DOMAIN,oauthaccountmanager.googleapis.com," + strictAiTarget,
+    "DOMAIN,www.googleapis.com," + strictAiTarget,
+    "DOMAIN,ssl.gstatic.com," + strictAiTarget,
+    "GEOSITE,google-deepmind," + strictAiTarget,
+    "GEOSITE,youtube,🌍 国际媒体",
+    "GEOSITE,google-play,🌍 国际媒体",
+    "GEOSITE,googlefcm," + fcmTarget
+  ];
+  if (USER_OPTIONS.rejectAiQuic !== false) {
+    rules.push("AND,((NETWORK,udp),(DST-PORT,443),(GEOSITE,google)),REJECT");
+  }
+  rules.push("GEOSITE,google," + strictAiTarget);
+  return rules;
 }
 
 function buildGeminiChallengeRules(strictAiTarget) {
@@ -2166,11 +2203,14 @@ function buildManagedRules(strictAiTarget, frontProxyName, fullProtocolTarget) {
   rules = rules.concat(buildProxyServerDirectRules());
   // Tailscale 的 STUN 也会使用 UDP/3478，必须先于通用 WebRTC 防泄漏规则匹配。
   rules = rules.concat(buildTailscaleProcessRuleLines());
-  rules = rules.concat(buildGooglePlayMtalkRules());
+  rules = rules.concat(buildGooglePlayMtalkRules(fullProtocolTarget));
   rules = rules.concat(buildGeminiChallengeRules(strictAiTarget));
-  rules = rules.concat(buildWebRtcUdpRejectRules());
   if (strictAiTarget) {
     rules = rules.concat(buildYoutubeSharedPlatformRules());
+    rules = rules.concat(buildGoogleConsistencyRules(strictAiTarget, fullProtocolTarget));
+  }
+  rules = rules.concat(buildWebRtcUdpRejectRules());
+  if (strictAiTarget) {
     rules = rules.concat(buildAiQuicRejectRules());
     rules = rules.concat(buildNetworkProbeRules(strictAiTarget, frontProxyName));
   }

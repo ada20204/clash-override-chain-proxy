@@ -102,12 +102,17 @@ function tcp443DomainRule(domain, target) {
   return "AND,((NETWORK,tcp),(DST-PORT,443),(DOMAIN-SUFFIX," + domain + "))," + target;
 }
 
-function googlePlayMtalkRule() {
-  return "AND,((NETWORK,tcp),(DST-PORT,5228),(DOMAIN-SUFFIX,mtalk.google.com)),🌍 国际媒体";
+function googlePlayMtalkRule(target) {
+  return "AND,((NETWORK,tcp),(DST-PORT,5228),(DOMAIN-SUFFIX,mtalk.google.com))," +
+    (target || EXPECTED.fullProtocolFallbackGroupName);
 }
 
 function geminiChallengeQuicRejectRule() {
   return "AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN,www.google.com)),REJECT";
+}
+
+function googleGeositeQuicRejectRule() {
+  return "AND,((NETWORK,udp),(DST-PORT,443),(GEOSITE,google)),REJECT";
 }
 
 function assertTransportAwareDomainRules(rules, domain, tlsTarget) {
@@ -345,10 +350,50 @@ function testDefaultConfig() {
   assertTransportAwareDomainRules(output.rules, "googleapis.com", "节点选择");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,cloudcode-pa.googleapis.com," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,daily-cloudcode-pa.googleapis.com," + EXPECTED.aiGroupName);
+  const googleDeepMindRule = "GEOSITE,google-deepmind," + EXPECTED.aiGroupName;
+  const googleCatchAllRule = "GEOSITE,google," + EXPECTED.aiGroupName;
+  const youtubeGeositeRule = "GEOSITE,youtube," + EXPECTED.mediaGroupName;
+  const googlePlayGeositeRule = "GEOSITE,google-play," + EXPECTED.mediaGroupName;
+  const googleFcmGeositeRule = "GEOSITE,googlefcm," + EXPECTED.fullProtocolFallbackGroupName;
+  const googleAccountCountryRule = "DOMAIN-REGEX,^accounts\\.google\\..+$," + EXPECTED.aiGroupName;
+  const youtubeAccountRule = "DOMAIN,accounts.youtube.com," + EXPECTED.aiGroupName;
+  [
+    googleDeepMindRule,
+    googleCatchAllRule,
+    youtubeGeositeRule,
+    googlePlayGeositeRule,
+    googleFcmGeositeRule,
+    googleAccountCountryRule,
+    youtubeAccountRule,
+    "DOMAIN,accounts.gstatic.com," + EXPECTED.aiGroupName,
+    "DOMAIN,oauthaccountmanager.googleapis.com," + EXPECTED.aiGroupName,
+    "DOMAIN,www.googleapis.com," + EXPECTED.aiGroupName,
+    "DOMAIN,ssl.gstatic.com," + EXPECTED.aiGroupName
+  ].forEach(function (rule) {
+    assertRuleExists(output.rules, rule);
+  });
+  assert(output.rules.indexOf(googleAccountCountryRule) < output.rules.indexOf(googleCatchAllRule),
+    "Google 国家账号域名必须先于 Google 总集合进入 AI Agent");
+  assert(output.rules.indexOf(youtubeAccountRule) < output.rules.indexOf(youtubeGeositeRule),
+    "YouTube 登录域名必须先于 YouTube 内容流量进入 AI Agent");
+  [googleDeepMindRule, youtubeGeositeRule, googlePlayGeositeRule, googleFcmGeositeRule].forEach(function (rule) {
+    assert(output.rules.indexOf(rule) < output.rules.indexOf(googleCatchAllRule),
+      rule + " 必须先于 Google 总集合");
+  });
+  assertRuleExists(output.rules, googleGeositeQuicRejectRule());
+  assert(output.rules.indexOf(googleGeositeQuicRejectRule()) < output.rules.indexOf(googleCatchAllRule),
+    "Google 账号与 AI 流量应先拒绝 QUIC，再通过统一 TCP 出口访问");
+  assert(output.rules.indexOf(googleCatchAllRule) < output.rules.indexOf(
+    tcp443DomainRule("google.com", "节点选择")
+  ), "Google 总集合必须先于旧的通用 Google 规则");
   assertRuleExists(output.rules, "PROCESS-NAME,agy,"          + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,Claude,"       + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,claude,"       + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "PROCESS-NAME,Codex (Service)," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,Cursor Helper (Plugin)," + EXPECTED.aiGroupName);
+  assert(output.rules.indexOf("PROCESS-NAME,Codex (Service)," + EXPECTED.aiGroupName) <
+      output.rules.indexOf("AND,((NETWORK,tcp),(DST-PORT,443))," + EXPECTED.generalEgressGroupName),
+    "Codex 桌面服务必须优先于通用 TCP/443 回退规则进入 AI Agent");
   assert(output.rules.indexOf("PROCESS-NAME,Cursor Helper (Plugin)," + EXPECTED.aiGroupName) <
       output.rules.indexOf("AND,((NETWORK,tcp),(DST-PORT,443))," + EXPECTED.generalEgressGroupName),
     "Cursor 插件进程必须优先于通用 TCP/443 回退规则进入 AI Agent");
@@ -413,8 +458,8 @@ function testDefaultConfig() {
   assertRulesMissing(output.rules, [aiQuicRejectRule("googleapis.com")]);
   assertRuleExists(output.rules, googlePlayMtalkRule());
   assert(output.rules.indexOf(googlePlayMtalkRule()) < output.rules.indexOf(
-    tcp443DomainRule("google.com", "节点选择")
-  ), "Google Play Services 的 5228 规则必须优先于通用 Google 规则");
+    googleCatchAllRule
+  ), "Google Play Services 的 5228 规则必须优先进入全协议出口");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,reddit.com," + EXPECTED.mediaGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,tiktok.com," + EXPECTED.mediaGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,bbc.com," + EXPECTED.mediaGroupName);
@@ -482,6 +527,16 @@ function testDefaultConfig() {
     output.dns["nameserver-policy"]["geosite:gfw"],
     output.dns["nameserver-policy"]["geosite:geolocation-!cn"]
   );
+  ["geosite:google-deepmind", "geosite:google"].forEach(function (policyKey) {
+    assert(output.dns["nameserver-policy"][policyKey].every(function (server) {
+      return server.indexOf("#" + EXPECTED.aiGroupName) > 0;
+    }), policyKey + " 的 DNS 应与 Google 账号出口一致");
+  });
+  ["geosite:youtube", "geosite:google-play", "geosite:googlefcm"].forEach(function (policyKey) {
+    assert(output.dns["nameserver-policy"][policyKey].every(function (server) {
+      return server.indexOf("#" + EXPECTED.mediaGroupName) > 0;
+    }), policyKey + " 的 DNS 应跟随对应媒体出口");
+  });
   assert.strictEqual(output.dns["fallback-filter"].geosite, undefined,
     "已迁移到 nameserver-policy 后不应继续使用即将废弃的 fallback-filter.geosite");
   assert.deepEqual(
@@ -604,7 +659,25 @@ function testAiQuicRejectCanBeDisabled() {
   assert.strictEqual(output.rules.filter(function (rule) {
     return rule.indexOf("AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX,") === 0;
   }).length, 0, "关闭 rejectAiQuic 后不应生成 AI QUIC 拒绝规则");
+  assertRulesMissing(output.rules, [googleGeositeQuicRejectRule()]);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,openai.com," + EXPECTED.aiGroupName);
+}
+
+function testGoogleTrafficConsistencyCanBeDisabled() {
+  const { output } = runMain(null, function (sandbox) {
+    sandbox.USER_OPTIONS.googleTrafficConsistency = false;
+  });
+  assertRulesMissing(output.rules, [
+    "GEOSITE,google-deepmind," + EXPECTED.aiGroupName,
+    "GEOSITE,youtube," + EXPECTED.mediaGroupName,
+    "GEOSITE,google-play," + EXPECTED.mediaGroupName,
+    "GEOSITE,googlefcm," + EXPECTED.fullProtocolFallbackGroupName,
+    googleGeositeQuicRejectRule(),
+    "GEOSITE,google," + EXPECTED.aiGroupName
+  ]);
+  assert.strictEqual(output.dns["nameserver-policy"]["geosite:google"], undefined,
+    "关闭 Google 统一出口后不应注入 Google GEOSITE DNS 策略");
+  assertTransportAwareDomainRules(output.rules, "google.com", "节点选择");
 }
 
 function testFullProtocolFallbackCanBeDisabled() {
@@ -615,6 +688,8 @@ function testFullProtocolFallbackCanBeDisabled() {
     return group.name === EXPECTED.fullProtocolFallbackGroupName;
   }), "关闭 fullProtocolFallback 后不应创建全协议回退组");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com,节点选择");
+  assertRuleExists(output.rules, "GEOSITE,googlefcm," + EXPECTED.mediaGroupName);
+  assertRuleExists(output.rules, googlePlayMtalkRule(EXPECTED.mediaGroupName));
   assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
   assertRulesMissing(output.rules, [
     tcp443DomainRule("google.com", "节点选择"),
@@ -1446,6 +1521,7 @@ function testAutoSelectFiltersSubscriptionInfoNodes() {
 testDefaultConfig();
 testTunDnsHijackPreservesExistingEntries();
 testAiQuicRejectCanBeDisabled();
+testGoogleTrafficConsistencyCanBeDisabled();
 testFullProtocolFallbackCanBeDisabled();
 testFullProtocolFallbackRequiresExplicitUdp();
 testHttpFrontProxyExcludesChainedSubscriptionFromFallback();
