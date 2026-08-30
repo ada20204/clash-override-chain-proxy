@@ -44,6 +44,7 @@ var USER_OPTIONS = {
   directProxyServerRules: true, // 将最终代理节点的服务器地址在本机规则层直连，避免局域网下游 Clash 再代理一层
   proxyServerResolvedIps: {}, // 域名代理服务器在下游 Clash 场景下使用的已解析 IP，例如 { "edge.example.com": ["203.0.113.10"] }
   rejectAiQuic: true, // 拒绝 AI 域名 UDP/443，防止不支持 UDP 的出口被跳过后直连；浏览器会回退 HTTPS/TCP
+  rejectAppStoreQuic: true, // 拒绝 App Store 启动接口 UDP/443，避免 QUIC 在 TUN 中超时；系统会回退 HTTPS/TCP
   rejectWebRtcUdp: true, // 拒绝常用 STUN UDP 端口，避免 HTTP 出口不支持 UDP 时 WebRTC 暴露本地公网 IP
   fullProtocolFallback: true, // HTTP 出口保留给 TCP/443；其余流量回退到支持完整隧道的订阅节点
   enableChainRegionBrowserProcessProxy: false, // 是否让受管浏览器按应用名强制走家宽出口
@@ -2165,6 +2166,7 @@ function buildManagedRules(strictAiTarget, frontProxyName, fullProtocolTarget) {
   rules = rules.concat(buildTailscaleProcessRuleLines());
   rules = rules.concat(buildGooglePlayMtalkRules(fullProtocolTarget));
   rules = rules.concat(buildGeminiChallengeRules(strictAiTarget));
+  rules = rules.concat(buildAppStoreQuicRejectRules());
   if (strictAiTarget) {
     rules = rules.concat(buildYoutubeSharedPlatformRules());
     rules = rules.concat(buildGoogleConsistencyRules(strictAiTarget, fullProtocolTarget));
@@ -2233,6 +2235,7 @@ function buildProtectedManagedRuleLines(strictAiTarget, fullProtocolTarget) {
     .concat(tailscaleRuleLines)
     .concat(buildGooglePlayMtalkRules(fullProtocolTarget))
     .concat(buildGeminiChallengeRules(strictAiTarget))
+    .concat(buildAppStoreQuicRejectRules())
     .concat(buildGoogleConsistencyRules(strictAiTarget, fullProtocolTarget))
     .concat(buildWebRtcUdpRejectRules());
   if (strictAiTarget) {
@@ -2325,6 +2328,11 @@ function buildQuicRejectRules(domainPatterns) {
 function buildAiQuicRejectRules() {
   if (USER_OPTIONS.rejectAiQuic === false) return [];
   return buildQuicRejectRules(DERIVED.patterns.strict.all);
+}
+
+function buildAppStoreQuicRejectRules() {
+  if (USER_OPTIONS.rejectAppStoreQuic === false) return [];
+  return ["AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN,bag.itunes.apple.com)),REJECT"];
 }
 
 function buildWebRtcUdpRejectRules() {

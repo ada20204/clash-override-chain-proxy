@@ -123,6 +123,8 @@ Sentry、Datadog、Intercom、Statsig、Stripe、WorkOS、SendGrid 等共享基�
 
 当 `rejectAiQuic: true` 时，每一个 AI 域名都会生成一条 UDP/443 `REJECT` 规则，再匹配对应的 TCP/HTTPS AI 规则。对于不支持 UDP 的 HTTP 固定出口，这是防止回退到直连的必要边界。
 
+当 `rejectAppStoreQuic: true` 时，App Store 启动接口 `bag.itunes.apple.com` 的 UDP/443 会被拒绝，促使 macOS 回退到 HTTPS/TCP。该规则不改变 `🍎 Apple` 的出口选择，也不影响 iCloud 或 Apple Push。
+
 ### DNS
 
 海外和未知域名的 DoH 默认通过 `🤖 AI Agent` 建立连接，国内域名、直连域名和代理服务器解析则使用国内 DNS。DNS 检测页显示的是递归 DNS 提供商的地址，不会等于家宽出口 IP；关键判断是海外解析是否仍显示中国大陆递归 DNS。

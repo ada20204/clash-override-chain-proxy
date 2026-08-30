@@ -115,6 +115,10 @@ function googleGeositeQuicRejectRule() {
   return "AND,((NETWORK,udp),(DST-PORT,443),(GEOSITE,google)),REJECT";
 }
 
+function appStoreQuicRejectRule() {
+  return "AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN,bag.itunes.apple.com)),REJECT";
+}
+
 function assertTransportAwareDomainRules(rules, domain, tlsTarget) {
   const tlsRule = tcp443DomainRule(domain, tlsTarget);
   const fallbackRule = "DOMAIN-SUFFIX," + domain + "," + EXPECTED.fullProtocolFallbackGroupName;
@@ -483,7 +487,11 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,telegram.org,📲 Telegram");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,github.com,🐙 GitHub");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,steampowered.com,🎮 游戏平台");
+  assertRuleExists(output.rules, appStoreQuicRejectRule());
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,apple.com,🍎 Apple");
+  assert(output.rules.indexOf(appStoreQuicRejectRule()) < output.rules.indexOf(
+    "DOMAIN-SUFFIX,apple.com,🍎 Apple"
+  ), "App Store QUIC 拒绝规则必须优先于 Apple 域名分流");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,icloud.com.cn,🍎 Apple");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,microsoft.com," + EXPECTED.microsoftGroupName);
   assertTransportAwareDomainRules(output.rules, "marketplace.visualstudio.com", "节点选择");
@@ -716,6 +724,14 @@ function testAiQuicRejectCanBeDisabled() {
   }).length, 0, "关闭 rejectAiQuic 后不应生成 AI QUIC 拒绝规则");
   assertRulesMissing(output.rules, [googleGeositeQuicRejectRule()]);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,openai.com," + EXPECTED.aiGroupName);
+}
+
+function testAppStoreQuicRejectCanBeDisabled() {
+  const { output } = runMain(null, function (sandbox) {
+    sandbox.USER_OPTIONS.rejectAppStoreQuic = false;
+  });
+  assertRulesMissing(output.rules, [appStoreQuicRejectRule()]);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,apple.com,🍎 Apple");
 }
 
 function testGoogleTrafficConsistencyCanBeDisabled() {
@@ -1629,6 +1645,7 @@ function testAutoSelectFiltersSubscriptionInfoNodes() {
 testDefaultConfig();
 testTunDnsHijackPreservesExistingEntries();
 testAiQuicRejectCanBeDisabled();
+testAppStoreQuicRejectCanBeDisabled();
 testGoogleTrafficConsistencyCanBeDisabled();
 testFullProtocolFallbackCanBeDisabled();
 testFullProtocolFallbackRequiresExplicitUdp();
