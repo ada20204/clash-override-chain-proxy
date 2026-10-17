@@ -11,7 +11,7 @@ module.exports = {
     cnReturn: [{ name: "阿里云回国", secret: "CN_EXIT_URL", optional: true }], // → 🇨🇳 国内 候选（overseas 默认选第一个）
     relay: { prefer: ["^🇺🇸 Lil 美国09", "^🇺🇸 Large 美国03"], excludePorts: [80, 443] } // 🔗 家宽跳板 排序
   },
-  options: {},                                   // 覆盖 完全覆写.js 的 USER_OPTIONS 任意键（不改共享脚本）
+  options: { front: { excludePorts: [80, 443], excludeKeywords: ["遊戲專用"], prefer: ["^🇺🇸 Lil 美国09", "^🇺🇸 Large 美国03"] } }, // 🔗 前置 候选过滤                                   // 覆盖 完全覆写.js 的 USER_OPTIONS 任意键（不改共享脚本）
   runtime: {
     mixedPort: 7890, bindAddress: "127.0.0.1", allowLan: false,
     controller: "127.0.0.1:9090", secret: "secret:CONTROLLER_SECRET_OVERSEAS_CLOUD",

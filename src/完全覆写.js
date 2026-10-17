@@ -39,8 +39,11 @@ var USER_OPTIONS = {
   location: "cn", // 本机所在位置："cn" 在中国大陆（默认）；"overseas" 在境外。规则对所有主机相同，只有 🇨🇳 国内 / 🌐 国外 / 🐟 兜底 三个策略组的默认选项跟着变
   domesticExit: [], // 🇨🇳 国内 组的回国出口候选：_customProxies 名称、订阅节点或策略组名。overseas 默认选第一个；cn 默认 DIRECT
   // 🔗 前置：一级跳（相当于常驻的 前置代理.js 开关）。订阅节点和 useFrontProxy 的自定义节点 dialer-proxy 都指向它；
-  // 候选 = DIRECT（默认，不走前置）+ _frontProxy 节点 + 未挂前置的普通自定义节点。节点可写 via: "名称" 指定专门的前置。false 时退回旧行为。
+  // 候选 = DIRECT（默认，不走前置）+ _frontProxy 节点 + 本机可直连的全部节点：没挂前置的自定义节点直接用原节点，
+  // 其余（订阅节点等）生成不挂前置的副本「⤴ 原名」，副本只出现在 🔗 前置 里。节点可写 via: "名称" 指定专门的前置。false 时退回旧行为。
   frontGroup: true,
+  // 🔗 前置 候选过滤：excludePorts 端口的节点本机连不上（不生成副本）；excludeKeywords 不当前置；prefer 正则命中的排在 DIRECT 之后。
+  front: { excludePorts: [], excludeKeywords: [], prefer: [] },
   autoSelectGroupName: "自动选择", // 订阅中的自动选择组名（url-test），Smart 内核会自动追加 "(Smart Group)" 后缀
   autoSelectExcludeKeywords: ["公司代理"], // 只过滤自动选择组；公司代理仍会保留在节点选择里供手动使用
   urlTestProbeUrl: "", // 直连/界面健康检查默认测速地址；留空按 location 选择（cn: connect.rom.miui.com，overseas: cp.cloudflare.com）；单个分组可用 testUrl 覆盖
@@ -94,7 +97,8 @@ var BASE = {
     tailscaleProcess: "🧩 Tailscale 进程",
     tailnetDirect: "🧩 Tailnet 内部直连",
     tailscaleExit: "🧩 Tailscale Exit Node",
-    frontGroup: "🔗 前置"
+    frontGroup: "🔗 前置",
+    frontCopyPrefix: "⤴ "
   },
   // 策略组：决定“哪类流量走哪里”，对所有主机相同；默认选项按 location 切换。
   policyNames: {
@@ -3239,6 +3243,80 @@ function ensureFrontGroup(config, frontNodeName, customProxyNames) {
   return groupName;
 }
 
+function getFrontOptions() {
+  var f = USER_OPTIONS.front || {};
+  return { excludePorts: f.excludePorts || [], excludeKeywords: f.excludeKeywords || [], prefer: f.prefer || [] };
+}
+
+// 本机能否直接把它当前置：排除被拦截端口、订阅信息节点、关键词、家宽节点和 dedicated 节点。
+function isFrontEligibleProxy(proxy, opts, excludedLookup) {
+  var name = String(proxy && proxy.name || "");
+  var lowerName = name.toLowerCase();
+  var i;
+  if (!name || excludedLookup[name]) return false;
+  if (name === BASE.nodeNames.home || name === BASE.nodeNames.homeChained) return false;
+  if (name.indexOf(BASE.nodeNames.frontCopyPrefix) === 0) return false;
+  for (i = 0; i < opts.excludePorts.length; i++) {
+    if (Number(opts.excludePorts[i]) === Number(proxy.port)) return false;
+  }
+  for (i = 0; i < opts.excludeKeywords.length; i++) {
+    if (lowerName.indexOf(String(opts.excludeKeywords[i]).toLowerCase()) >= 0) return false;
+  }
+  if (/https?:\/\//i.test(name)) return false;
+  for (i = 0; i < AUTO_SELECT_INFO_NODE_KEYWORDS.length; i++) {
+    if (lowerName.indexOf(String(AUTO_SELECT_INFO_NODE_KEYWORDS[i]).toLowerCase()) >= 0) return false;
+  }
+  return true;
+}
+
+// 所有组建好之后，把本机可直连的节点补进 🔗 前置：
+// 没挂 dialer-proxy 的节点直接用原节点；挂了的生成「⤴ 原名」副本（不挂 dialer-proxy，只进 🔗 前置，不进其它组）。
+// 顺序：[_frontProxy?] DIRECT → prefer 命中 → 自定义节点 → 其余订阅节点。
+function addFrontCandidates(config, frontNodeName, subscriptionNodeNames, customProxyNames, excludedNames) {
+  var groupName = getFrontGroupName();
+  var group = groupName ? findProxyGroupByName(config["proxy-groups"], groupName) : null;
+  var opts = getFrontOptions();
+  var excludedLookup = buildStringLookup(excludedNames || []);
+  var ordered = [];
+  var preferred = [];
+  var customNames = [];
+  var subNames = [];
+  var i;
+  var j;
+  if (!group) return;
+
+  function candidateFor(name) {
+    var proxy = findProxyByName(config.proxies, name);
+    if (!proxy || !isFrontEligibleProxy(proxy, opts, excludedLookup)) return null;
+    if (!proxy["dialer-proxy"]) return proxy.name;
+    var copyName = BASE.nodeNames.frontCopyPrefix + proxy.name;
+    if (!findProxyByName(config.proxies, copyName)) {
+      var copy = JSON.parse(JSON.stringify(proxy));
+      copy.name = copyName;
+      delete copy["dialer-proxy"];
+      appendProxyNode(config, copy);
+    }
+    return copyName;
+  }
+
+  for (i = 0; i < opts.prefer.length; i++) {
+    var re = new RegExp(opts.prefer[i]);
+    for (j = 0; j < subscriptionNodeNames.length; j++) {
+      if (re.test(subscriptionNodeNames[j])) { preferred.push(subscriptionNodeNames[j]); break; }
+    }
+  }
+  for (i = 0; i < (customProxyNames || []).length; i++) customNames.push(customProxyNames[i]);
+  for (i = 0; i < subscriptionNodeNames.length; i++) subNames.push(subscriptionNodeNames[i]);
+
+  var names = uniqueStrings(preferred.concat(customNames).concat(subNames));
+  for (i = 0; i < names.length; i++) {
+    var c = candidateFor(names[i]);
+    if (c) ordered.push(c);
+  }
+  var head = frontNodeName ? [frontNodeName, BASE.ruleTargets.direct] : [BASE.ruleTargets.direct];
+  group.proxies = uniqueStrings(head.concat(ordered));
+}
+
 // 解析家宽节点前一跳应使用的跳板组。
 // 自动选择组已由 ensureAutoSelectGroup 在 main() 最早阶段确保存在。
 function resolveRelayTarget(config) {
@@ -4536,6 +4614,9 @@ function main(config) {
 
   // ⑦ 地区 url-test 组（沉底）
   appendTailGroups(config, anchorResult.regionGroups);
+  // 🔗 前置 补全本机可直连节点（副本最后注入，不会进入任何其它组）
+  addFrontCandidates(config, frontNodeName, subscriptionNodeNames, customProxyNames,
+    collectProxyNames(dedicatedCustomProxies));
   if (customRuleGroups) {
     customRuleGroupRules = injectCustomRuleGroups(config, customRuleGroups, customGroupInsertionIndex);
   }

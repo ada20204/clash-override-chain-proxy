@@ -222,7 +222,15 @@ function testDefaultConfig() {
   // 🔗 前置：一级跳，默认 DIRECT；订阅节点都挂到它上面，家宽节点不挂
   const frontGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 前置"; });
   assert(frontGroup && frontGroup.type === "select", "🔗 前置 组应存在且为 select");
-  assert.deepStrictEqual(Array.from(frontGroup.proxies), ["DIRECT"], "无自定义节点时 🔗 前置 只有 DIRECT");
+  assert.deepStrictEqual(Array.from(frontGroup.proxies),
+    ["DIRECT", "⤴ 🇸🇬 SG Auto 01", "⤴ 🇭🇰 HK Auto 01", "⤴ 🇺🇸 US Auto 01", "⤴ 🇯🇵 JP Auto 01"],
+    "🔗 前置 = DIRECT + 订阅节点的前置副本");
+  output.proxies.filter(function (p) { return p.name.indexOf("⤴ ") === 0; }).forEach(function (copy) {
+    assert.strictEqual(copy["dialer-proxy"], undefined, copy.name + " 副本不挂前置");
+    output["proxy-groups"].forEach(function (g) {
+      if (g.name !== "🔗 前置") assert(g.proxies.indexOf(copy.name) < 0, copy.name + " 不应出现在 " + g.name);
+    });
+  });
   ["🇸🇬 SG Auto 01", "🇺🇸 US Auto 01"].forEach(function (name) {
     const node = output.proxies.find(function (p) { return p.name === name; });
     assert.strictEqual(node["dialer-proxy"], "🔗 前置", name + " 应经 🔗 前置");
@@ -1914,7 +1922,9 @@ function testFrontGroup() {
   });
   const byName = function (n) { return output.proxies.find(function (p) { return p.name === n; }); };
   const front = findGroup(output, "🔗 前置");
-  assert.deepStrictEqual(Array.from(front.proxies), ["DIRECT", "公司"], "候选：DIRECT 在前 + 未挂前置的自定义节点");
+  assert.deepStrictEqual(Array.from(front.proxies).slice(0, 4), ["DIRECT", "公司", "⤴ 经前置", "⤴ 指定"],
+    "候选：DIRECT → 自定义节点（未挂前置用原节点，挂了用副本）→ 订阅副本");
+  assert(front.proxies.indexOf("⤴ 🇸🇬 SG Auto 01") >= 0);
   assert.strictEqual(byName("经前置")["dialer-proxy"], "🔗 前置");
   assert.strictEqual(byName("指定")["dialer-proxy"], "公司", "via 应覆盖默认前置");
   assert(!("via" in byName("指定")), "via 不应进入节点");
@@ -1927,8 +1937,19 @@ function testFrontGroup() {
   const { output: withFront } = runMain(function (config) {
     config._frontProxy = { name: "一级前置", type: "socks5", server: "198.51.100.50", port: 1080, udp: true };
   });
-  assert.deepStrictEqual(Array.from(findGroup(withFront, "🔗 前置").proxies), ["一级前置", "DIRECT"],
+  assert.deepStrictEqual(Array.from(findGroup(withFront, "🔗 前置").proxies).slice(0, 2), ["一级前置", "DIRECT"],
     "配置 _frontProxy（旧 前置代理.js 开启）时它排第一");
+
+  const { output: filtered } = runMain(function (config) {
+    config.proxies[0].port = 443;
+    config.proxies.push({ name: "🇺🇸 Game US | 遊戲專用", type: "ss", udp: true, port: 8388 });
+  }, function (sandbox) {
+    sandbox.USER_OPTIONS.front = { excludePorts: [80, 443], excludeKeywords: ["遊戲專用"], prefer: ["US Auto"] };
+  });
+  const fp = findGroup(filtered, "🔗 前置").proxies;
+  assert.strictEqual(fp[1], "⤴ 🇺🇸 US Auto 01", "prefer 命中的副本排在 DIRECT 之后");
+  assert(fp.indexOf("⤴ 🇸🇬 SG Auto 01") < 0, "excludePorts 的节点不生成副本");
+  assert(fp.every(function (n) { return n.indexOf("遊戲專用") < 0; }), "excludeKeywords 生效");
 
   const { output: legacy } = runMain(function (config) {
     config._frontProxy = { name: "一级前置", type: "socks5", server: "198.51.100.50", port: 1080 };

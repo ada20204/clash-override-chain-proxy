@@ -41,6 +41,7 @@ fs.writeFileSync(path.join(hostsDir, "t1.js"), `module.exports = {
     cnReturn: [{ name: "回国SS", secret: "T_CN" }, { name: "可选出口", secret: "T_MISSING", optional: true }],
     relay: { prefer: ["^🇺🇸 US"], excludePorts: [443] }
   },
+  options: { front: { excludePorts: [443], prefer: ["^🇺🇸 US B"] } },
   runtime: { mixedPort: 17890, controller: "127.0.0.1:19090", secret: "secret:T_CTRL", tun: false },
   selections: { "🤖 AI Agent": "🏠 家宽IP" }
 };\n`);
@@ -66,7 +67,7 @@ assert.deepStrictEqual(G("🐟 兜底").proxies, ["🌐 国外", "🇨🇳 国�
 assert.strictEqual(cfg.rules[cfg.rules.length - 1], "MATCH,🐟 兜底");
 assert.strictEqual(G("🔗 家宽跳板").proxies[0], "🇺🇸 US B", "家宽跳板应优先非 443 美国节点");
 assert(cfg.proxies.some(p => p.name === "家宽IP链式" && p["dialer-proxy"] === "🔗 家宽跳板"));
-assert.deepStrictEqual(G("🔗 前置").proxies, ["DIRECT"], "🔗 前置 默认 DIRECT；dedicated 节点不当前置");
+assert.deepStrictEqual(G("🔗 前置").proxies, ["DIRECT", "⤴ 🇺🇸 US B", "⤴ 🇭🇰 HK A"], "🔗 前置：DIRECT + 可直连副本；443 与 dedicated 节点不进");
 assert(cfg.proxies.filter(p => /^🇺🇸|^🇭🇰/.test(p.name)).every(p => p["dialer-proxy"] === "🔗 前置"), "订阅节点经 🔗 前置");
 const names = cfg["proxy-groups"].map(g => g.name);
 assert(names.indexOf("🐟 兜底") < names.indexOf("🏠 家宽IP") && names.indexOf("🏠 家宽IP") < names.indexOf("🔗 前置"), "策略组段在节点组段之前");
