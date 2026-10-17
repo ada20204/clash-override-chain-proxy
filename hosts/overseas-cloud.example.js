@@ -8,8 +8,8 @@ module.exports = {
   ],
   roles: {
     home: { secret: "HOME_PROXY_URL", optional: true },                 // → 🏠 家宽IP / 家宽IP链式（http 或 socks5 URI）
-    cnReturn: [{ name: "阿里云回国", secret: "CN_EXIT_URL", optional: true }], // → 🇨🇳 回国 候选（DIRECT 自动追加）
-    relay: { prefer: ["^🇺🇸 Lil 美国09", "^🇺🇸 Large 美国03"], excludePorts: [80, 443] } // 🔗 家宽跳板 排序
+    cnReturn: [{ name: "阿里云回国", secret: "CN_EXIT_URL", optional: true }], // → 🇨🇳 国内 候选（overseas 默认选第一个）
+    relay: { excludePorts: [80, 443], excludeKeywords: ["遊戲專用"], prefer: ["^🇺🇸 Lil 美国09"] } // 🔗 前置：80/443 端口节点需中转
   },
   options: {},                                   // 覆盖 完全覆写.js 的 USER_OPTIONS 任意键（不改共享脚本）
   runtime: {
@@ -19,9 +19,11 @@ module.exports = {
   },
   // 主机首次拉取（或旧选择失效）时套用的分组选择；数组表示按顺序取第一个存在的
   selections: {
-    "🔗 家宽跳板": ["🇺🇸 Lil 美国09", "🇺🇸 Large 美国03"],
+    "🔗 前置": "⚡ 前置自动",
     "🏠 家宽IP": "家宽IP链式",
     "🤖 AI Agent": "🏠 家宽IP",
-    "🇨🇳 回国": "阿里云回国"
+    "🇨🇳 国内": "阿里云回国",
+    "🌐 国外": "DIRECT",
+    "🐟 兜底": "🌐 国外"
   }
 };

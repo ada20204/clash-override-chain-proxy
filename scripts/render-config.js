@@ -5,7 +5,7 @@
  *
  *   订阅（拉取 + 本地缓存） → 凭证步骤（主机文件 + secrets → _homeProxy / _customProxies / _customRuleGroups）
  *   → src/完全覆写.js main(config)（USER_OPTIONS 由主机文件覆盖，不改共享脚本）
- *   → 主机偏好（家宽跳板排序）→ runtime（端口、监听、控制器、TUN）→ out/<host>.yaml（600）→ mihomo -t
+ *   → runtime（端口、监听、控制器、TUN）→ out/<host>.yaml（600）→ mihomo -t
  *
  * 用法：
  *   node scripts/render-config.js --host grok-bot            # 渲染 hosts/grok-bot.js
@@ -30,7 +30,7 @@ try { YAML = require("yaml"); } catch (e) {
 
 const ROOT = path.resolve(__dirname, "..");
 const OVERRIDE = path.join(ROOT, "src", "完全覆写.js");
-const HOME_GROUP = "🏠 家宽IP", RELAY_GROUP = "🔗 家宽跳板";
+const RELAY_GROUP = "🔗 前置", DOMESTIC_GROUP = "🇨🇳 国内";
 
 function parseArgs(argv) {
   const a = { hosts: [], hostsDir: path.join(ROOT, "hosts"), out: path.join(ROOT, "out"),
@@ -159,19 +159,6 @@ function runOverride(config, options) {
   return JSON.parse(JSON.stringify(ctx.main(JSON.parse(JSON.stringify(config)))));
 }
 
-function applyRelayPrefs(config, relay) {
-  if (!relay) return;
-  const g = (config["proxy-groups"] || []).find(x => x.name === RELAY_GROUP);
-  if (!g) return;
-  const ex = new Set(relay.excludePorts || []);
-  const ok = n => { const p = config.proxies.find(x => x.name === n); return !p || !ex.has(p.port); };
-  const prefs = (relay.prefer || []).map(re => new RegExp(re))
-    .map(re => config.proxies.find(p => re.test(p.name) && !ex.has(p.port))).filter(Boolean).map(p => p.name);
-  let rest = g.proxies.filter(n => !prefs.includes(n));
-  if (relay.dropExcluded) rest = rest.filter(ok);
-  g.proxies = prefs.concat(rest);
-}
-
 function applyRuntime(config, rt, secrets) {
   rt = rt || {};
   for (const k of ["port", "socks-port", "redir-port", "tproxy-port", "external-ui", "external-ui-url", "external-ui-name",
@@ -243,12 +230,13 @@ async function renderHost(name, args, secrets) {
   if (custom.length) config._customProxies = custom;
   if (host.customRuleGroups) config._customRuleGroups = resolveSecrets(host.customRuleGroups, secrets, []);
   if (cnNames.length) options.domesticExit = cnNames;
+  // roles.relay → USER_OPTIONS.relay（🔗 前置：excludePorts / excludeKeywords / prefer / enable）
+  if (roles.relay) options.relay = Object.assign({}, options.relay || {}, roles.relay);
 
   // 3) 主覆写
   config = runOverride(config, options);
 
-  // 4) 主机偏好 + runtime
-  applyRelayPrefs(config, roles.relay);
+  // 4) runtime
   applyRuntime(config, host.runtime, secrets);
 
   // 5) 输出（内容确定：同样输入 → 同样字节 → 同样 ETag）
@@ -284,8 +272,9 @@ async function renderHost(name, args, secrets) {
   const summary = {
     host: name, out, changed, etag: crypto.createHash("sha256").update(text).digest("hex").slice(0, 16),
     proxies: config.proxies.length, groups: (config["proxy-groups"] || []).length, rules: (config.rules || []).length,
-    home: !!home, cnReturn: g("🇨🇳 回国") ? g("🇨🇳 回国").proxies : null,
-    relayFirst: g(RELAY_GROUP) ? g(RELAY_GROUP).proxies.slice(0, 2) : null,
+    home: !!home, domestic: g(DOMESTIC_GROUP) ? g(DOMESTIC_GROUP).proxies : null,
+    relay: g(RELAY_GROUP) ? { first: g(RELAY_GROUP).proxies.slice(0, 3), candidates: g(RELAY_GROUP).proxies.length } : null,
+    match: (config.rules || []).slice(-1)[0],
     tun: config.tun.enable, mixed: `${config["bind-address"]}:${config["mixed-port"]}`, controller: config["external-controller"],
     publishToken: !!secrets["PUBLISH_TOKEN_" + hostKey(name)], tested: args.test,
   };

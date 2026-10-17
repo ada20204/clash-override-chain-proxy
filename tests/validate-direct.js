@@ -23,7 +23,7 @@ const EXPECTED = {
   homeChainedNodeName: "家宽IP链式",
   relayGroupName:  "自动选择(Smart Group)",
   mediaGroupName:  "🌍 国际媒体",
-  generalEgressGroupName: "🌐 通用出海",
+  generalEgressGroupName: "🌐 国外",
   fullProtocolFallbackGroupName: "🔌 全协议回退",
   japanServicesGroupName: "🇯🇵 日本服务",
   microsoftGroupName: "Ⓜ️ 微软服务",
@@ -128,13 +128,14 @@ function assertTransportAwareDomainRules(rules, domain, tlsTarget) {
     domain + " 的 TCP/443 规则应优先于全协议回退规则");
 }
 
+// 兜底统一为最后一条 MATCH,🐟 兜底；不再有按 TCP/443 拆分的通用兜底。
+const FALLBACK_MATCH = "MATCH,🐟 兜底";
 function assertTransportAwareFallbackRules(rules) {
-  const tlsRule = "AND,((NETWORK,tcp),(DST-PORT,443))," + EXPECTED.generalEgressGroupName;
-  const fallbackRule = "MATCH," + EXPECTED.fullProtocolFallbackGroupName;
-  assertRuleExists(rules, tlsRule);
-  assertRuleExists(rules, fallbackRule);
-  assert(rules.indexOf(tlsRule) < rules.indexOf(fallbackRule),
-    "TCP/443 兜底应优先于其余协议的全协议回退");
+  assert.strictEqual(rules[rules.length - 1], FALLBACK_MATCH, "最后一条规则应为 " + FALLBACK_MATCH);
+  assertRulesMissing(rules, [
+    "AND,((NETWORK,tcp),(DST-PORT,443))," + EXPECTED.generalEgressGroupName,
+    "MATCH," + EXPECTED.fullProtocolFallbackGroupName
+  ]);
 }
 
 function assertRulesMissing(rules, ruleLines) {
@@ -208,15 +209,21 @@ function testDefaultConfig() {
 
   const homeChainedNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeChainedNodeName; });
   assert(homeChainedNode, "存在可用跳板时应额外创建家宽IP链式节点");
-  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 家宽跳板",
+  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 前置",
     "家宽IP链式节点的 dialer-proxy 应指向家宽跳板组");
   assert.strictEqual(homeChainedNode.udp, false, "HTTP 家宽链式节点不应声明 UDP 能力");
 
   // 家宽跳板组存在
-  const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 家宽跳板"; });
-  assert(relayGroup, "家宽跳板组应存在");
+  const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 前置"; });
+  assert(relayGroup, "前置组应存在");
   assert.strictEqual(relayGroup.type, "select");
-  assert(relayGroup.proxies.indexOf(EXPECTED.relayGroupName) >= 0, "家宽跳板应包含自动选择组");
+  assert.strictEqual(relayGroup.proxies[0], "⚡ 前置自动", "前置默认应为 ⚡ 前置自动");
+  ["🇸🇬 SG Auto 01", "🇺🇸 US Auto 01"].forEach(function (name) {
+    assert(relayGroup.proxies.indexOf(name) >= 0, "前置应包含可直连的订阅节点：" + name);
+  });
+  assert(relayGroup.proxies.indexOf(EXPECTED.homeChainedNodeName) < 0, "家宽IP链式不能当前置（防循环）");
+  const relayAutoGroup = output["proxy-groups"].find(function (g) { return g.name === "⚡ 前置自动"; });
+  assert(relayAutoGroup && relayAutoGroup.type === "url-test", "⚡ 前置自动 应为 url-test");
 
   // 家宽IP节点不在节点选择中（在组生成之后注入）
   const nodeSelGroup = output["proxy-groups"].find(function (g) { return g.name === "节点选择"; });
@@ -226,12 +233,16 @@ function testDefaultConfig() {
   const generalEgressGroup = output["proxy-groups"].find(function (g) {
     return g.name === EXPECTED.generalEgressGroupName;
   });
-  assert(generalEgressGroup, "通用出海组应存在");
-  assert.strictEqual(generalEgressGroup.proxies.length, 1,
-    "通用出海不应保留额外出口选项");
-  assert.strictEqual(generalEgressGroup.proxies[0], "节点选择",
-    "通用出海只应复用人工选择结果");
-  assert.strictEqual(generalEgressGroup.hidden, true, "通用出海应作为内部兜底组隐藏");
+  assert(generalEgressGroup, "🌐 国外 组应存在");
+  assert.strictEqual(generalEgressGroup.proxies[0], "节点选择", "cn 下 🌐 国外 默认走节点选择");
+  assert(generalEgressGroup.proxies.indexOf("DIRECT") >= 0, "🌐 国外 应保留 DIRECT 候选");
+  assert.notStrictEqual(generalEgressGroup.hidden, true, "🌐 国外 是可见的策略组");
+  const domesticPolicy = output["proxy-groups"].find(function (g) { return g.name === "🇨🇳 国内"; });
+  assert(domesticPolicy && domesticPolicy.proxies[0] === "DIRECT", "cn 下 🇨🇳 国内 默认 DIRECT");
+  const fallbackPolicy = output["proxy-groups"].find(function (g) { return g.name === "🐟 兜底"; });
+  assert.deepStrictEqual(Array.from(fallbackPolicy.proxies).slice(0, 2), ["🇨🇳 国内", EXPECTED.generalEgressGroupName],
+    "cn 下 🐟 兜底 默认国内");
+  assert.strictEqual(output.rules[output.rules.length - 1], "MATCH,🐟 兜底", "最后一条规则应指向 🐟 兜底");
 
   const fullProtocolFallbackGroup = output["proxy-groups"].find(function (g) {
     return g.name === EXPECTED.fullProtocolFallbackGroupName;
@@ -411,11 +422,11 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "PROCESS-NAME,Codex (Service)," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "PROCESS-NAME,Cursor Helper (Plugin)," + EXPECTED.aiGroupName);
   assert(output.rules.indexOf("PROCESS-NAME,Codex (Service)," + EXPECTED.aiGroupName) <
-      output.rules.indexOf("AND,((NETWORK,tcp),(DST-PORT,443))," + EXPECTED.generalEgressGroupName),
-    "Codex 桌面服务必须优先于通用 TCP/443 回退规则进入 AI Agent");
+      output.rules.indexOf(FALLBACK_MATCH),
+    "Codex 桌面服务必须优先于兜底规则进入 AI Agent");
   assert(output.rules.indexOf("PROCESS-NAME,Cursor Helper (Plugin)," + EXPECTED.aiGroupName) <
-      output.rules.indexOf("AND,((NETWORK,tcp),(DST-PORT,443))," + EXPECTED.generalEgressGroupName),
-    "Cursor 插件进程必须优先于通用 TCP/443 回退规则进入 AI Agent");
+      output.rules.indexOf(FALLBACK_MATCH),
+    "Cursor 插件进程必须优先于兜底规则进入 AI Agent");
 
   // AI QUIC 先拒绝再回退 TCP，避免 HTTP 家宽出口不支持 UDP 时继续匹配到 DIRECT。
   ["openai.com", "chatgpt.com", "anthropic.com", "claude.ai", "gemini.gstatic.com", "assistant.google.com", "accounts.google.com", "accounts.google.ca", "cursor.sh", "cursor.com", "cursorapi.com", "aistudio.google.com"].forEach(function (domain) {
@@ -514,7 +525,11 @@ function testDefaultConfig() {
     "dingtalkapps.com"
   ];
   const overseasDnsDirectOverrides = ["typeless.com"];
-  domesticDnsDirectOverrides.concat(overseasDnsDirectOverrides).forEach(function (domain) {
+  // 国内业务域名统一进 🇨🇳 国内（cn 默认 DIRECT）；海外 DNS 例外仍直接 DIRECT。
+  domesticDnsDirectOverrides.forEach(function (domain) {
+    assertRuleExists(output.rules, "DOMAIN-SUFFIX," + domain + ",🇨🇳 国内");
+  });
+  overseasDnsDirectOverrides.forEach(function (domain) {
     assertRuleExists(output.rules, "DOMAIN-SUFFIX," + domain + ",DIRECT");
   });
   domesticDnsDirectOverrides.forEach(function (domain) {
@@ -541,8 +556,8 @@ function testDefaultConfig() {
   ].forEach(function (domain) {
     assertRulesMissing(output.rules, ["DOMAIN-SUFFIX," + domain + ",DIRECT"]);
   });
-  assertRuleExists(output.rules, "GEOSITE,cn,DIRECT");
-  assertRuleExists(output.rules, "GEOIP,cn,DIRECT,no-resolve");
+  assertRuleExists(output.rules, "GEOSITE,cn,🇨🇳 国内");
+  assertRuleExists(output.rules, "GEOIP,cn,🇨🇳 国内,no-resolve");
 
   [
     "cloudflare.com",
@@ -557,7 +572,7 @@ function testDefaultConfig() {
   ].forEach(function (domain) {
     const tlsRule = tcp443DomainRule(domain, EXPECTED.generalEgressGroupName);
     assertTransportAwareDomainRules(output.rules, domain, EXPECTED.generalEgressGroupName);
-    assert(output.rules.indexOf(tlsRule) < output.rules.indexOf("GEOSITE,cn,DIRECT"),
+    assert(output.rules.indexOf(tlsRule) < output.rules.indexOf("GEOSITE,cn,🇨🇳 国内"),
       domain + " 应在 GeoSite 国内直连规则之前固定进入通用出海");
   });
 
@@ -794,7 +809,7 @@ function testFullProtocolFallbackCanBeDisabled() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,google.com,节点选择");
   assertRuleExists(output.rules, "GEOSITE,googlefcm," + EXPECTED.mediaGroupName);
   assertRuleExists(output.rules, googlePlayMtalkRule(EXPECTED.mediaGroupName));
-  assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
+  assertRuleExists(output.rules, FALLBACK_MATCH);
   assertRulesMissing(output.rules, [
     tcp443DomainRule("google.com", "节点选择"),
     "MATCH," + EXPECTED.fullProtocolFallbackGroupName
@@ -833,7 +848,7 @@ function testHttpFrontProxyExcludesChainedSubscriptionFromFallback() {
   assert.strictEqual(fallbackGroup, undefined,
     "所有订阅节点经 HTTP 前置代理时不应创建全协议回退组");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,gstatic.com,节点选择");
-  assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
+  assertRuleExists(output.rules, FALLBACK_MATCH);
 }
 
 function testFullProtocolFallbackChecksDialerProxyGroupsRecursively() {
@@ -1183,7 +1198,7 @@ function testFrontProxyDoesNotOverrideHomeProxyDialer() {
   assert.strictEqual(homeNode["dialer-proxy"], undefined, "家宽IP真直连节点不应被前置代理覆盖");
 
   const homeChainedNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeChainedNodeName; });
-  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 家宽跳板", "家宽IP链式应继续走家宽跳板");
+  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 前置", "家宽IP链式应继续走家宽跳板");
 
   const subNode = output.proxies.find(function (p) { return p.name === "🇺🇸 US Auto 01"; });
   assert.strictEqual(subNode["dialer-proxy"], "一级前置代理", "订阅节点应走前置代理");
@@ -1291,7 +1306,7 @@ function testProbeUrlsAreSplitByGroupPurpose() {
   const githubGroup = output["proxy-groups"].find(function (g) { return g.name === "🐙 GitHub"; });
   const appleGroup = output["proxy-groups"].find(function (g) { return g.name === "🍎 Apple"; });
   const directGroup = output["proxy-groups"].find(function (g) { return g.name === "🎯 直连"; });
-  const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 家宽跳板"; });
+  const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 前置"; });
   const tailnetGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailnetDirectGroupName; });
 
   assert.strictEqual(autoGroup.url, "https://www.gstatic.com/generate_204",
@@ -1335,7 +1350,7 @@ function testStandaloneCustomRuleGroupsWithoutSubscription() {
   assert(nodeSelGroup, "只有自定义规则组时仍应创建基础节点选择");
   assert(nodeSelGroup.proxies.indexOf("DIRECT") >= 0, "基础节点选择应保留 DIRECT");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,internal.example.test,自定义业务");
-  assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
+  assertRuleExists(output.rules, FALLBACK_MATCH);
 }
 
 function testStandaloneHomeOnlyWithoutSubscription() {
@@ -1347,8 +1362,9 @@ function testStandaloneHomeOnlyWithoutSubscription() {
   assert(homeNode, "无订阅固定 IP 模式应注入家宽IP节点");
   assert.strictEqual(homeNode["dialer-proxy"], undefined, "没有可用跳板时家宽IP不应绑定 dialer-proxy");
 
-  const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 家宽跳板"; });
-  assert(!relayGroup, "没有订阅和自定义跳板时不应创建家宽跳板");
+  const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 前置"; });
+  assert(!relayGroup || relayGroup.proxies.every(function (n) { return n === EXPECTED.homeNodeName; }),
+    "没有订阅和自定义节点时，🔗 前置 最多只有可直连的家宽IP");
 
   const chainGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.chainGroupName; });
   assert(chainGroup, "无订阅固定 IP 模式应创建家宽IP组");
@@ -1408,7 +1424,7 @@ function testProxyServerAddressesUseDirectRules() {
   assertRuleExists(output.rules, "IP-CIDR,203.0.113.10/32,DIRECT,no-resolve");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,edge.example.com,DIRECT");
   assert(output.rules.indexOf("IP-CIDR,203.0.113.10/32,DIRECT,no-resolve") <
-      output.rules.indexOf("MATCH," + EXPECTED.fullProtocolFallbackGroupName),
+      output.rules.indexOf(FALLBACK_MATCH),
     "代理服务器直连规则应在兜底规则之前");
 }
 
@@ -1439,7 +1455,7 @@ function testTailnetDestinationRulesTakePriorityOverFullProtocolFallback() {
   const { output } = runMain(null, function (sandbox) {
     sandbox.USER_OPTIONS.tailscale.subnetCidrs = ["192.168.88.0/24", "fd00:abcd::/64"];
   });
-  const fallbackIndex = output.rules.indexOf("MATCH," + EXPECTED.fullProtocolFallbackGroupName);
+  const fallbackIndex = output.rules.indexOf(FALLBACK_MATCH);
   [
     "IP-CIDR,100.64.0.0/10," + EXPECTED.tailnetDirectGroupName + ",no-resolve",
     "IP-CIDR6,fd7a:115c:a1e0::/48," + EXPECTED.tailnetDirectGroupName + ",no-resolve",
@@ -1615,7 +1631,7 @@ function testFallbackToUrlTestGroup() {
   const homeNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeNodeName; });
   assert.strictEqual(homeNode["dialer-proxy"], undefined, "回退时家宽IP真直连节点不应挂 dialer-proxy");
   const homeChainedNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeChainedNodeName; });
-  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 家宽跳板", "回退时家宽IP链式应指向家宽跳板组");
+  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 前置", "回退时家宽IP链式应指向家宽跳板组");
 }
 
 function testAutoCreateUrlTestGroup() {
@@ -1629,7 +1645,7 @@ function testAutoCreateUrlTestGroup() {
   const homeNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeNodeName; });
   assert.strictEqual(homeNode["dialer-proxy"], undefined, "自建时家宽IP真直连节点不应挂 dialer-proxy");
   const homeChainedNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeChainedNodeName; });
-  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 家宽跳板", "自建时家宽IP链式应指向家宽跳板组");
+  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 前置", "自建时家宽IP链式应指向家宽跳板组");
   const autoGroup = output["proxy-groups"].find(function (g) { return g.name === "自动选择"; });
   assert(autoGroup, "自动选择组应被自动创建");
   assert.strictEqual(autoGroup.type, "url-test");
@@ -1683,7 +1699,7 @@ function testAutoSelectFiltersSubscriptionInfoNodes() {
 
 // ─── location profiles ──────────────────────────────────────────────────────
 
-const DOMESTIC_GROUP = "🇨🇳 回国";
+const DOMESTIC_GROUP = "🇨🇳 国内";
 const DOMESTIC_EXIT  = { name: "阿里云回国", scope: "dedicated", type: "socks5", server: "198.51.100.20", port: 1080, udp: true };
 
 function runOverseas(configMutator, optionMutator) {
@@ -1704,34 +1720,36 @@ function findGroup(output, name) {
 function testLocationDefaultsToCn() {
   const { sandbox, output } = runMain();
   assert.strictEqual(sandbox.USER_OPTIONS.location, "cn");
-  assertRuleExists(output.rules, "GEOSITE,cn,DIRECT");
-  assertRuleExists(output.rules, "GEOIP,cn,DIRECT,no-resolve");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,feishu.net,DIRECT");
-  assert(!findGroup(output, DOMESTIC_GROUP), "cn 默认不创建回国组");
+  assertRuleExists(output.rules, "GEOSITE,cn,🇨🇳 国内");
+  assertRuleExists(output.rules, "GEOIP,cn,🇨🇳 国内,no-resolve");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,feishu.net,🇨🇳 国内");
+  assert.deepStrictEqual(Array.from(findGroup(output, DOMESTIC_GROUP).proxies), ["DIRECT", "节点选择"], "cn 下 🇨🇳 国内 默认 DIRECT");
+  assertRuleExists(output.rules, "GEOSITE,cn," + DOMESTIC_GROUP);
   assert.deepStrictEqual(Array.from(output.dns["default-nameserver"]), ["223.5.5.5", "119.29.29.29"]);
   assert.strictEqual(output.dns["fallback-filter"]["geoip-code"], "CN");
   assert.strictEqual(findGroup(output, "🎯 直连").url, "http://connect.rom.miui.com/generate_204");
   assert.deepStrictEqual(Array.from(findGroup(output, EXPECTED.chainGroupName).proxies),
     [EXPECTED.homeChainedNodeName, EXPECTED.homeNodeName], "cn 下家宽组默认先选链式");
-  assertRuleExists(output.rules, "MATCH," + EXPECTED.fullProtocolFallbackGroupName);
+  assertRuleExists(output.rules, FALLBACK_MATCH);
+  assert.deepStrictEqual(Array.from(findGroup(output, "🐟 兜底").proxies),
+    [DOMESTIC_GROUP, EXPECTED.generalEgressGroupName, EXPECTED.fullProtocolFallbackGroupName]);
 }
 
 function testCnIgnoresDomesticExit() {
-  // cn 下 domesticExit 不生效，未被引用的 dedicated 节点仍应被拒绝。
-  assert.throws(function () {
-    runMain(function (config) {
-      config._customProxies = [Object.assign({}, DOMESTIC_EXIT)];
-    }, function (sandbox) {
-      sandbox.USER_OPTIONS.domesticExit = [DOMESTIC_EXIT.name];
-    });
-  }, /未被 _customRuleGroups\.proxies 引用/);
+  // cn 下 domesticExit 作为 🇨🇳 国内 的手动候选，默认仍 DIRECT。
+  const { output } = runMain(function (config) {
+    config._customProxies = [Object.assign({}, DOMESTIC_EXIT)];
+  }, function (sandbox) {
+    sandbox.USER_OPTIONS.domesticExit = [DOMESTIC_EXIT.name];
+  });
+  assert.deepStrictEqual(Array.from(findGroup(output, DOMESTIC_GROUP).proxies), ["DIRECT", DOMESTIC_EXIT.name, "节点选择"]);
 }
 
 function testOverseasRoutesDomesticTrafficToReturnGroup() {
   const { output } = runOverseas();
   const domesticGroup = findGroup(output, DOMESTIC_GROUP);
   assert(domesticGroup, "overseas 应创建回国组");
-  assert.deepStrictEqual(Array.from(domesticGroup.proxies), [DOMESTIC_EXIT.name, "DIRECT"]);
+  assert.deepStrictEqual(Array.from(domesticGroup.proxies), [DOMESTIC_EXIT.name, "DIRECT", "节点选择"]);
   assert.strictEqual(domesticGroup.url, "http://connect.rom.miui.com/generate_204", "回国组应使用国内测速地址");
   assertRuleExists(output.rules, "GEOSITE,cn," + DOMESTIC_GROUP);
   assertRuleExists(output.rules, "GEOIP,cn," + DOMESTIC_GROUP + ",no-resolve");
@@ -1744,7 +1762,7 @@ function testOverseasRoutesDomesticTrafficToReturnGroup() {
   assert(output.rules.indexOf("IP-CIDR,198.51.100.20/32,DIRECT,no-resolve") <
     output.rules.indexOf("GEOIP,cn," + DOMESTIC_GROUP + ",no-resolve"));
   // dedicated 回国节点不能进入通用出口。
-  ["节点选择", "GLOBAL", EXPECTED.aiGroupName, "🔗 家宽跳板", EXPECTED.mediaGroupName].forEach(function (name) {
+  ["节点选择", "GLOBAL", EXPECTED.aiGroupName, "🔗 前置", EXPECTED.mediaGroupName].forEach(function (name) {
     const group = findGroup(output, name);
     if (!group) return;
     assert(group.proxies.indexOf(DOMESTIC_EXIT.name) < 0, name + " 不应包含回国节点");
@@ -1758,7 +1776,8 @@ function testOverseasRoutesDomesticTrafficToReturnGroup() {
 
 function testOverseasDefaultsPreferDirectEgress() {
   const { output } = runOverseas();
-  assert.deepStrictEqual(Array.from(findGroup(output, EXPECTED.generalEgressGroupName).proxies), ["DIRECT", "节点选择"]);
+  assert.deepStrictEqual(Array.from(findGroup(output, EXPECTED.generalEgressGroupName).proxies).slice(0, 2), ["DIRECT", "节点选择"]);
+  assert.deepStrictEqual(Array.from(findGroup(output, "🐟 兜底").proxies), [EXPECTED.generalEgressGroupName, DOMESTIC_GROUP]);
   assert.strictEqual(findGroup(output, EXPECTED.mediaGroupName).proxies[0], "DIRECT");
   assert.strictEqual(findGroup(output, "🐙 GitHub").proxies[0], "DIRECT");
   assert.notStrictEqual(findGroup(output, EXPECTED.japanServicesGroupName).proxies[0], "DIRECT",
@@ -1766,7 +1785,7 @@ function testOverseasDefaultsPreferDirectEgress() {
   assert.deepStrictEqual(Array.from(findGroup(output, EXPECTED.chainGroupName).proxies),
     [EXPECTED.homeNodeName, EXPECTED.homeChainedNodeName], "overseas 下家宽组默认先选真直连");
   assert(!findGroup(output, EXPECTED.fullProtocolFallbackGroupName), "overseas 默认关闭全协议回退");
-  assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
+  assertRuleExists(output.rules, FALLBACK_MATCH);
   assert.strictEqual(findGroup(output, "🎯 直连").url, "http://cp.cloudflare.com/generate_204");
 }
 
@@ -1790,7 +1809,7 @@ function testOverseasWithoutDomesticExitFallsBackToDirect() {
   const { output } = runMain(null, function (sandbox) {
     sandbox.USER_OPTIONS.location = "overseas";
   });
-  assert.deepStrictEqual(Array.from(findGroup(output, DOMESTIC_GROUP).proxies), ["DIRECT"]);
+  assert.deepStrictEqual(Array.from(findGroup(output, DOMESTIC_GROUP).proxies), ["DIRECT", "节点选择"]);
   assertRuleExists(output.rules, "GEOSITE,cn," + DOMESTIC_GROUP);
 }
 
@@ -1807,7 +1826,7 @@ function testOverseasStandaloneBoxProfile() {
   assert.strictEqual(findGroup(output, EXPECTED.aiGroupName).proxies[0], EXPECTED.chainGroupName);
   assert.strictEqual(findGroup(output, EXPECTED.generalEgressGroupName).proxies[0], "DIRECT");
   assertRuleExists(output.rules, "GEOSITE,cn," + DOMESTIC_GROUP);
-  assert.strictEqual(output.rules[output.rules.length - 1], "MATCH," + EXPECTED.generalEgressGroupName);
+  assert.strictEqual(output.rules[output.rules.length - 1], FALLBACK_MATCH);
 }
 
 function testOverseasExplicitOptionsWin() {
@@ -1843,18 +1862,18 @@ function testLocationRejectsInvalidValues() {
     }, /location 无效/, "仅允许明确的 cn 或 overseas");
   });
   const { output } = runMain(null, function (sandbox) { delete sandbox.USER_OPTIONS.location; });
-  assertRuleExists(output.rules, "GEOSITE,cn,DIRECT");
+  assertRuleExists(output.rules, "GEOSITE,cn,🇨🇳 国内");
 }
 
 function testDomesticExitNormalizesCandidates() {
   const { output } = runOverseas(null, function (sandbox) {
     sandbox.USER_OPTIONS.domesticExit = ["DIRECT", " " + DOMESTIC_EXIT.name + " ", "DIRECT", DOMESTIC_EXIT.name];
   });
-  assert.deepStrictEqual(Array.from(findGroup(output, DOMESTIC_GROUP).proxies), [DOMESTIC_EXIT.name, "DIRECT"]);
+  assert.deepStrictEqual(Array.from(findGroup(output, DOMESTIC_GROUP).proxies), [DOMESTIC_EXIT.name, "DIRECT", "节点选择"]);
   const { output: single } = runOverseas(null, function (sandbox) {
     sandbox.USER_OPTIONS.domesticExit = DOMESTIC_EXIT.name;
   });
-  assert.deepStrictEqual(Array.from(findGroup(single, DOMESTIC_GROUP).proxies), [DOMESTIC_EXIT.name, "DIRECT"]);
+  assert.deepStrictEqual(Array.from(findGroup(single, DOMESTIC_GROUP).proxies), [DOMESTIC_EXIT.name, "DIRECT", "节点选择"]);
 }
 
 function testDomesticExitRejectsInvalidValues() {
@@ -1869,16 +1888,40 @@ function testDomesticExitRejectsInvalidValues() {
 }
 
 function testDomesticExitAllowsForwardReferences() {
-  const choices = ["🇭🇰|香港", EXPECTED.chainGroupName, EXPECTED.aiGroupName, "🔗 家宽跳板"];
+  const choices = ["🇭🇰|香港", EXPECTED.chainGroupName, EXPECTED.aiGroupName, "🔗 前置"];
   const { output } = runMain(null, function (sandbox) {
     sandbox.USER_OPTIONS.location = "overseas";
     sandbox.USER_OPTIONS.domesticExit = choices;
   });
-  assert.deepStrictEqual(Array.from(findGroup(output, DOMESTIC_GROUP).proxies), choices.concat("DIRECT"));
+  assert.deepStrictEqual(Array.from(findGroup(output, DOMESTIC_GROUP).proxies), choices.concat("DIRECT", "节点选择"));
   const { output: custom } = runOverseas(function (config) {
     config._customRuleGroups = [{ name: "回国业务", proxies: [DOMESTIC_EXIT.name], rules: [] }];
   }, function (sandbox) { sandbox.USER_OPTIONS.domesticExit = ["回国业务"]; });
-  assert.deepStrictEqual(Array.from(findGroup(custom, DOMESTIC_GROUP).proxies), ["回国业务", "DIRECT"]);
+  assert.deepStrictEqual(Array.from(findGroup(custom, DOMESTIC_GROUP).proxies), ["回国业务", "DIRECT", "节点选择"]);
+}
+
+// 🔗 前置：excludePorts 上的自定义节点自动经 🔗 前置；via 覆盖；需中转/已挂前置的节点不进候选。
+function testRelayMarksUnreachableNodes() {
+  const { output } = runMain(function (config) {
+    config.proxies.push({ name: "🇺🇸 US 443", type: "ss", server: "192.0.2.9", port: 443, udp: true });
+    config._customProxies = [
+      { name: "N443", type: "http", server: "198.51.100.31", port: 443 },
+      { name: "NVIA", type: "http", server: "198.51.100.32", port: 80, via: "🇺🇸 US Auto 01" },
+      { name: "NOK", type: "socks5", server: "198.51.100.33", port: 1080 }
+    ];
+  }, function (sandbox) {
+    sandbox.USER_OPTIONS.relay = { excludePorts: [80, 443] };
+  });
+  const byName = function (n) { return output.proxies.find(function (p) { return p.name === n; }); };
+  assert.strictEqual(byName("N443")["dialer-proxy"], "🔗 前置", "需中转的自定义节点应自动经 🔗 前置");
+  assert.strictEqual(byName("NVIA")["dialer-proxy"], "🇺🇸 US Auto 01", "via 应覆盖默认前置");
+  assert.strictEqual(byName("NOK")["dialer-proxy"], undefined, "可直连节点不挂前置");
+  assert(!("via" in byName("NVIA")), "via 是管理字段，不应进入节点");
+  const relay = findGroup(output, "🔗 前置").proxies;
+  assert(relay.indexOf("NOK") >= 0, "可直连的自定义节点应进 🔗 前置");
+  ["N443", "NVIA", "🇺🇸 US 443", EXPECTED.homeChainedNodeName].forEach(function (n) {
+    assert(relay.indexOf(n) < 0, n + " 不应进 🔗 前置");
+  });
 }
 
 function testProxyGraphRejectsCycles() {
@@ -2136,5 +2179,6 @@ testCommunityServiceBoundaries();
 testCommunityExactDomainsAndSharedServices();
 testCommunityQuicOptionCoversNewDomains();
 testOverseasPreservesIpv6AndCommunityDnsOptions();
+testRelayMarksUnreachableNodes();
 
 console.log("validate-direct.js: all checks passed");

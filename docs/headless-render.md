@@ -36,7 +36,7 @@ node scripts/serve-configs.js --listen <本机 tailnet IP>:7898
 - 渲染顺序与 Clash Party 一致：先「凭证步骤」（主机文件 + secrets 生成 `_homeProxy` / `_frontProxy` / `_customProxies` / `_customRuleGroups`），再执行 `src/完全覆写.js` 的 `main(config)`。
 - 每台主机的 `location`、`domesticExit`（由 `roles.cnReturn` 生成）、`options` 在渲染时覆盖 `USER_OPTIONS`，不再修改共享脚本。
 - 出口可写 `{ name, secret: "KEY" }`、`{ name, uri: "ss://…" }` 或完整 mihomo 节点；协议字段（ss 的 cipher、vless 的 uuid/reality 等）完整透传。`optional: true` 时缺 secret 跳过。
-- `roles.relay` 可对 `🔗 家宽跳板` 排序：`prefer`（正则）、`excludePorts`。
+- `roles.relay` → `USER_OPTIONS.relay`（`🔗 前置`）：`excludePorts`（这些端口的节点视为需中转，自动经 `🔗 前置`，且不当前置）、`excludeKeywords`（`⚡ 前置自动` 不测的节点）、`prefer`（正则，排在手动候选前面）、`enable`。
 - `runtime` 决定监听端口、`bind-address`、`allow-lan`、控制器地址与 secret、TUN 开关；渲染器会去掉订阅里的其它监听项。
 - `selections` 写入配置头部注释 `# cocp-selections:`，主机首次拉取或旧选择失效时套用。
 - 同样输入产生同样字节，ETag 只在内容变化时改变。日志只打印 secret 的 KEY，不打印值。

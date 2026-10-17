@@ -46,19 +46,19 @@
 2. Tailnet 地址与 `*.ts.net` 保持 Tailscale 直连，MagicDNS 不进入 Fake-IP 或普通上游 DNS。
 3. AI 域名的 UDP/443 与常见 WebRTC STUN UDP 被拒绝，浏览器会回退到 TCP，不把本地 UDP 出口暴露出去。
 4. Claude、OpenAI、Gemini、AI Studio、Antigravity、Kiro、Perplexity、Mistral、xAI 及已覆盖的 AI 进程进入 `🤖 AI Agent`。
-5. 开发服务、通用 Google 服务和未分类国际流量再进入 `节点选择` 或隐藏的 `🌐 通用出海`。
-6. 国内域名/IP 最后按少量显式例外、GeoSite 与 GeoIP 直连；其余流量才进入最终兜底。
+5. 开发服务、通用 Google 服务和明确的境外域名再进入 `节点选择` 或 `🌐 国外`。
+6. 国内域名/IP（少量显式例外、GeoSite 与 GeoIP）进入 `🇨🇳 国内`；其余流量由最后一条 `MATCH,🐟 兜底` 决定走国内还是国外。
 
 国内直连以 Mihomo 的 `GEOSITE,cn` 和 `GEOIP,cn` 为主，不重复维护腾讯、阿里、WPS 等整套域名清单。脚本只显式保留 `rivotek.com`、`larksuite.com`、`larkoffice.com`、`dashscope.aliyuncs.com`、`feishu.net`、`feishucdn.com`、`dingtalkapps.com` 和 `typeless.com`，用于提前兜底或指定合适的 DNS；其中 `typeless.com` 使用海外 DNS，但业务流量仍保持直连。
 
 ### 可选：全协议回退
 
-`USER_OPTIONS.fullProtocolFallback` 默认开启。它只影响原本走 `节点选择`、`🌐 通用出海` 和最终 `MATCH` 的普通流量：
+`USER_OPTIONS.fullProtocolFallback` 默认开启。它只影响原本走 `节点选择`、`🌐 国外` 的普通流量（cn 下 `🐟 兜底` 也多一个 `🔌 全协议回退` 候选）：
 
-- TCP/443 仍使用当前 `节点选择` / `🌐 通用出海` 的选择结果，例如你手动选中的公司代理。
+- TCP/443 仍使用当前 `节点选择` / `🌐 国外` 的选择结果，例如你手动选中的公司代理。
 - HTTP、IMAP、其他 TCP 端口和 UDP 会进入隐藏的 `🔌 全协议回退`。
 - 回退组只收录明确配置 `udp: true` 且完整链路均支持 UDP 的订阅节点或普通自定义出口；HTTP 家宽 IP、HTTP 公司代理，以及经过 HTTP 前置代理的节点不会被放入其中。
-- 如果没有符合条件的节点，回退组不会生成，原有的 `节点选择` / `🌐 通用出海` 行为保持不变。
+- 如果没有符合条件的节点，回退组不会生成，原有的 `节点选择` / `🌐 国外` 行为保持不变。
 - AI Agent、AI DNS、AI QUIC、Tailnet 与已有功能组不使用回退组。
 
 需要恢复旧逻辑时，在 `完全覆写.js` 顶部设置：
@@ -82,7 +82,7 @@ fullProtocolFallback: false
 复制 [`src/出口IP凭证_样本.js`](./src/出口IP凭证_样本.js) 为本地 `出口IP凭证.js`，配置 `_homeProxy`。脚本会生成：
 
 - `🏠 家宽IP`：真直连与可选链式家宽出口的选择组。
-- `🔗 家宽跳板`：家宽链式节点使用的上游选择组。
+- `🔗 前置`：本机可直连节点组成的前置选择组（默认 `⚡ 前置自动` 测速选最快），家宽链式节点和其它“需中转”节点都经它连接。
 - `🤖 AI Agent`：默认优先选择 `🏠 家宽IP`，同时保留普通节点选择。
 
 ### 无订阅与自定义出口
@@ -98,11 +98,11 @@ fullProtocolFallback: false
 - `GLOBAL`：全局模式的选择入口；有前置代理时可在这里显式选择它。
 - `🤖 AI Agent`：AI 域名与 AI 应用的独立出口选择。
 - `🌍 国际媒体`、`📲 Telegram`、`🐙 GitHub`、`Ⓜ️ 微软服务`、`🎮 游戏平台`、`🍎 Apple`、`🎯 直连`：按业务拆分的策略组。
-- `🏠 家宽IP`、`🔗 家宽跳板`：仅在配置家宽 IP 时出现。
+- `🇨🇳 国内`、`🌐 国外`、`🐟 兜底`：位置无关的三个策略组，规则对所有主机相同，只有默认选项随 `location` 变（见下文）。
+- 节点组段：`🏠 家宽IP`（配置家宽 IP 时）、`🔗 前置` / `⚡ 前置自动`、地区 url-test 组。
 
 **隐藏的内部组**
 
-- `🌐 通用出海`：让最终国际流量复用 `节点选择`，不作为额外入口展示。
 - `🔌 全协议回退`：可选的非 443 / UDP 出口能力组。
 - `🇯🇵 日本服务`：LINE、Yahoo Japan、Sony、Nintendo 等优先日本节点的内部组。
 - `🧩 Tailnet 内部直连`、`🧩 Tailscale 控制面`、`🧩 Tailscale 进程`：默认隐藏，排障时可临时显示。
@@ -155,9 +155,17 @@ Sentry、Datadog、Intercom、Statsig、Stripe、WorkOS、SendGrid 等共享基�
 
 海外和未知域名的 DoH 默认通过 `🤖 AI Agent` 建立连接，国内域名、直连域名和代理服务器解析则使用国内 DNS。DNS 检测页显示的是递归 DNS 提供商的地址，不会等于家宽出口 IP；关键判断是海外解析是否仍显示中国大陆递归 DNS。
 
-电脑或云主机在境外时，把 `USER_OPTIONS.location` 改为 `overseas`：国内域名和 IP 改走 `🇨🇳 回国` 组（成员来自 `domesticExit`，例如一台国内 VPS），其余流量默认直连，DNS 也换成本机直连的境外 DoH。默认 `cn` 的输出保持不变，详见[配置教程](docs/配置教程.md#境外使用location)。
+电脑或云主机在境外时，把 `USER_OPTIONS.location` 改为 `overseas`：`🇨🇳 国内` 默认改选回国出口（成员来自 `domesticExit`，例如一台国内 VPS），`🌐 国外` 与 `🐟 兜底` 默认直连/国外，DNS 也换成本机直连的境外 DoH。默认 `cn` 的输出保持不变，详见[配置教程](docs/配置教程.md#境外使用location)。
 
-`🇨🇳 回国` 是手动选择组。`DIRECT` 会去重并放在末尾供手动选择，不表示节点故障后自动切换直连。
+| 策略组 | 谁指向它 | cn 默认 | overseas 默认 |
+|---|---|---|---|
+| `🇨🇳 国内` | 国内例外域名、`GEOSITE,cn`、`GEOIP,cn` | `DIRECT` | `domesticExit` 第一个（如 阿里云回国） |
+| `🌐 国外` | 明确的境外域名 | `节点选择` | `DIRECT` |
+| `🐟 兜底` | 最后一条 `MATCH` | `🇨🇳 国内` | `🌐 国外` |
+
+三个组都是手动选择组，候选一直都在，可随时切换。
+
+**🔗 前置**：节点只按“本机能不能直连”分两类。`USER_OPTIONS.relay.excludePorts` 端口上的节点（例如出口拦截 443 的云主机）视为需中转：自定义节点和家宽IP 自动 `dialer-proxy` 到 `🔗 前置`，自身不进前置候选；节点也可写 `via: "名称"` 指定专门的前置。其余可直连的订阅节点、自定义节点（alivps、公司代理……）都是 `🔗 前置` 的候选，`⚡ 前置自动` 只对订阅节点测速（`relay.excludeKeywords` 可过滤高倍率节点）。
 
 不要同时开启 Clash Party 独立的「DNS 覆写」作为第二个配置入口。它可能在主脚本之后覆盖 `respect-rules`、上游 DNS 与策略路由。
 
