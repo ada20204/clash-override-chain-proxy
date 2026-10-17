@@ -209,20 +209,24 @@ function testDefaultConfig() {
 
   const homeChainedNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeChainedNodeName; });
   assert(homeChainedNode, "存在可用跳板时应额外创建家宽IP链式节点");
-  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 前置",
+  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 家宽跳板",
     "家宽IP链式节点的 dialer-proxy 应指向家宽跳板组");
   assert.strictEqual(homeChainedNode.udp, false, "HTTP 家宽链式节点不应声明 UDP 能力");
 
   // 家宽跳板组存在
-  const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 前置"; });
-  assert(relayGroup, "前置组应存在");
+  const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 家宽跳板"; });
+  assert(relayGroup, "家宽跳板组应存在");
   assert.strictEqual(relayGroup.type, "select");
-  assert.strictEqual(relayGroup.proxies[0], "DIRECT", "🔗 前置 默认 DIRECT（不走前置）");
+  assert(relayGroup.proxies.indexOf(EXPECTED.relayGroupName) >= 0, "家宽跳板应包含自动选择组");
+
+  // 🔗 前置：一级跳，默认 DIRECT；订阅节点都挂到它上面，家宽节点不挂
+  const frontGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 前置"; });
+  assert(frontGroup && frontGroup.type === "select", "🔗 前置 组应存在且为 select");
+  assert.deepStrictEqual(Array.from(frontGroup.proxies), ["DIRECT"], "无自定义节点时 🔗 前置 只有 DIRECT");
   ["🇸🇬 SG Auto 01", "🇺🇸 US Auto 01"].forEach(function (name) {
-    assert(relayGroup.proxies.indexOf(name) >= 0, "前置应包含可直连的订阅节点：" + name);
+    const node = output.proxies.find(function (p) { return p.name === name; });
+    assert.strictEqual(node["dialer-proxy"], "🔗 前置", name + " 应经 🔗 前置");
   });
-  assert(relayGroup.proxies.indexOf(EXPECTED.homeChainedNodeName) < 0, "家宽IP链式不能当前置（防循环）");
-  assert(!output["proxy-groups"].some(function (g) { return g.name === "⚡ 前置自动"; }), "前置不再自动测速跳变");
 
   // 家宽IP节点不在节点选择中（在组生成之后注入）
   const nodeSelGroup = output["proxy-groups"].find(function (g) { return g.name === "节点选择"; });
@@ -1159,12 +1163,13 @@ function testFrontProxyAppliesOnlyToSubscriptionNodes() {
   });
 
   const frontNode = output.proxies.find(function (p) { return p.name === "一级前置代理"; });
+  assert.strictEqual(findGroup(output, "🔗 前置").proxies[0], "一级前置代理", "配置前置代理时 🔗 前置 默认选它");
   assert(frontNode, "前置代理节点应被注入");
   assert.strictEqual(frontNode.udp, false, "未声明 UDP 的 SOCKS5 前置代理不应被推断为支持 UDP");
 
   ["🇸🇬 SG Auto 01", "🇭🇰 HK Auto 01", "🇺🇸 US Auto 01"].forEach(function (name) {
     const node = output.proxies.find(function (p) { return p.name === name; });
-    assert.strictEqual(node["dialer-proxy"], "一级前置代理", name + " 应先走前置代理");
+    assert.strictEqual(node["dialer-proxy"], "🔗 前置", name + " 应先走 🔗 前置（默认选中前置代理节点）");
   });
 
   const customNode = output.proxies.find(function (p) { return p.name === "公司代理"; });
@@ -1197,10 +1202,10 @@ function testFrontProxyDoesNotOverrideHomeProxyDialer() {
   assert.strictEqual(homeNode["dialer-proxy"], undefined, "家宽IP真直连节点不应被前置代理覆盖");
 
   const homeChainedNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeChainedNodeName; });
-  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 前置", "家宽IP链式应继续走家宽跳板");
+  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 家宽跳板", "家宽IP链式应继续走家宽跳板");
 
   const subNode = output.proxies.find(function (p) { return p.name === "🇺🇸 US Auto 01"; });
-  assert.strictEqual(subNode["dialer-proxy"], "一级前置代理", "订阅节点应走前置代理");
+  assert.strictEqual(subNode["dialer-proxy"], "🔗 前置", "订阅节点应走 🔗 前置");
 }
 
 function testStandaloneCustomProxiesWithoutSubscription() {
@@ -1305,7 +1310,7 @@ function testProbeUrlsAreSplitByGroupPurpose() {
   const githubGroup = output["proxy-groups"].find(function (g) { return g.name === "🐙 GitHub"; });
   const appleGroup = output["proxy-groups"].find(function (g) { return g.name === "🍎 Apple"; });
   const directGroup = output["proxy-groups"].find(function (g) { return g.name === "🎯 直连"; });
-  const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 前置"; });
+  const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 家宽跳板"; });
   const tailnetGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.tailnetDirectGroupName; });
 
   assert.strictEqual(autoGroup.url, "https://www.gstatic.com/generate_204",
@@ -1361,9 +1366,8 @@ function testStandaloneHomeOnlyWithoutSubscription() {
   assert(homeNode, "无订阅固定 IP 模式应注入家宽IP节点");
   assert.strictEqual(homeNode["dialer-proxy"], undefined, "没有可用跳板时家宽IP不应绑定 dialer-proxy");
 
-  const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 前置"; });
-  assert(!relayGroup || relayGroup.proxies.every(function (n) { return n === EXPECTED.homeNodeName || n === "DIRECT"; }),
-    "没有订阅和自定义节点时，🔗 前置 只有 DIRECT 和可直连的家宽IP");
+  const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 家宽跳板"; });
+  assert(!relayGroup, "没有订阅和自定义跳板时不应创建家宽跳板");
 
   const chainGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.chainGroupName; });
   assert(chainGroup, "无订阅固定 IP 模式应创建家宽IP组");
@@ -1388,7 +1392,7 @@ function testStandaloneFrontProxyOnlyAppliesWhenRequested() {
   const normalNode = output.proxies.find(function (p) { return p.name === "公司代理"; });
   const chainedNode = output.proxies.find(function (p) { return p.name === "上游节点"; });
   assert.strictEqual(normalNode["dialer-proxy"], undefined, "未声明 useFrontProxy 的自定义节点不应走前置代理");
-  assert.strictEqual(chainedNode["dialer-proxy"], "一级前置代理", "声明 useFrontProxy 的自定义节点应走前置代理");
+  assert.strictEqual(chainedNode["dialer-proxy"], "🔗 前置", "声明 useFrontProxy 的自定义节点应走 🔗 前置");
 
   const nodeSelGroup = output["proxy-groups"].find(function (g) { return g.name === "节点选择"; });
   assert(nodeSelGroup.proxies.indexOf("一级前置代理") < 0, "前置代理不应进入节点选择");
@@ -1630,7 +1634,7 @@ function testFallbackToUrlTestGroup() {
   const homeNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeNodeName; });
   assert.strictEqual(homeNode["dialer-proxy"], undefined, "回退时家宽IP真直连节点不应挂 dialer-proxy");
   const homeChainedNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeChainedNodeName; });
-  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 前置", "回退时家宽IP链式应指向家宽跳板组");
+  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 家宽跳板", "回退时家宽IP链式应指向家宽跳板组");
 }
 
 function testAutoCreateUrlTestGroup() {
@@ -1644,7 +1648,7 @@ function testAutoCreateUrlTestGroup() {
   const homeNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeNodeName; });
   assert.strictEqual(homeNode["dialer-proxy"], undefined, "自建时家宽IP真直连节点不应挂 dialer-proxy");
   const homeChainedNode = output.proxies.find(function (p) { return p.name === EXPECTED.homeChainedNodeName; });
-  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 前置", "自建时家宽IP链式应指向家宽跳板组");
+  assert.strictEqual(homeChainedNode["dialer-proxy"], "🔗 家宽跳板", "自建时家宽IP链式应指向家宽跳板组");
   const autoGroup = output["proxy-groups"].find(function (g) { return g.name === "自动选择"; });
   assert(autoGroup, "自动选择组应被自动创建");
   assert.strictEqual(autoGroup.type, "url-test");
@@ -1761,7 +1765,7 @@ function testOverseasRoutesDomesticTrafficToReturnGroup() {
   assert(output.rules.indexOf("IP-CIDR,198.51.100.20/32,DIRECT,no-resolve") <
     output.rules.indexOf("GEOIP,cn," + DOMESTIC_GROUP + ",no-resolve"));
   // dedicated 回国节点不能进入通用出口。
-  ["节点选择", "GLOBAL", EXPECTED.aiGroupName, "🔗 前置", EXPECTED.mediaGroupName].forEach(function (name) {
+  ["节点选择", "GLOBAL", EXPECTED.aiGroupName, "🔗 家宽跳板", EXPECTED.mediaGroupName].forEach(function (name) {
     const group = findGroup(output, name);
     if (!group) return;
     assert(group.proxies.indexOf(DOMESTIC_EXIT.name) < 0, name + " 不应包含回国节点");
@@ -1887,7 +1891,7 @@ function testDomesticExitRejectsInvalidValues() {
 }
 
 function testDomesticExitAllowsForwardReferences() {
-  const choices = ["🇭🇰|香港", EXPECTED.chainGroupName, EXPECTED.aiGroupName, "🔗 前置"];
+  const choices = ["🇭🇰|香港", EXPECTED.chainGroupName, EXPECTED.aiGroupName, "🔗 家宽跳板"];
   const { output } = runMain(null, function (sandbox) {
     sandbox.USER_OPTIONS.location = "overseas";
     sandbox.USER_OPTIONS.domesticExit = choices;
@@ -1899,28 +1903,39 @@ function testDomesticExitAllowsForwardReferences() {
   assert.deepStrictEqual(Array.from(findGroup(custom, DOMESTIC_GROUP).proxies), ["回国业务", "DIRECT", "节点选择"]);
 }
 
-// 🔗 前置：excludePorts 上的自定义节点自动经 🔗 前置；via 覆盖；需中转/已挂前置的节点不进候选。
-function testRelayMarksUnreachableNodes() {
+// 🔗 前置：订阅节点与 useFrontProxy 节点经它出站；候选为 DIRECT + _frontProxy + 未挂前置的普通自定义节点；via 覆盖。
+function testFrontGroup() {
   const { output } = runMain(function (config) {
-    config.proxies.push({ name: "🇺🇸 US 443", type: "ss", server: "192.0.2.9", port: 443, udp: true });
     config._customProxies = [
-      { name: "N443", type: "http", server: "198.51.100.31", port: 443 },
-      { name: "NVIA", type: "http", server: "198.51.100.32", port: 80, via: "🇺🇸 US Auto 01" },
-      { name: "NOK", type: "socks5", server: "198.51.100.33", port: 1080 }
+      { name: "公司", type: "http", server: "198.51.100.41", port: 3128 },
+      { name: "经前置", type: "socks5", server: "198.51.100.42", port: 1080, useFrontProxy: true },
+      { name: "指定", type: "http", server: "198.51.100.43", port: 8080, via: "公司" }
     ];
-  }, function (sandbox) {
-    sandbox.USER_OPTIONS.relay = { excludePorts: [80, 443] };
   });
   const byName = function (n) { return output.proxies.find(function (p) { return p.name === n; }); };
-  assert.strictEqual(byName("N443")["dialer-proxy"], "🔗 前置", "需中转的自定义节点应自动经 🔗 前置");
-  assert.strictEqual(byName("NVIA")["dialer-proxy"], "🇺🇸 US Auto 01", "via 应覆盖默认前置");
-  assert.strictEqual(byName("NOK")["dialer-proxy"], undefined, "可直连节点不挂前置");
-  assert(!("via" in byName("NVIA")), "via 是管理字段，不应进入节点");
-  const relay = findGroup(output, "🔗 前置").proxies;
-  assert(relay.indexOf("NOK") >= 0, "可直连的自定义节点应进 🔗 前置");
-  ["N443", "NVIA", "🇺🇸 US 443", EXPECTED.homeChainedNodeName].forEach(function (n) {
-    assert(relay.indexOf(n) < 0, n + " 不应进 🔗 前置");
+  const front = findGroup(output, "🔗 前置");
+  assert.deepStrictEqual(Array.from(front.proxies), ["DIRECT", "公司"], "候选：DIRECT 在前 + 未挂前置的自定义节点");
+  assert.strictEqual(byName("经前置")["dialer-proxy"], "🔗 前置");
+  assert.strictEqual(byName("指定")["dialer-proxy"], "公司", "via 应覆盖默认前置");
+  assert(!("via" in byName("指定")), "via 不应进入节点");
+  assert.strictEqual(byName("公司")["dialer-proxy"], undefined, "前置候选自身不挂前置（防循环）");
+  assert.strictEqual(byName(EXPECTED.homeNodeName)["dialer-proxy"], undefined, "家宽IP 不挂前置");
+  assert.strictEqual(byName(EXPECTED.homeChainedNodeName)["dialer-proxy"], "🔗 家宽跳板", "家宽链式仍走家宽跳板");
+  assert(findGroup(output, EXPECTED.fullProtocolFallbackGroupName).proxies.indexOf("🇸🇬 SG Auto 01") >= 0,
+    "前置默认 DIRECT 时订阅节点仍保留全协议能力");
+
+  const { output: withFront } = runMain(function (config) {
+    config._frontProxy = { name: "一级前置", type: "socks5", server: "198.51.100.50", port: 1080, udp: true };
   });
+  assert.deepStrictEqual(Array.from(findGroup(withFront, "🔗 前置").proxies), ["一级前置", "DIRECT"],
+    "配置 _frontProxy（旧 前置代理.js 开启）时它排第一");
+
+  const { output: legacy } = runMain(function (config) {
+    config._frontProxy = { name: "一级前置", type: "socks5", server: "198.51.100.50", port: 1080 };
+  }, function (sandbox) { sandbox.USER_OPTIONS.frontGroup = false; });
+  assert(!findGroup(legacy, "🔗 前置"), "frontGroup=false 不生成 🔗 前置");
+  assert.strictEqual(legacy.proxies.find(function (p) { return p.name === "🇸🇬 SG Auto 01"; })["dialer-proxy"], "一级前置",
+    "frontGroup=false 时沿用旧的单节点前置");
 }
 
 function testProxyGraphRejectsCycles() {
@@ -2178,6 +2193,6 @@ testCommunityServiceBoundaries();
 testCommunityExactDomainsAndSharedServices();
 testCommunityQuicOptionCoversNewDomains();
 testOverseasPreservesIpv6AndCommunityDnsOptions();
-testRelayMarksUnreachableNodes();
+testFrontGroup();
 
 console.log("validate-direct.js: all checks passed");

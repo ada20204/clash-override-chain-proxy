@@ -38,9 +38,9 @@ var USER_OPTIONS = {
   enableIPv6: false, // 是否启用 IPv6；同时控制 Mihomo 全局与 DNS 的 ipv6，默认关闭
   location: "cn", // 本机所在位置："cn" 在中国大陆（默认）；"overseas" 在境外。规则对所有主机相同，只有 🇨🇳 国内 / 🌐 国外 / 🐟 兜底 三个策略组的默认选项跟着变
   domesticExit: [], // 🇨🇳 国内 组的回国出口候选：_customProxies 名称、订阅节点或策略组名。overseas 默认选第一个；cn 默认 DIRECT
-  // 🔗 前置：本机能直连的节点都可以当前置。excludePorts 端口上的节点视为“需中转”（自定义节点/家宽IP 自动 dialer-proxy 到 🔗 前置，且不进前置候选）；
-  // 🔗 前置 是固定选择的 select，默认 DIRECT（不走前置）；excludeKeywords 过滤不想当前置的节点；prefer 为正则字符串，命中的节点排在 DIRECT 之后。节点可写 via: "名称" 指定专门的前置，direct: false 强制标为需中转。
-  relay: { enable: true, excludePorts: [], excludeKeywords: [], prefer: [] },
+  // 🔗 前置：一级跳（相当于常驻的 前置代理.js 开关）。订阅节点和 useFrontProxy 的自定义节点 dialer-proxy 都指向它；
+  // 候选 = DIRECT（默认，不走前置）+ _frontProxy 节点 + 未挂前置的普通自定义节点。节点可写 via: "名称" 指定专门的前置。false 时退回旧行为。
+  frontGroup: true,
   autoSelectGroupName: "自动选择", // 订阅中的自动选择组名（url-test），Smart 内核会自动追加 "(Smart Group)" 后缀
   autoSelectExcludeKeywords: ["公司代理"], // 只过滤自动选择组；公司代理仍会保留在节点选择里供手动使用
   urlTestProbeUrl: "", // 直连/界面健康检查默认测速地址；留空按 location 选择（cn: connect.rom.miui.com，overseas: cp.cloudflare.com）；单个分组可用 testUrl 覆盖
@@ -94,7 +94,7 @@ var BASE = {
     tailscaleProcess: "🧩 Tailscale 进程",
     tailnetDirect: "🧩 Tailnet 内部直连",
     tailscaleExit: "🧩 Tailscale Exit Node",
-    relay: "🔗 前置"
+    frontGroup: "🔗 前置"
   },
   // 策略组：决定“哪类流量走哪里”，对所有主机相同；默认选项按 location 切换。
   policyNames: {
@@ -212,7 +212,7 @@ function resolveProxyUdp(proxyConfig) {
 var PROXY_MANAGEMENT_KEYS = {
   name: true, type: true, server: true, port: true, udp: true, username: true, password: true,
   scope: true, useFrontProxy: true, interfaceName: true, "interface-name": true, "dialer-proxy": true,
-  via: true, direct: true
+  via: true
 };
 
 function copyProtocolFields(source, node) {
@@ -2981,6 +2981,10 @@ function isFullProtocolProxy(proxy, proxyLookup, groupLookup, visitedProxyNames,
 
   dialerProxyName = proxy["dialer-proxy"];
   if (!dialerProxyName) return true;
+  // 🔗 前置 默认 DIRECT：按它的默认候选判断，避免仅因可选的 HTTP 前置候选而丢掉全协议能力
+  if (dialerProxyName === BASE.nodeNames.frontGroup && groupLookup[dialerProxyName]) {
+    dialerProxyName = (groupLookup[dialerProxyName].proxies || [])[0] || BASE.ruleTargets.direct;
+  }
   visited = visitedProxyNames || {};
   if (visited[proxy.name]) return false;
   visited[proxy.name] = true;
@@ -3144,21 +3148,16 @@ function buildHomeProxy(credentials, proxyName, relayGroupName) {
   return node;
 }
 
-// 家宽IP直连节点：先注入（本机可直连时它也是 🔗 前置 的候选）。
-function injectHomeDirectProxy(config, credentials) {
-  appendProxyNode(config, buildHomeProxy(credentials, BASE.nodeNames.home, null));
-}
-
-// 家宽IP链式节点：dialer-proxy 指向 🔗 前置（via 可覆盖）。返回 🏠 家宽IP 组成员顺序。
+// 将家宽IP直连节点和可选链式节点注入主配置。
 function injectHomeProxies(config, credentials, relayGroupName) {
   var chainProxies = [];
-  var dialer = credentials.via || relayGroupName;
-  if (dialer) {
-    appendProxyNode(config, buildHomeProxy(credentials, BASE.nodeNames.homeChained, dialer));
+  appendProxyNode(config, buildHomeProxy(credentials, BASE.nodeNames.home, null));
+  if (relayGroupName) {
+    appendProxyNode(config, buildHomeProxy(credentials, BASE.nodeNames.homeChained, relayGroupName));
     chainProxies.push(BASE.nodeNames.homeChained);
   }
-  // cn 默认先选链式；境外直连家宽更稳，真直连排第一；本机直连不了家宽（端口被拦截）时也先选链式。
-  if (getLocationProfile().homeChainFirst || !isDirectlyReachableSpec(credentials)) {
+  // cn 默认先选链式；境外直连家宽更稳，真直连排第一。
+  if (getLocationProfile().homeChainFirst) {
     chainProxies.push(BASE.nodeNames.home);
   } else {
     chainProxies.unshift(BASE.nodeNames.home);
@@ -3203,14 +3202,51 @@ function injectFrontProxy(config, credentials, subscriptionNodeNames) {
   return frontNode.name;
 }
 
-function bindFrontProxyToSubscriptionNodes(config, frontProxyName, subscriptionNodeNames) {
+// keepExisting：订阅里已自带 dialer-proxy 的节点保持原链路（🔗 前置 组模式）。
+function bindFrontProxyToSubscriptionNodes(config, frontProxyName, subscriptionNodeNames, keepExisting) {
   var subscriptionLookup = buildStringLookup(subscriptionNodeNames);
   for (var i = 0; i < config.proxies.length; i++) {
     var proxy = config.proxies[i];
+    if (keepExisting && proxy["dialer-proxy"]) continue;
     if (subscriptionLookup[proxy.name]) {
       proxy["dialer-proxy"] = frontProxyName;
     }
   }
+}
+
+// 🔗 前置（select）：订阅节点与 useFrontProxy 自定义节点的一级跳。
+// 候选：DIRECT（默认，不走前置）、_frontProxy 节点（配置了就排第一，等同旧 前置代理.js 开启）、未挂 dialer-proxy 的普通自定义节点。
+// 防循环：挂了 🔗 前置 的节点不会成为候选。
+function getFrontGroupName() {
+  return USER_OPTIONS.frontGroup === false ? null : BASE.nodeNames.frontGroup;
+}
+
+function ensureFrontGroup(config, frontNodeName, customProxyNames) {
+  var groupName = getFrontGroupName();
+  var candidates = [];
+  var proxy;
+  if (!groupName) return null;
+  for (var i = 0; i < (customProxyNames || []).length; i++) {
+    proxy = findProxyByName(config.proxies, customProxyNames[i]);
+    if (proxy && !proxy["dialer-proxy"]) candidates.push(proxy.name);
+  }
+  var proxies = frontNodeName
+    ? [frontNodeName, BASE.ruleTargets.direct]
+    : [BASE.ruleTargets.direct];
+  upsertNamedItem(config["proxy-groups"], {
+    name: groupName, type: "select", proxies: uniqueStrings(proxies.concat(candidates)), url: getProxyProbeUrl()
+  });
+  return groupName;
+}
+
+// 解析家宽节点前一跳应使用的跳板组。
+// 自动选择组已由 ensureAutoSelectGroup 在 main() 最早阶段确保存在。
+function resolveRelayTarget(config) {
+  var smartName = USER_OPTIONS.autoSelectGroupName + "(Smart Group)";
+  var baseName  = USER_OPTIONS.autoSelectGroupName;
+  if (hasProxyOrGroup(config, smartName)) return smartName;
+  if (hasProxyOrGroup(config, baseName))  return baseName;
+  throw createUserError("自动选择组不存在，请检查脚本逻辑");
 }
 
 // 返回家宽IP出口组的固定名称。
@@ -3250,107 +3286,37 @@ function ensureAiAgentGroup(config, options) {
   return BASE.nodeNames.aiAgent;
 }
 
-// ---- 🔗 前置 ----
-// 节点只按“本机能不能直连”分两类：能直连的自动成为前置候选；需中转的（端口被本机出口拦截等）
-// 自动 dialer-proxy 到 🔗 前置。不区分订阅节点、alivps、家宽IP、公司代理。
-function getRelayOptions() {
-  var r = USER_OPTIONS.relay || {};
-  return {
-    enable: r.enable !== false,
-    excludePorts: r.excludePorts || [],
-    excludeKeywords: r.excludeKeywords || [],
-    prefer: r.prefer || []
-  };
-}
-
-function isRelayExcludedPort(port) {
-  var ports = getRelayOptions().excludePorts;
-  for (var i = 0; i < ports.length; i++) {
-    if (Number(ports[i]) === Number(port)) return true;
-  }
-  return false;
-}
-
-// 节点配置（自定义节点 / 家宽凭证）在本机是否可直连。
-function isDirectlyReachableSpec(spec) {
-  if (!spec) return false;
-  if (spec.direct === false) return false;
-  if (spec.direct === true) return true;
-  return !isRelayExcludedPort(spec.port);
-}
-
-// 自定义节点 / 家宽节点应挂的前置：via 优先；需中转时用 🔗 前置；否则不挂。
-function resolveNodeDialer(spec) {
-  if (spec.via) return spec.via;
-  if (getRelayOptions().enable && !isDirectlyReachableSpec(spec)) return BASE.nodeNames.relay;
-  return null;
-}
-
-function isBuiltinInfoNodeName(proxyName) {
-  var name = String(proxyName || "");
-  var lowerName = name.toLowerCase();
-  if (/https?:\/\//i.test(name)) return true;
-  for (var i = 0; i < AUTO_SELECT_INFO_NODE_KEYWORDS.length; i++) {
-    if (lowerName.indexOf(String(AUTO_SELECT_INFO_NODE_KEYWORDS[i]).toLowerCase()) >= 0) return true;
-  }
-  return false;
-}
-
-// 防循环：已挂 dialer-proxy 的节点、需中转的节点、家宽IP链式不能当前置。
-function isRelayCandidateProxy(proxy, unreachableLookup) {
-  if (!proxy || !proxy.name) return false;
-  if (proxy["dialer-proxy"]) return false;
-  if (proxy.name === BASE.nodeNames.homeChained) return false;
-  if (unreachableLookup[proxy.name]) return false;
-  if (isRelayExcludedPort(proxy.port)) return false;
-  return !isBuiltinInfoNodeName(proxy.name);
-}
-
-// 生成可见的 🔗 前置（纯 select，固定选择，不自动跳变）：[DIRECT, prefer 命中的节点, 自定义节点, 其余订阅节点]。
-// 默认 DIRECT（不走前置）；本机直连不了需中转节点时，在主机 selections 里固定一个可直连节点。
-function ensureRelayGroups(config, subscriptionNodeNames, unreachableNames) {
-  var opts = getRelayOptions();
-  var unreachableLookup = buildStringLookup(unreachableNames || []);
-  var subscriptionLookup = buildStringLookup(subscriptionNodeNames || []);
-  var subscriptionCandidates = [];
-  var otherCandidates = [];
-  var preferred = [];
-  var proxies;
-  var i;
-  var j;
-  if (!opts.enable) return null;
-  function excludedByKeyword(name) {
-    var lowerName = String(name).toLowerCase();
-    for (var k = 0; k < opts.excludeKeywords.length; k++) {
-      if (lowerName.indexOf(String(opts.excludeKeywords[k]).toLowerCase()) >= 0) return true;
-    }
-    return false;
-  }
-  for (i = 0; i < config.proxies.length; i++) {
-    var proxy = config.proxies[i];
-    if (!isRelayCandidateProxy(proxy, unreachableLookup) || excludedByKeyword(proxy.name)) continue;
-    if (subscriptionLookup[proxy.name]) subscriptionCandidates.push(proxy.name);
-    else otherCandidates.push(proxy.name);
-  }
-  if (subscriptionCandidates.length + otherCandidates.length === 0) return null;
-  for (i = 0; i < opts.prefer.length; i++) {
-    var re = new RegExp(opts.prefer[i]);
-    for (j = 0; j < subscriptionCandidates.length; j++) {
-      if (re.test(subscriptionCandidates[j])) { preferred.push(subscriptionCandidates[j]); break; }
-    }
-  }
-  proxies = uniqueStrings([BASE.ruleTargets.direct].concat(preferred).concat(otherCandidates).concat(subscriptionCandidates));
-  upsertNamedItem(config["proxy-groups"], {
-    name: BASE.nodeNames.relay, type: "select", proxies: proxies, url: getProxyProbeUrl()
-  });
-  return BASE.nodeNames.relay;
-}
-
 // 解析本轮注入所需的关键目标。
-function resolveRoutingTargets(config, relayGroupName) {
+// 新增「🔗 家宽跳板」select 组，成员为 [自动选择, 地区组..., 自定义节点...]，
+// 用户可在界面上手动选择家宽IP走哪条跳板线路。
+function resolveRoutingTargets(config, regionGroupNames, customProxyNames, options) {
+  var opts = options || {};
+  var relayTarget = null;
+  var relayGroupName = null;
+  var relayGroupProxies = [];
+
+  if (opts.enableAutoRelay !== false) {
+    relayTarget = resolveRelayTarget(config);
+    relayGroupProxies.push(relayTarget);
+  }
+  relayGroupProxies = relayGroupProxies
+    .concat(regionGroupNames || [])
+    .concat(customProxyNames || []);
+  relayGroupProxies = uniqueStrings(relayGroupProxies);
+
+  if (relayGroupProxies.length > 0) {
+    relayGroupName = "🔗 家宽跳板";
+    upsertNamedItem(config["proxy-groups"], {
+      name: relayGroupName, type: "select", proxies: relayGroupProxies, url: getProxyProbeUrl()
+    });
+  }
+
+  var chainGroupName = ensureChainGroup();
+
   return {
+    relayTarget: relayTarget,
     relayGroupName: relayGroupName,
-    chainGroupName: ensureChainGroup(),
+    chainGroupName: chainGroupName,
     strictAiTarget: BASE.nodeNames.aiAgent
   };
 }
@@ -3445,13 +3411,13 @@ function buildCustomProxyNode(proxyConfig, frontProxyName) {
   if (proxyConfig.interfaceName || proxyConfig["interface-name"]) {
     node["interface-name"] = proxyConfig.interfaceName || proxyConfig["interface-name"];
   }
-  if (proxyConfig.useFrontProxy) {
+  if (proxyConfig.via) {
+    node["dialer-proxy"] = proxyConfig.via; // 指定专门的前置
+  } else if (proxyConfig.useFrontProxy) {
     if (!frontProxyName) {
       throw createUserError("自定义出口 " + proxyConfig.name + " 启用了 useFrontProxy，但未配置前置代理");
     }
     node["dialer-proxy"] = frontProxyName;
-  } else if (resolveNodeDialer(proxyConfig)) {
-    node["dialer-proxy"] = resolveNodeDialer(proxyConfig); // via 或需中转 → 🔗 前置
   }
   copyProtocolFields(proxyConfig, node);
   return node;
@@ -4393,7 +4359,7 @@ function validateManagedRouting(config, routingTargets) {
   }
   if (routingTargets.relayGroupName && !hasProxyOrGroup(config, routingTargets.relayGroupName)) {
     throw createUserError(
-      "前置组 \"" + routingTargets.relayGroupName + "\" 不存在，请检查代理组注入逻辑"
+      "家宽跳板组 \"" + routingTargets.relayGroupName + "\" 不存在，请检查代理组注入逻辑"
     );
   }
 
@@ -4405,14 +4371,14 @@ function validateManagedRouting(config, routingTargets) {
     throw createUserError("家宽IP真直连节点不应绑定 dialer-proxy，请检查代理链路注入逻辑");
   }
   homeChainedProxy = findProxyByName(config.proxies, BASE.nodeNames.homeChained);
-  if (routingTargets.homeDialer) {
+  if (routingTargets.relayGroupName) {
     if (!homeChainedProxy ||
-        homeChainedProxy["dialer-proxy"] !== routingTargets.homeDialer) {
-      throw createUserError("家宽IP链式节点未正确绑定到前置，请检查代理链路注入逻辑");
+        homeChainedProxy["dialer-proxy"] !== routingTargets.relayGroupName) {
+      throw createUserError("家宽IP链式节点未正确绑定到家宽跳板组，请检查代理链路注入逻辑");
     }
   }
-  if (!routingTargets.homeDialer && homeChainedProxy) {
-    throw createUserError("没有可用前置时不应创建家宽IP链式节点，请检查代理链路注入逻辑");
+  if (!routingTargets.relayGroupName && homeChainedProxy) {
+    throw createUserError("没有可用家宽跳板时不应创建家宽IP链式节点，请检查代理链路注入逻辑");
   }
 
   chainGroup = findProxyGroupByName(config["proxy-groups"], routingTargets.chainGroupName);
@@ -4485,14 +4451,21 @@ function main(config) {
       (!customRuleGroups || customRuleGroups.length === 0)) {
     throw createUserError("未检测到订阅节点，也未配置 _customProxies 或 _homeProxy。请导入订阅，或使用 出口IP凭证.js 添加公司节点/固定 IP。");
   }
+  var frontNodeName = null;
   if (frontProxy) {
-    frontProxyName = injectFrontProxy(config, frontProxy, subscriptionNodeNames);
-    bindFrontProxyToSubscriptionNodes(config, frontProxyName, subscriptionNodeNames);
+    frontNodeName = injectFrontProxy(config, frontProxy, subscriptionNodeNames);
+    frontProxyName = frontNodeName;
+  }
+  // 有 🔗 前置 组时，订阅节点和 useFrontProxy 节点都挂到组上；否则沿用旧的单节点前置。
+  var frontDialer = getFrontGroupName() || frontNodeName;
+  if (frontDialer && hasSubscriptionNodes) {
+    bindFrontProxyToSubscriptionNodes(config, frontDialer, subscriptionNodeNames, !!getFrontGroupName());
   }
   if (ordinaryCustomProxies.length > 0) {
-    customProxyNames = injectCustomProxies(config, ordinaryCustomProxies, frontProxyName);
+    customProxyNames = injectCustomProxies(config, ordinaryCustomProxies, frontDialer);
   }
   resetSubscriptionGroupsAndRules(config);
+  ensureFrontGroup(config, frontNodeName, customProxyNames);
 
   // ① 自动选择组（最上面）：订阅有就用，没有就自建 url-test
   if (!standaloneMode) ensureAutoSelectGroup(config);
@@ -4529,29 +4502,19 @@ function main(config) {
   ensureTailscaleMonitorGroups(config);
   if (dedicatedCustomProxies.length > 0) {
     validateDedicatedProxyNameAvailability(config, dedicatedCustomProxies, customRuleGroups);
-    injectCustomProxies(config, dedicatedCustomProxies, frontProxyName);
+    injectCustomProxies(config, dedicatedCustomProxies, frontDialer);
   }
   customGroupInsertionIndex = config["proxy-groups"].length;
   ensureDomesticGroup(config);
   ensureFallbackPolicyGroup(config, fullProtocolTarget);
 
-  // ⑤ 🔗 前置（本机可直连节点）+ 家宽出口（有凭证时）
+  // ⑤ 家宽出口 + 跳板组（有凭证时）
   var chainGroupName = null;
-  var unreachableNames = [];
   if (hasHomeProxy) {
-    injectHomeDirectProxy(config, credentials);
-    if (!isDirectlyReachableSpec(credentials)) unreachableNames.push(BASE.nodeNames.home);
-  }
-  // dedicated 节点只给引用它的规则组用，不当前置
-  var relayGroupName = ensureRelayGroups(config, subscriptionNodeNames,
-    unreachableNames.concat(collectProxyNames(dedicatedCustomProxies)));
-  assertRelayReferencesResolved(config, relayGroupName);
-  if (hasHomeProxy) {
-    // 防循环：家宽IP链式不能拿家宽IP自己当前置；🔗 前置里只有家宽IP 时不生成链式节点。
-    var homeRelay = relayHasCandidateOtherThan(config, relayGroupName, BASE.nodeNames.home) ? relayGroupName : null;
-    routingTargets = resolveRoutingTargets(config, homeRelay);
-    routingTargets.homeDialer = credentials.via || homeRelay;
-    routingTargets.chainProxies = injectHomeProxies(config, credentials, homeRelay);
+    routingTargets = resolveRoutingTargets(config, regionGroupNames, customProxyNames, {
+      enableAutoRelay: !standaloneMode
+    });
+    routingTargets.chainProxies = injectHomeProxies(config, credentials, routingTargets.relayGroupName);
     chainGroupName = ensureChainGroupWithProxies(config, routingTargets.chainProxies);
     routingTargets.chainGroupName = chainGroupName;
     // 将 🏠 家宽IP 添加到节点选择和 GLOBAL 中（在 DIRECT 之前）
@@ -4603,33 +4566,13 @@ function main(config) {
   return config;
 }
 
-function relayHasCandidateOtherThan(config, relayGroupName, name) {
-  var group = relayGroupName ? findProxyGroupByName(config["proxy-groups"], relayGroupName) : null;
-  if (!group) return false;
-  for (var i = 0; i < group.proxies.length; i++) {
-    if (group.proxies[i] !== name && group.proxies[i] !== BASE.ruleTargets.direct) return true;
-  }
-  return false;
-}
-
-// 需中转的节点引用了 🔗 前置，但本机没有任何可直连候选。
-function assertRelayReferencesResolved(config, relayGroupName) {
-  if (relayGroupName) return;
-  for (var i = 0; i < config.proxies.length; i++) {
-    if (config.proxies[i]["dialer-proxy"] === BASE.nodeNames.relay) {
-      throw createUserError("节点 " + config.proxies[i].name + " 需要经 " + BASE.nodeNames.relay +
-        " 中转，但本机没有可直连的前置候选（或 relay.enable=false）；可给它写 via 指定前置");
-    }
-  }
-}
-
 // 面板顺序：入口（自动选择/节点选择/GLOBAL）→ 策略组段（AI Agent、功能组、自定义规则组、国内/国外/兜底）
-// → 隐藏组 → 节点组段（🏠 家宽IP、🔗 前置、🔌 全协议回退、地区组）。同段内保持原顺序。
+// → 隐藏组 → 节点组段（🏠 家宽IP、🔗 家宽跳板、🔗 前置、🔌 全协议回退、地区组）。同段内保持原顺序。
 function orderProxyGroups(config) {
   var groups = config["proxy-groups"];
   var autoNames = [USER_OPTIONS.autoSelectGroupName, USER_OPTIONS.autoSelectGroupName + "(Smart Group)"];
   var policyTail = [BASE.policyNames.domestic, BASE.policyNames.overseas, BASE.policyNames.fallback];
-  var nodeGroups = [ensureChainGroup(), BASE.nodeNames.relay, BASE.nodeNames.fullProtocolFallback];
+  var nodeGroups = [ensureChainGroup(), "🔗 家宽跳板", BASE.nodeNames.frontGroup, BASE.nodeNames.fullProtocolFallback];
   function rank(g) {
     if (autoNames.indexOf(g.name) >= 0 || g.name === "节点选择" || g.name === "GLOBAL") return 0;
     if (g.name === BASE.nodeNames.aiAgent) return 1;

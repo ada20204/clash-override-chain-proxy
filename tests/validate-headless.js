@@ -64,15 +64,10 @@ assert.deepStrictEqual(G("🇨🇳 国内").proxies, ["回国SS", "DIRECT", "节
 assert.deepStrictEqual(G("🌐 国外").proxies.slice(0, 2), ["DIRECT", "节点选择"]);
 assert.deepStrictEqual(G("🐟 兜底").proxies, ["🌐 国外", "🇨🇳 国内"]);
 assert.strictEqual(cfg.rules[cfg.rules.length - 1], "MATCH,🐟 兜底");
-const relay = G("🔗 前置").proxies;
-assert.strictEqual(G("🔗 前置").type, "select");
-assert.deepStrictEqual(relay.slice(0, 2), ["DIRECT", "🇺🇸 US B"], "前置默认 DIRECT，prefer 命中的节点紧随其后");
-assert(!cfg["proxy-groups"].some(g => g.name === "⚡ 前置自动"), "不再生成自动测速前置");
-assert(!relay.includes("🇺🇸 US A"), "excludePorts(443) 的节点不能当前置");
-assert(!relay.includes("回国SS"), "dedicated 节点不当前置");
-assert(!relay.includes("家宽IP") && !relay.includes("家宽IP链式"), "需中转的家宽IP / 链式节点不能当前置");
-assert(cfg.proxies.some(p => p.name === "家宽IP链式" && p["dialer-proxy"] === "🔗 前置"));
-assert.deepStrictEqual(G("🏠 家宽IP").proxies, ["家宽IP链式", "家宽IP"], "家宽端口被拦截时默认链式");
+assert.strictEqual(G("🔗 家宽跳板").proxies[0], "🇺🇸 US B", "家宽跳板应优先非 443 美国节点");
+assert(cfg.proxies.some(p => p.name === "家宽IP链式" && p["dialer-proxy"] === "🔗 家宽跳板"));
+assert.deepStrictEqual(G("🔗 前置").proxies, ["DIRECT"], "🔗 前置 默认 DIRECT；dedicated 节点不当前置");
+assert(cfg.proxies.filter(p => /^🇺🇸|^🇭🇰/.test(p.name)).every(p => p["dialer-proxy"] === "🔗 前置"), "订阅节点经 🔗 前置");
 const names = cfg["proxy-groups"].map(g => g.name);
 assert(names.indexOf("🐟 兜底") < names.indexOf("🏠 家宽IP") && names.indexOf("🏠 家宽IP") < names.indexOf("🔗 前置"), "策略组段在节点组段之前");
 assert.deepStrictEqual([cfg["mixed-port"], cfg["bind-address"], cfg["allow-lan"], cfg["external-controller"], cfg.secret, cfg.tun.enable],

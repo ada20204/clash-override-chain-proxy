@@ -9,7 +9,7 @@ module.exports = {
   roles: {
     home: { secret: "HOME_PROXY_URL", optional: true },                 // → 🏠 家宽IP / 家宽IP链式（http 或 socks5 URI）
     cnReturn: [{ name: "阿里云回国", secret: "CN_EXIT_URL", optional: true }], // → 🇨🇳 国内 候选（overseas 默认选第一个）
-    relay: { excludePorts: [80, 443], excludeKeywords: ["遊戲專用"], prefer: ["^🇺🇸 Lil 美国09"] } // 🔗 前置：80/443 端口节点需中转
+    relay: { prefer: ["^🇺🇸 Lil 美国09", "^🇺🇸 Large 美国03"], excludePorts: [80, 443] } // 🔗 家宽跳板 排序
   },
   options: {},                                   // 覆盖 完全覆写.js 的 USER_OPTIONS 任意键（不改共享脚本）
   runtime: {
@@ -19,7 +19,7 @@ module.exports = {
   },
   // 主机首次拉取（或旧选择失效）时套用的分组选择；数组表示按顺序取第一个存在的
   selections: {
-    "🔗 前置": ["🇺🇸 Lil 美国09", "🇺🇸 Large 美国03"],   // 默认 DIRECT；本机 443 被拦截，必须固定一个可直连节点
+    "🔗 家宽跳板": ["🇺🇸 Lil 美国09", "🇺🇸 Large 美国03"],
     "🏠 家宽IP": "家宽IP链式",
     "🤖 AI Agent": "🏠 家宽IP",
     "🇨🇳 国内": "阿里云回国",
