@@ -2,7 +2,7 @@
 # mihomo-pull.sh：主机侧拉取。从发布器拉本机配置 → mihomo -t 校验 → 原子替换 → PUT /configs 热重载 → 恢复分组选择。
 # 失败时保留旧配置（重载失败会回滚到旧文件并再次重载）。未变化（304）时什么都不做。
 #
-# 用法：mihomo-pull.sh [ENV_FILE]      默认 ENV_FILE=${MIHOMO_PULL_ENV:-$HOME/.config/mihomo-pull.env}
+# 用法：mihomo-pull.sh [--apply-selections] [ENV_FILE]      默认 ENV_FILE=${MIHOMO_PULL_ENV:-$HOME/.config/mihomo-pull.env}
 # ENV_FILE（chmod 600）示例：
 #   PULL_URL=http://100.x.y.z:7898/myhost.yaml
 #   PULL_TOKEN=<本机 publish token>
@@ -13,6 +13,7 @@
 #   CONTROLLER=127.0.0.1:9090              # 可选；默认读配置里的 external-controller
 # 依赖：bash、curl、python3（解析控制器 JSON）。
 set -uo pipefail
+APPLY_ONLY=; [ "${1:-}" = "--apply-selections" ] && { APPLY_ONLY=1; shift; }   # 只把配置头部的默认选择套到运行中的内核
 ENV_FILE=${1:-${MIHOMO_PULL_ENV:-$HOME/.config/mihomo-pull.env}}
 [ -f "$ENV_FILE" ] || { echo "mihomo-pull: 缺少 $ENV_FILE" >&2; exit 2; }
 # shellcheck disable=SC1090
@@ -60,6 +61,8 @@ for g,v in cur.items():
 }
 rule_count() { awk '/^rules:/{r=1;next} r&&/^[^ #-]/{r=0} r&&/^ *- /{n++} END{print n+0}' "$1"; }
 reload() { api "$1" PUT '/configs?force=true' "$(python3 -c 'import json,sys;print(json.dumps({"path":sys.argv[1]}))' "$2")" >/dev/null; }
+
+if [ -n "$APPLY_ONLY" ]; then restore_selections "$MIHOMO_CONFIG" "{}"; exit 0; fi
 
 # 1) 拉取（带 ETag）
 ETAG_FILE=$STATE_DIR/etag; NEW=$STATE_DIR/config.new.yaml; HDR=$STATE_DIR/headers

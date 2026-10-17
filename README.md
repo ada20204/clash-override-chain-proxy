@@ -15,6 +15,8 @@
 
 ## 从这里开始
 
+> 多台机器、或不想安装 Clash Party：默认用 [headless 渲染 + 主机拉取](#默认工作流headless-渲染--主机拉取不需要-clash-party)，一台主机渲染，各主机 mihomo 内核自己拉取并热重载。下面是单机在 Clash Party 里直接导入脚本的用法。
+
 只想先让分流工作起来，不需要配置家宽 IP 或自定义节点：
 
 1. 在 Clash Party 的覆写列表导入 [`src/完全覆写.js`](./src/完全覆写.js)。
@@ -165,6 +167,29 @@ Sentry、Datadog、Intercom、Statsig、Stripe、WorkOS、SendGrid 等共享基�
 
 Exit Node 转发流量默认继续使用正常分流规则。只有明确要把 Exit Node 转发流量强制指定到某个目标时，才开启 `forceExitNodeTraffic`。
 
+## 默认工作流：headless 渲染 + 主机拉取（不需要 Clash Party）
+
+一台渲染主机持有秘密，按主机文件为每台机器渲染一份通用 mihomo 配置；各主机的 mihomo 内核通过 tailnet 拉取自己的那一份并热重载。Clash Party 变为可选的查看器，或继续按下文「导入顺序」自己跑覆写。
+
+```mermaid
+flowchart LR
+  A["secrets.env + hosts/&lt;host&gt;.js"] --> B["render-config.js<br/>订阅 → 凭证步骤 → 完全覆写.js → runtime → mihomo -t"]
+  B --> C["out/&lt;host&gt;.yaml"] --> D["serve-configs.js<br/>tailnet only · 每主机 token · ETag"]
+  D --> E["主机 mihomo-pull.sh<br/>304 跳过 / 校验 → 替换 → PUT /configs → 恢复选择"]
+```
+
+```bash
+npm install
+cp secrets.env.example secrets.env && chmod 600 secrets.env
+cp hosts/overseas-cloud.example.js hosts/myhost.js
+node scripts/render-config.js --host myhost            # out/myhost.yaml，自动 mihomo -t
+node scripts/serve-configs.js --listen 100.x.y.z:7898  # 渲染主机的 tailnet IP
+# 目标主机：
+mihomo-pull.sh /etc/mihomo-pull.env                    # 配合 examples/systemd 的 timer 或 cron
+```
+
+完整说明（主机文件字段、回滚与选择恢复、安全边界）见 [docs/headless-render.md](./docs/headless-render.md)。
+
 ## 导入顺序
 
 按需导入，主脚本始终放在最后：
@@ -204,6 +229,7 @@ node --check src/完全覆写.js
 node tests/validate-direct.js
 node tests/validate.js
 node tests/validate-community.js
+node tests/validate-headless.js        # 需先 npm install
 node scripts/sync-community-rules.js --check
 python3 -m py_compile scripts/proxy-reliability-test.py
 node scripts/check-claude-rules.js
@@ -227,8 +253,13 @@ tests/
   validate-direct.js       主覆写行为与回归测试
   validate.js              原始链式代理脚本的兼容性测试
   validate-community.js    社区解析、分类边界与增量更新测试
+  validate-headless.js     headless 渲染器回归（URI 解析、字段透传、runtime、ETag 稳定）
 
 scripts/
+  render-config.js         headless 渲染：每台主机一份 mihomo 配置（不需要 Clash Party）
+  serve-configs.js         tailnet 配置发布器（每主机 token、ETag/304）
+  mihomo-pull.sh           主机侧拉取、校验、热重载、回滚、恢复选择
+  lib/proxy-uri.js         代理 URI 解析（http/socks5/ss/vless/trojan/hy2）
   update-interface-name.js 自动探测并写入 Tailscale 网卡名
   proxy-reliability-test.py 批量测试出口代理稳定性
   check-claude-rules.js    检查 Claude/Anthropic 域名与 CIDR 覆盖
@@ -240,7 +271,13 @@ rules/
   community.snapshot.json 固定上游版本的完整规则快照
   community-update-history.json 追加式更新历史
 
+hosts/
+  *.example.js             主机文件样例（真实 hosts/*.js 不进 git）
+
+examples/                  mihomo-pull 的 systemd timer、cron 与 env 样例
+
 docs/
+  headless-render.md       默认工作流：渲染 → 发布 → 拉取 → 热重载
   配置教程.md              面向首次使用者的完整操作说明
   规则维护与调研记录.md    调查证据与后续增量维护步骤
 ```
