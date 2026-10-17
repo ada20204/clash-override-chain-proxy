@@ -109,7 +109,31 @@ fullProtocolFallback: false
 
 自定义业务规则可以覆盖普通服务分类，但不能覆盖代理服务器直连、Tailnet 基础路由、Google/AI 一致性及 QUIC/WebRTC 防泄漏规则。出现同类型、同匹配值的冲突时，脚本会直接指出冲突规则并停止生成配置。
 
+节点与代理组的名称必须全局唯一，自定义配置不能覆盖同名订阅节点或受管组。脚本会在全部组创建后检查显式成员和 `dialer-proxy` 的引用，缺失出口和循环链路会显示具体路径。
+
 ## AI、DNS 与隐私边界
+
+### IPv6 开关
+
+`完全覆写.js` 顶部的 `USER_OPTIONS.enableIPv6` 默认是 `false`，生成配置时同时设置全局 `ipv6: false` 和 `dns.ipv6: false`，覆盖订阅原有值。需要启用时改为 `true`，两项会同步开启。该开关适用于订阅和无订阅模式，控制 Mihomo 配置；系统网卡和 Tailscale 的 IPv6 设置由各自管理。
+
+修改后重新加载覆写，检查实际配置中的这两项是否一致。
+
+### 社区规则与增量维护
+
+AI、国际媒体、Telegram/Discord 和 GitHub 的基础域名来自社区维护清单，更新时固定上游提交并内嵌到脚本。Muse / Meta AI、Llama、Microsoft Copilot 和 GitHub Copilot 优先进入 `🤖 AI Agent`；普通 Facebook、Instagram、WhatsApp、YouTube 继续使用 `🌍 国际媒体`。精确域名不会自动扩大为后缀，共享登录、CDN 和遥测按记录中的策略处理。
+
+来源、过滤理由、这次调查的证据与后续步骤见 [规则维护与调研记录](./docs/规则维护与调研记录.md)。维护流程：
+
+```bash
+node scripts/sync-community-rules.js --dry-run
+node scripts/sync-community-rules.js --refresh
+node scripts/sync-community-rules.js --check
+node tests/validate-community.js
+node tests/validate-direct.js
+```
+
+离线或仅调整本地分类策略时使用 `--render`。不要手工修改主脚本中的生成区段；工具会记录每次规则增删和上游版本。
 
 ### AI Agent
 
@@ -128,6 +152,10 @@ Sentry、Datadog、Intercom、Statsig、Stripe、WorkOS、SendGrid 等共享基�
 ### DNS
 
 海外和未知域名的 DoH 默认通过 `🤖 AI Agent` 建立连接，国内域名、直连域名和代理服务器解析则使用国内 DNS。DNS 检测页显示的是递归 DNS 提供商的地址，不会等于家宽出口 IP；关键判断是海外解析是否仍显示中国大陆递归 DNS。
+
+电脑或云主机在境外时，把 `USER_OPTIONS.location` 改为 `overseas`：国内域名和 IP 改走 `🇨🇳 回国` 组（成员来自 `domesticExit`，例如一台国内 VPS），其余流量默认直连，DNS 也换成本机直连的境外 DoH。默认 `cn` 的输出保持不变，详见[配置教程](docs/配置教程.md#境外使用location)。
+
+`🇨🇳 回国` 是手动选择组。`DIRECT` 会去重并放在末尾供手动选择，不表示节点故障后自动切换直连。
 
 不要同时开启 Clash Party 独立的「DNS 覆写」作为第二个配置入口。它可能在主脚本之后覆盖 `respect-rules`、上游 DNS 与策略路由。
 
@@ -175,11 +203,13 @@ Exit Node 转发流量默认继续使用正常分流规则。只有明确要把 
 node --check src/完全覆写.js
 node tests/validate-direct.js
 node tests/validate.js
+node tests/validate-community.js
+node scripts/sync-community-rules.js --check
 python3 -m py_compile scripts/proxy-reliability-test.py
 node scripts/check-claude-rules.js
 ```
 
-`check-claude-rules.js` 会把当前 Claude/Anthropic 规则与参考页的具体域名、CIDR 比对。关键词、ASN 和 GeoSite 建议只输出提示，不会自动扩大匹配范围。
+`check-claude-rules.js` 会把当前内嵌 AI 规则和本地 Anthropic 补充与参考页的具体域名、CIDR 比对，保留精确/后缀匹配的区别。关键词、ASN 和 GeoSite 建议只输出提示，不会自动扩大匹配范围。
 
 对家宽 IP、公司代理或自定义 HTTP/SOCKS5 出口，可使用 [`scripts/proxy-reliability-test.py`](./scripts/proxy-reliability-test.py) 独立压测连通率与延迟；它验证代理本身，不替代 Clash 的规则命中检查。
 
@@ -196,14 +226,23 @@ src/
 tests/
   validate-direct.js       主覆写行为与回归测试
   validate.js              原始链式代理脚本的兼容性测试
+  validate-community.js    社区解析、分类边界与增量更新测试
 
 scripts/
   update-interface-name.js 自动探测并写入 Tailscale 网卡名
   proxy-reliability-test.py 批量测试出口代理稳定性
   check-claude-rules.js    检查 Claude/Anthropic 域名与 CIDR 覆盖
+  sync-community-rules.js 社区快照同步、规则生成与增量记录
+  rule-routing-audit.js   显式规则首条命中的离线检查
+
+rules/
+  community-sources.json  来源、分类策略、过滤理由与边界样例
+  community.snapshot.json 固定上游版本的完整规则快照
+  community-update-history.json 追加式更新历史
 
 docs/
   配置教程.md              面向首次使用者的完整操作说明
+  规则维护与调研记录.md    调查证据与后续增量维护步骤
 ```
 
 `src/家宽IP-链式代理.js` 与 `src/MiyaIP 凭证_样本.js` 是历史参考脚本，不是当前推荐入口。新配置使用 `出口IP凭证.js` 加 `完全覆写.js`。
@@ -211,5 +250,6 @@ docs/
 ## 进一步阅读
 
 - [低门槛配置教程](./docs/配置教程.md)：逐步导入、无订阅、前置代理、家宽 IP、公司内网和 Tailscale。
+- [规则维护与调研记录](./docs/规则维护与调研记录.md)：社区来源、服务分类边界、更新工具和本次调查结果。
 - [出口凭证样本](./src/出口IP凭证_样本.js)：本地出口配置的唯一入口。
 - [自定义规则组样本](./src/自定义规则组_样本.js)：把指定业务域名与网段固定指向某个专用节点。

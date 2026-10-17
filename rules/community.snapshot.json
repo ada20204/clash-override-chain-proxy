@@ -1,0 +1,5855 @@
+{
+  "schemaVersion": 1,
+  "repositories": {
+    "metacube": {
+      "repo": "MetaCubeX/meta-rules-dat",
+      "branch": "meta",
+      "commit": "9328036209ca841ff6b221a65010f0e42d485527",
+      "committedAt": "2026-10-05T01:08:52Z"
+    },
+    "vpsdance": {
+      "repo": "VPSDance/ai-proxy-rules",
+      "branch": "main",
+      "commit": "29a223756069f9e0e8b1adcd4fae6c289653f781",
+      "committedAt": "2026-10-05T01:25:36Z"
+    }
+  },
+  "sources": [
+    {
+      "id": "ai-core",
+      "repository": "metacube",
+      "path": "geo/geosite/category-ai-!cn.list",
+      "format": "domain-list",
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/9328036209ca841ff6b221a65010f0e42d485527/geo/geosite/category-ai-!cn.list",
+      "sha256": "e14ef822641391b6204dbcc6630541b47d03ba415c5fad0cccfcc5a9a0711a3e",
+      "rules": [
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "agentclientprotocol.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ai.studio"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "aicode.googleapis.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "aida.googleapis.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "aisandbox-pa.googleapis.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "aistudio.google.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "anthropic.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "antigravity-unleash.goog"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "antigravity.google"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "anythingllm.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "arena.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bard.google.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "cerebras.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "chat.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "chatgpt.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "chatgpt.livekit.cloud"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "chatgpt.site"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "chutes.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "cici.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ciciai.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ciciaicdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "clau.de"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "claude.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "claude.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "claude.dev"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "claudemcpclient.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "claudemcpcontent.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "claudeusercontent.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "clawhub.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "clipdrop.co"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "codeium.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "codeiumdata.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "coderabbit.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "coderabbit.gallery.vsassets.io"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "cohere.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "cohere.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "comfy.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "comfyci.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "comfyregistry.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "copilot-stg.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "copilot.cloud.microsoft"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "copilot.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "copilot.microsoft.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "coze.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "crewai.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "crixet.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "cursor-cdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "cursor.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "cursor.sh"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "cursorapi.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "deepmind.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "deepmind.google"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "deepwiki.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "deepwiki.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "devin.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "diabrowser.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "diabrowser.engineering"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "dify.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "dola.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "dreamgen.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "duck.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "elevenlabs.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "elevenlabs.io"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "envato-static.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "envato.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "envatousercontent.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "flow.google"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "flow.google.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "gateway.ai.cloudflare.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "geller-pa.googleapis.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "gemini.google"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "gemini.google.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "gemini.gstatic.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "generativeai.google"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "generativelanguage.googleapis.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "githubcopilot.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "grazie.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "grazie.aws.intellij.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "grok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "grok.x.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "grokipedia.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "groq.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "h2o.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hf.co"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hf.space"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "host.livekit.cloud"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huggingface.co"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "jasper.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "jetbrains.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "jules.google"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "jules.google.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "kimi.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "kiro.dev"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "labs.google"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "labs.google.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "labstailwind.pa.googleapis.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "langchain.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "liveperson.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "lmstudio.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "lovart.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "lpsnmedia.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "makersuite.google.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "manus.im"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "manuscdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "marscode.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "meta.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "metaaivm.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "midjourney.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "minimax.io"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "mistral.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "moonshot.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "mozilla.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "muse.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "notebook.google"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "notebook.google.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "notebooklm.google"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "notebooklm.google.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "notegpt.io"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "novelai.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oaistatic.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oaistatsig.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oaiusercontent.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ollama.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "opal.google"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "opal.google.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "openai.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "openai.com.cdn.cloudflare.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "openart.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "openclaw.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "opencode.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "openrouter.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "openspec.dev"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oystermercury.top"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "perplexity.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "perplexity.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "plannotator.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "poe.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "poecdn.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "pplx.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "proactivebackend-pa.googleapis.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "qoder.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "robinfrontend-pa.googleapis.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "sider.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "sora.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "spicywriter.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "stitch.withgoogle.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "talkai.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tapnow.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "themeforest.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "trae.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tripo3d.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "turn.livekit.cloud"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "windsurf.build"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "windsurf.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "x.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youmind.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youmind.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youmind.site"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "ai.google.dev"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "alkalicore-pa.clients6.google.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "alkalimakersuite-pa.clients6.google.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "antigravity-pa.googleapis.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "antigravity.googleapis.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "browser-intake-datadoghq.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "cloudaicompanion.googleapis.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "cloudcode-pa.googleapis.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "copilot-proxy.githubusercontent.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "copilot-telemetry-service.githubusercontent.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "copilot-telemetry.githubusercontent.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "copilot-workspace.githubnext.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "copilotprodattachments.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "daily-cloudcode-pa.googleapis.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "geminiweb-pa.clients.google.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "geminiweb-pa.clients6.google.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "notebooklm-pa.googleapis.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "notebooklm.googleapis.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "o33249.ingest.sentry.io"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "openai.qualtrics.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "openaiapi-site.azureedge.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "openaiassets.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "openaicom.imgix.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "openaicomproductionae4b.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "ppl-ai-file-upload.s3.amazonaws.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "pplx-res.cloudinary.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "production-openaicom-storage.azureedge.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "servd-anthropic-website.b-cdn.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "webchannel-alkalimakersuite-pa.clients6.google.com"
+        }
+      ]
+    },
+    {
+      "id": "meta-ai",
+      "repository": "vpsdance",
+      "path": "rules/clash/meta-ai.yaml",
+      "format": "classical-yaml",
+      "url": "https://raw.githubusercontent.com/VPSDance/ai-proxy-rules/29a223756069f9e0e8b1adcd4fae6c289653f781/rules/clash/meta-ai.yaml",
+      "sha256": "8e420d76cd69829469f20a079d4740058f987cd0cb91e86b2d7c93b24d147f8a",
+      "rules": [
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "atmeta.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "llama.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "llamameta.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "meta.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "metaaivm.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "muse.ai"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "ai.developer.meta.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "ai.meta.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "aidemos.meta.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "developer.meta.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "llama.developer.meta.com"
+        }
+      ]
+    },
+    {
+      "id": "youtube",
+      "repository": "metacube",
+      "path": "geo/geosite/youtube.list",
+      "format": "domain-list",
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/9328036209ca841ff6b221a65010f0e42d485527/geo/geosite/youtube.list",
+      "sha256": "e95f241fa4357918fc1066390c352aad750b571ddea15e3421d30c84e947ac10",
+      "rules": [
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ads.youtube.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ggpht.cn"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ggpht.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "googlevideo.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "wide-youtube.l.google.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "withyoutube.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtu.be"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube-nocookie.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube-ui.l.google.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ae"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.al"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.am"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.at"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.az"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ba"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.be"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.bg"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.bh"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.bo"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.by"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ca"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.cat"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ch"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.cl"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.ae"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.at"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.cr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.hu"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.id"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.il"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.in"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.jp"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.ke"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.kr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.ma"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.nz"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.th"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.tz"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.ug"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.uk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.ve"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.za"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.co.zw"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.ar"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.au"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.az"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.bd"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.bh"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.bo"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.br"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.by"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.co"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.do"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.ec"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.ee"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.eg"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.es"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.gh"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.gr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.gt"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.hk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.hn"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.hr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.jm"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.jo"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.kw"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.lb"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.lv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.ly"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.mk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.mt"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.mx"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.my"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.ng"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.ni"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.om"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.pa"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.pe"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.ph"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.pk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.pt"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.py"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.qa"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.ro"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.sa"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.sg"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.sv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.tn"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.tr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.tw"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.ua"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.uy"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.com.ve"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.cr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.cz"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.de"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.dk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ee"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.es"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.fi"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.fr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ge"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.googleapis.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.gr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.gt"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.hk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.hr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.hu"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ie"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.in"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.iq"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.is"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.it"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.jo"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.jp"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.kr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.kz"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.la"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.lk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.lt"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.lu"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.lv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ly"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ma"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.md"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.me"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.mk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.mn"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.mx"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.my"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ng"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ni"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.nl"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.no"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.pa"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.pe"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ph"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.pk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.pl"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.pr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.pt"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.qa"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ro"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.rs"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ru"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.sa"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.se"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.sg"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.si"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.sk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.sn"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.soy"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.sv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.tn"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.tv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ua"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.ug"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.uy"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtube.vn"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtubeeducation.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtubeembeddedplayer.googleapis.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtubefanfest.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtubegaming.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtubego.co.id"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtubego.co.in"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtubego.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtubego.com.br"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtubego.id"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtubego.in"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtubei.googleapis.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtubekids.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "youtubemobilesupport.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "yt.be"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ytimg.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "yt3.googleusercontent.com"
+        }
+      ]
+    },
+    {
+      "id": "meta-social",
+      "repository": "metacube",
+      "path": "geo/geosite/meta.list",
+      "format": "domain-list",
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/9328036209ca841ff6b221a65010f0e42d485527/geo/geosite/meta.list",
+      "sha256": "593b4be4c45dacbf80499b2c83c181e5f6f1164f6b8bd781bd1bb58467e5fab9",
+      "rules": [
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "aboutfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "accessfacebookfromschool.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "accountkit.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "acebooik.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "acebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "achat-followers-instagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "acheter-followers-instagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "acheterdesfollowersinstagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "acheterfollowersinstagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "advancediddetection.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "analytics.facebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "askfacebook.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "askfacebook.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "atdmt2.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "atlasdmt.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "atlasonepoint.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "atmeta.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "atscaleconference.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "binoculus.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bookstagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "botorch.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "buck.build"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "buckbuild.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "buyingfacebooklikes.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "buyoculus.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "careersatfb.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "carstagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "cdninstagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "celebgramme.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "chickstagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "china-facebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "click-url.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "como-hackearfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "componentkit.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "crowdtangle.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "dacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "dlfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "dotfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "dotfacebook.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "draftjs.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "expresswifi.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "f8.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faacebok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faasbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facbebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facbeok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facboo.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facbool.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facboox.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faccebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faccebookk.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facdbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facdebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "face-book.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceabook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebboc.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebboook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebcook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebdok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebgook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebhook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebkkk.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebo-ok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboak.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebock.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebocke.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebof.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboik.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebokbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebokc.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebokk.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebokok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboks.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebol.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebolk.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebomok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboo.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooa.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboob.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboobok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooc.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboock.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebood.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooe.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboof.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooi.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooik.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooik.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooj.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-corp.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-covid-19.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-ebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-forum.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-hardware.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-inc.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-login.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-newsroom.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-newsroom.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-pmdcenter.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-pmdcenter.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-pmdcenter.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-privacy.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-program.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-studio.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-support.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-texas-holdem.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook-texas-holdem.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.br"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.ca"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.cc"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.design"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.hu"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.in"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.nl"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.se"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.shop"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.tv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.us"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook.wang"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook123.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook30.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook30.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook30.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebook4business.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookads.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookadvertisingsecrets.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookappcenter.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookappcenter.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookappcenter.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookatschool.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookawards.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookblueprint.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookbrand.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookbrand.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookcanadianelectionintegrityinitiative.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookcareer.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookcheats.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookck.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookclub.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookcom.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookconnect.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookconsultant.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookcoronavirus.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookcovers.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookcredits.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookdating.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookdevelopergarage.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookdusexe.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookemail.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookenespanol.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookexchange.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookexchange.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookflow.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookgames.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookgraphsearch.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookgraphsearch.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookgroups.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookhome.cc"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookhome.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookhome.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookhub.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooki.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookinc.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookland.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooklikeexchange.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooklive.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooklivestaging.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooklivestaging.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooklogin.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooklogin.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookloginhelp.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooklogs.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookmail.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookmail.tv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookmanager.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookmarketing.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookmarketingpartner.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookmarketingpartners.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookmobile.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookmsn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooknews.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooknfl.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooknude.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookofsex.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookpaper.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookpay.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookphonenumber.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookphoto.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookphotos.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookpmdcenter.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookpoke.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookpoke.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookpoker.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookpokerchips.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookporn.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookporn.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookporno.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookportal.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooks.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooksafety.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooksecurity.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookshop.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooksignup.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooksite.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookstories.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookstudios.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookstudios.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooksupplier.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooksuppliers.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookswagemea.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookswagstore.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooksz.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookthreads.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooktv.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooktv.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookvacation.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookw.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookwork.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebookworld.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebool.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebool.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebooll.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboom.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboon.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboonk.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboooik.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboop.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboot.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceboox.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebopk.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebpook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebuk.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebuok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebvook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebyook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facebzook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facecbgook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facecbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facecbook.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facecook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facecook.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facedbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceebok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceebot.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facegbok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facegbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceobk.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceobok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceobook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faceook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facerbooik.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facerbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facesbooc.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facesounds.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facetook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facevbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facewbook.co"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facewook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facfebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faciometrics.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fackebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facnbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facrbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facvebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facwebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "facxebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fadebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faebok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faebookc.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faeboook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faecebok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faesebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fafacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faicbooc.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fasebokk.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fasebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faseboox.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fasttext.cc"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "favebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "faycbok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fb.careers"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fb.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fb.gg"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fb.me"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fb.watch"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbbmarket.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbboostyourbusiness.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbcdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbcdn.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbf8.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbfeedback.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbhome.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbidb.io"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbinc.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbinfer.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbinnovation.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fblitho.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbmarketing.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbmessenger.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbredex.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbreg.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbrell.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbrpms.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbsbx.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbsbx.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbsupport-covid.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbthirdpartypixel.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbthirdpartypixel.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbthirdpartypixel.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fburl.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbwat.ch"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fbworkmail.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fcacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fcaebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fcebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fcebookk.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fcfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fdacebook.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "feacboo.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "feacbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "feacbooke.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "feacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fecbbok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fecbooc.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fecbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "feceboock.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fecebook.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "feceboox.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fececbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "feook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ferabook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fescebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fesebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ffacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fgacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ficeboock.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "flow.dev"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "flow.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "flowtype.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fmcebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fnacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fosebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fpacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fqcebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fracebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "freeb.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "freebasics.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "freebasics.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "freebs.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "freefacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "freefacebook.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "freefacebookads.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "freefblikes.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "freindfeed.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "frescolib.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "friendbook.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "friendfed.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "friendfeed-api.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "friendfeed-media.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "friendfeed.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "friendfeedmedia.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fsacebok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fscebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fundraisingwithfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "funnyfacebook.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "futureofbusinesssurvey.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "gacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "gameroom.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "gfacecbook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "graph-fallback.instagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "graph.instagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "graph.whatsapp.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "graph.whatsapp.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "groups.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hackerfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hackfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hackfacebookid.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hacklang.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hhvm.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hifacebook.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "howtohackfacebook-account.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hsfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "httpfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "httpsfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "httpwwwfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "i.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ig.me"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "igcdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "igsonar.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "igtv.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "imstagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "imtagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instaadder.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instachecker.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instafallow.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instafollower.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagainer.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagda.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagify.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagmania.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagor.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagram-brand.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagram-engineering.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagram-help.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagram-press.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagram-press.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramci.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramcn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramdi.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramhashtags.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramhilecim.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramhilesi.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramium.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramizlenme.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramkusu.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramlogin.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramm.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagrampartners.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramphoto.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramq.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramsepeti.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramtakipcisatinal.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramtakiphilesi.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramtips.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagramtr.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagran.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagranm.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagrem.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagrm.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagtram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instagy.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instamgram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instangram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instanttelegram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instaplayer.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instastyle.tv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "instgram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "intagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "intagrm.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "internet.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "intgram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "kingstagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "klik.me"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "liverail.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "liverail.tv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "llama.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "lnstagram-help.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "login-account.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "m.me"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "makeitopen.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "markzuckerberg.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "mcrouter.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "mcrouter.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "messenger.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "messengerdevelopers.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "meta.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "meta.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "metaaivm.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "midentsolutions.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "mobilefacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "moneywithfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "muse.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "myfbfans.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "nbabot.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "newsfeed.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "nextstop.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ocul.us"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oculus-china.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oculus.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oculus2014.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oculus3d.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oculusblog.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oculusbrand.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oculuscasino.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oculuscdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oculusconnect.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oculusdiving.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oculusforbusiness.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oculusrift.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oculusvr.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ogp.me"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "oninstagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "online-deals.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "online-instagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "onlineinstagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "opencreate.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "opengraphprotocol.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "opengraphprotocol.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "parse.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "pixel.facebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "powersunitedvr.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "pyrobot.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "reachtheworldonfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "react.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "reactjs.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "reactjs.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "recoiljs.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "redkix.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "rocksdb.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "rocksdb.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "rocksdb.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "shopfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "sportsfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "sportstream.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "supportfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "terragraph.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tfbnw.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "thefacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "thefacebook.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "thefind.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "theinstagramhack.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "threads.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "threads.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "toplayerserver.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "viewpointsfromfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "wa.me"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "web-instagram.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "whatsapp-plus.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "whatsapp-plus.me"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "whatsapp-plus.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "whatsapp.cc"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "whatsapp.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "whatsapp.info"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "whatsapp.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "whatsapp.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "whatsapp.tv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "whatsappbrand.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "whyfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "workplace.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "workplaceusecases.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "worldhack.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "www-facebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "wwwfacebok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "wwwfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "wwwinstagram.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "wwwmfacebook.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "yogalayout.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "zuckerberg.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "zuckerberg.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "developers.facebook.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "fbcdn-a.akamaihd.net"
+        }
+      ]
+    },
+    {
+      "id": "netflix",
+      "repository": "metacube",
+      "path": "geo/geosite/netflix.list",
+      "format": "domain-list",
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/9328036209ca841ff6b221a65010f0e42d485527/geo/geosite/netflix.list",
+      "sha256": "980ec18a1c566850622523310feb9ed38cd562c82e697c3da7f756b816f337d8",
+      "rules": [
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fast.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflix.ca"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflix.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflix.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflixdnstest0.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflixdnstest1.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflixdnstest10.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflixdnstest2.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflixdnstest3.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflixdnstest4.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflixdnstest5.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflixdnstest6.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflixdnstest7.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflixdnstest8.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflixdnstest9.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflixinvestor.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "netflixtechblog.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "nflxext.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "nflximg.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "nflximg.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "nflxsearch.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "nflxso.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "nflxvideo.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "netflix.com.edgesuite.net"
+        }
+      ]
+    },
+    {
+      "id": "disney",
+      "repository": "metacube",
+      "path": "geo/geosite/disney.list",
+      "format": "domain-list",
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/9328036209ca841ff6b221a65010f0e42d485527/geo/geosite/disney.list",
+      "sha256": "761bc8faf336f1526d9420f23aca229acb90aeb051218ce59fdcb4f7e226f95b",
+      "rules": [
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "112263.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "20thcenturystudios.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "20thcenturystudios.com.au"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "20thcenturystudios.com.br"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "20thcenturystudios.jp"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "abc-studios.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "abc.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "abcnews.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "adventuresbydisney.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "babble.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "babyzone.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bamgrid.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bamtech.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "beautyandthebeastmusical.co.uk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "callhulu.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "detpress.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "dilcdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney-asia.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney-discount.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney-plus.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney-portal.my.onetrust.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney-studio.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney-studio.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.asia"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.be"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.bg"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.ca"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.ch"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.co.il"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.co.jp"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.co.kr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.co.th"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.co.uk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.co.za"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.com.au"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.com.br"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.com.hk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.com.tw"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.cz"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.de"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.dk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.es"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.fi"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.fr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.gr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.hu"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.id"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.in"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.io"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.it"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.my"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.nl"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.no"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.ph"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.pl"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.pt"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.ro"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.ru"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.se"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disney.sg"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyaccount.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyadsales.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyanimation.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyarena.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyaulani.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneybaby.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneycareers.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneychannelonstage.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneychannelroadtrip.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneycruisebrasil.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyenconcert.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyiejobs.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyinflight.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyinternational.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyinternationalhd.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyjunior.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyjuniortreataday.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneylandparis.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneylatino.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneymagicmoments.co.il"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneymagicmoments.co.uk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneymagicmoments.co.za"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneymagicmoments.de"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneymagicmoments.es"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneymagicmoments.fr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneymagicmoments.gen.tr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneymagicmoments.gr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneymagicmoments.it"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneymagicmoments.pl"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneymagicmomentsme.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyme.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneymeetingsandevents.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneymovieinsiders.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneymusicpromotion.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneynewseries.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneynow.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneypeoplesurveys.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyplus.bn5x.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyplus.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyprivacycenter.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyredirects.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneysrivieraresort.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneystore.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneystreaming.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneysubscription.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneytermsofuse.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneytickets.co.uk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyturkiye.com.tr"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneytvajobs.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "disneyworld-go.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "dmed.technology"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "dssott.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "dtci.co"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "dtci.technology"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "edgedatg.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "espn.co.uk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "espn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "espn.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "espncdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "espnqa.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "findyourlimits.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "freeform.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "freehulu.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fxnetwork.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fxnetworks.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "go-disneyworldgo.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "go.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hongkongdisneyland.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hooloo.tv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hoolu.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hoolu.tv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hotstar-cdn.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hotstar-labs.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hotstar.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hotstarext.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hsprepack.akamaized.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hu1u.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huloo.cc"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huloo.tv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulu.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulu.jp"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulu.tv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulu.us"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huluaction.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huluad.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huluapp.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huluasks.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulucall.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulufree.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulugans.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulugermany.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulugo.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huluim.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huluinstantmessenger.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huluitaly.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulunet.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulunetwork.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huluplus.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulupremium.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulupurchase.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huluqa.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulurussia.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huluspain.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulusports.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulustream.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huluteam.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "hulutv.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "huluusa.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "joinmaidez.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "lucasfilm.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "marvel.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "marvel10thanniversary.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "marveldimensionofheroes.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "marvelparty.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "marvelpinball.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "marvelsdoubleagent.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "marvelspotlightplays.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "marvelsuperheroseptember.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "marvelsuperwar.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "mickey.tv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "moviesanywhere.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "mushymush.tv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "myhulu.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "natgeomaps.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "nationalgeographic.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "nationalgeographicpartners.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ngeo.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "nomadlandmovie.ch"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "originalhulu.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "payhulu.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "pixar.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "playmation.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "registerhulu.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "searchlightpictures.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "shanghaidisneyresort.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "shopdisney.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "shops-disney.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "sorcerersarena.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "spaindisney.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "star-brasil.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "star-latam.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "starott.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "starplus.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "starwars.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "starwarsgalacticstarcruiser.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "starwarskids.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "streamingdisney.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "thehulubraintrust.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "themarvelexperiencetour.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "thestationbymaker.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "thewaltdisneycompany.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "thisispolaris.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tokyodisneyresort.jp"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "waltdisneystudios.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "watchdisneyfe.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "watchespn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "wwwhuluplus.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "disney.my.sentry.io"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "disneyplus.com.ssl.sc.omtrdc.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "espn.api.edge.bamgrid.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "espn.hb.omtrdc.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "espndotcom.tt.omtrdc.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "hulu.playback.edge.bamgrid.com"
+        }
+      ]
+    },
+    {
+      "id": "spotify",
+      "repository": "metacube",
+      "path": "geo/geosite/spotify.list",
+      "format": "domain-list",
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/9328036209ca841ff6b221a65010f0e42d485527/geo/geosite/spotify.list",
+      "sha256": "848d93a2d8da4caa0d0338e303e3b3da8cb56a7e5d58431e43d8a94b5f2d3080",
+      "rules": [
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "byspotify.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "lifeatspotify.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "pscdn.co"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "scdn.co"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "spoti.fi"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "spotify-everywhere.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "spotify.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "spotify.design"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "spotify.link"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "spotifycdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "spotifycdn.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "spotifycharts.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "spotifycodes.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "spotifyforbrands.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "spotifyforvendors.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "spotifyjobs.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tospotify.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "adeventtracker.spotify.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "adstudio-assets.scdn.co"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "audio-ak-spotify-com.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "audio4-ak-spotify-com.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "bloodhound.spotify.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "cdn-spotify-experiments.conductrics.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "heads-ak-spotify-com.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "heads4-ak-spotify-com.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "spotify.com.edgesuite.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "spotify.map.fastly.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "spotify.map.fastlylb.net"
+        }
+      ]
+    },
+    {
+      "id": "twitter",
+      "repository": "metacube",
+      "path": "geo/geosite/twitter.list",
+      "format": "domain-list",
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/9328036209ca841ff6b221a65010f0e42d485527/geo/geosite/twitter.list",
+      "sha256": "7bc17d19d2fa089b36993e56275eb0eb7355963f3e90a711364086442fd369c0",
+      "rules": [
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ads-twitter.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "cms-twdigitalassets.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "periscope.tv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "pscp.tv"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "t.co"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tellapart.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tweetdeck.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twimg.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twitpic.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twitter.biz"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twitter.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twitter.jp"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twitter.map.fastly.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twittercommunity.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twitterflightschool.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twitterinc.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twitteroauth.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twitterstat.us"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twtrdns.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twttr.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twttr.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "twvid.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "vine.co"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "x.com"
+        }
+      ]
+    },
+    {
+      "id": "reddit",
+      "repository": "metacube",
+      "path": "geo/geosite/reddit.list",
+      "format": "domain-list",
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/9328036209ca841ff6b221a65010f0e42d485527/geo/geosite/reddit.list",
+      "sha256": "bbfb9746c59c64d225d9126f23dc1f4d376edbafab2ac297415be9e9a059af16",
+      "rules": [
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "redd.it"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "reddit.app.link"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "reddit.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "reddit.map.fastly.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "redditblog.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "reddithelp.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "redditinc.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "redditmail.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "redditmedia.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "redditspace.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "redditstatic.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "redditstatus.com"
+        }
+      ]
+    },
+    {
+      "id": "tiktok",
+      "repository": "metacube",
+      "path": "geo/geosite/tiktok.list",
+      "format": "domain-list",
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/9328036209ca841ff6b221a65010f0e42d485527/geo/geosite/tiktok.list",
+      "sha256": "09edefc16d3913b24fa7d0d2bae1679e9be03b6f4e1d879e96d937a1d020e7db",
+      "rules": [
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "analytics.tiktok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bytedapm.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "muscdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "musical.ly"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tik-tokapi.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktok-minis.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktok-row.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktok.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokcdn-eu.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokcdn-us.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokcdn-us.com.edgesuite.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokcdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokcdn.com.akamaized.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokcdn.com.edgesuite.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokd.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokd.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokeu-cdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokglobalshopv.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokminis.us"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokrow-cdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokv.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokv.com.edgekey.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokv.com.edgesuite.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokv.eu"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokv.us"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokw.eu"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tiktokw.us"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ttcdn-us.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ttlivecdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ttoverseaus.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ttwstatic.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "p16-tiktok-dm-sticker-sign-sg.ibyteimg.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "p16-tiktokcdn-com.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "roovza-launches.appsflyersdk.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "roovza.inapps.appsflyersdk.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "roovza.launches.appsflyersdk.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "roovza.skadsdk.appsflyersdk.com"
+        }
+      ]
+    },
+    {
+      "id": "bbc",
+      "repository": "metacube",
+      "path": "geo/geosite/bbc.list",
+      "format": "domain-list",
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/9328036209ca841ff6b221a65010f0e42d485527/geo/geosite/bbc.list",
+      "sha256": "7b6bda62915f4e055a93846d43e16fe8be446fcc63998a87103a79f716a19160",
+      "rules": [
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bbc"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bbc-reporting-api.app"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bbc.co.uk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bbc.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bbc.in"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bbc.mp-pxcdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bbc.net.uk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bbcfmt.s.llnwi.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bbci.co.uk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bbcmedia.co.uk"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bbcpersian.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bbcverticals.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bidi.net.uk"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "aod-pod-uk-live.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "as-dash-uk-live.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "as-hls-uk-live.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "ve-dash-uk-live.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "ve-uhd-push-uk-live.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "vod-dash-uk-live.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "vod-dash-ww-live.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "vod-hls-uk-live.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "vod-sub-uk-live.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "vod-thumb-uk-live.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "vod-thumb-ww-live.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "vs-cmaf-push-uk-live.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "vs-cmaf-pushb-ww-live.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "vs-hls-push-uk-live.akamaized.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "vs-hls-pushb-uk-live.akamaized.net"
+        }
+      ]
+    },
+    {
+      "id": "telegram",
+      "repository": "metacube",
+      "path": "geo/geosite/telegram.list",
+      "format": "domain-list",
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/9328036209ca841ff6b221a65010f0e42d485527/geo/geosite/telegram.list",
+      "sha256": "2448b2699519cd258b10232fcacd01e89b7db04c8ce7fc860a4962518370a329",
+      "rules": [
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "cdn-telegram.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "comments.app"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "contest.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "fragment.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "graph.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "quiz.directory"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "t.me"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tdesktop.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "telega.one"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "telegra.ph"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "telegram-cdn.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "telegram.dog"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "telegram.me"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "telegram.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "telegram.space"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "telesco.pe"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tg.dev"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ton.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "toncenter.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "tx.me"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "usercontent.dev"
+        }
+      ]
+    },
+    {
+      "id": "discord",
+      "repository": "metacube",
+      "path": "geo/geosite/discord.list",
+      "format": "domain-list",
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/9328036209ca841ff6b221a65010f0e42d485527/geo/geosite/discord.list",
+      "sha256": "9f2530e2dc4117a27851256d731908931064bc6c9fefe43f69cc164804a33456",
+      "rules": [
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "airhorn.solutions"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "airhornbot.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "bigbeans.solutions"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "dis.gd"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discord-activities.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discord.co"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discord.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discord.design"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discord.dev"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discord.gg"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discord.gift"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discord.gifts"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discord.media"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discord.new"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discord.store"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discord.tools"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discordactivities.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discordapp.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discordapp.io"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discordapp.net"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discordcdn.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discordmerch.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discordpartygames.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discordsays.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "discordstatus.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "watchanimeattheoffice.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "discord-attachments-uploads-prd.storage.googleapis.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "hammerandchisel.ssl.zendesk.com"
+        }
+      ]
+    },
+    {
+      "id": "github",
+      "repository": "metacube",
+      "path": "geo/geosite/github.list",
+      "format": "domain-list",
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/9328036209ca841ff6b221a65010f0e42d485527/geo/geosite/github.list",
+      "sha256": "f5d67e6e0c8799bd292c8a012d579c8af37ee6a0af771299dd6500db4d1202fd",
+      "rules": [
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "atom.io"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "collector.github.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "dependabot.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "gh.io"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ghcr.io"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "ghe.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "git.io"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "github.ai"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "github.blog"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "github.career"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "github.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "github.community"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "github.dev"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "github.io"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "githubapp.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "githubassets.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "githubcopilot.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "githubhackathon.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "githubnext.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "githubpreview.dev"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "githubstatus.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "githubsupport.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "githubuniverse.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "githubusercontent.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "myoctocat.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "npm.community"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "npmjs.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "npmjs.org"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "octocaptcha.com"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "opensource.guide"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "repo.new"
+        },
+        {
+          "type": "DOMAIN-SUFFIX",
+          "value": "thegithubshop.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "copilot-proxy.githubusercontent.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "copilot-telemetry-service.githubusercontent.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "copilot-telemetry.githubusercontent.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "copilot-workspace.githubnext.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "copilotprodattachments.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "github-api.arkoselabs.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "github-cloud.s3.amazonaws.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "github-production-release-asset-2e65be.s3.amazonaws.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "github-production-repository-file-5c1aeb.s3.amazonaws.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "github-production-repository-image-32fea6.s3.amazonaws.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "github-production-upload-manifest-file-7fdce7.s3.amazonaws.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "github-production-user-asset-6210df.s3.amazonaws.com"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa0.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa1.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa10.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa11.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa12.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa13.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa14.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa15.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa16.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa17.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa18.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa19.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa2.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa3.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa4.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa5.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa6.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa7.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa8.blob.core.windows.net"
+        },
+        {
+          "type": "DOMAIN",
+          "value": "productionresultssa9.blob.core.windows.net"
+        }
+      ]
+    }
+  ]
+}
