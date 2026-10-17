@@ -21,6 +21,7 @@ const path = require("path");
 const vm = require("vm");
 const crypto = require("crypto");
 const { execFileSync } = require("child_process");
+const { fileURLToPath } = require("url");
 const { parseProxyUri } = require("./lib/proxy-uri");
 
 let YAML;
@@ -62,7 +63,7 @@ function loadSecrets(file) {
   const s = {};
   if (file && fs.existsSync(file)) {
     const mode = fs.statSync(file).mode & 0o077;
-    if (mode) console.warn("警告：secrets 文件权限过宽，建议 chmod 600");
+    if (mode && process.platform !== "win32") console.warn("警告：secrets 文件权限过宽，建议 chmod 600");
     for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
       if (/^\s*#/.test(line)) continue;
       const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line);
@@ -123,7 +124,10 @@ async function loadSubscription(sub, idx, secrets, args) {
     if (!doc || !Array.isArray(doc.proxies) || !doc.proxies.length) throw new Error("订阅 " + name + " 无节点");
     return doc;
   };
-  if (url && /^(file:|\/|\.)/.test(url)) return parse(fs.readFileSync(url.replace(/^file:\/\//, ""), "utf8"));
+  if (url && (/^(file:|\/|\.)/.test(url) || path.isAbsolute(url))) {
+    const file = url.startsWith("file:") ? fileURLToPath(url) : url;
+    return parse(fs.readFileSync(file, "utf8"));
+  }
   if (url && !args.offline) {
     try {
       const res = await fetch(url, { headers: { "User-Agent": sub.ua || "clash-verge/v1.7.7" }, signal: AbortSignal.timeout(30000) });

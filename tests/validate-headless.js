@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { execFileSync } = require("child_process");
+const { pathToFileURL } = require("url");
 const YAML = require("yaml");
 const { parseProxyUri } = require("../scripts/lib/proxy-uri");
 
@@ -52,7 +53,8 @@ const env = Object.assign({}, process.env, {
 const log = execFileSync("node", [path.join(ROOT, "scripts/render-config.js"), "--host", "t1", "--hosts-dir", hostsDir, "--out", out, "--secrets", path.join(tmp, "none.env"), "--no-test"], { env, encoding: "utf8" });
 assert(!/hp@|cnpw|ctrl-secret/.test(log), "日志不能包含秘密");
 const file = path.join(out, "t1.yaml");
-assert.strictEqual(fs.statSync(file).mode & 0o777, 0o600);
+if (process.platform !== "win32") assert.strictEqual(fs.statSync(file).mode & 0o777, 0o600);
+assert(fs.statSync(file).size > 0, "输出文件应可读取且非空");
 const text = fs.readFileSync(file, "utf8");
 assert(/^# cocp-selections: \{"🤖 AI Agent":"🏠 家宽IP"\}$/m.test(text));
 const cfg = YAML.parse(text);
@@ -77,6 +79,12 @@ assert.deepStrictEqual([cfg["mixed-port"], cfg["bind-address"], cfg["allow-lan"]
 // 同样输入 → 同样字节（ETag 稳定）
 execFileSync("node", [path.join(ROOT, "scripts/render-config.js"), "--host", "t1", "--hosts-dir", hostsDir, "--out", out, "--secrets", path.join(tmp, "none.env"), "--no-test"], { env });
 assert.strictEqual(fs.readFileSync(file, "utf8"), text, "重复渲染应字节一致");
+
+const spacedSub = path.join(tmp, "sub fixture.yaml");
+fs.copyFileSync(sub, spacedSub);
+execFileSync(process.execPath, [path.join(ROOT, "scripts/render-config.js"), "--host", "t1", "--hosts-dir", hostsDir, "--out", out, "--secrets", path.join(tmp, "none.env"), "--no-test"],
+  { env: Object.assign({}, env, { T_SUB: pathToFileURL(spacedSub).href }), stdio: "pipe" });
+assert.strictEqual(fs.readFileSync(file, "utf8"), text, "file URL 应正确处理转义的空格和本地盘符");
 
 // 缺少必需 secret 时失败且不打印值
 let failed = false;
