@@ -15,7 +15,7 @@
 
 ## 从这里开始
 
-> 多台机器、或不想安装 Clash Party：默认用 [headless 渲染 + 主机拉取](#默认工作流headless-渲染--主机拉取不需要-clash-party)，一台主机渲染，各主机 mihomo 内核自己拉取并热重载。下面是单机在 Clash Party 里直接导入脚本的用法。
+> 多台机器、或不想安装 Clash Party：用本仓 `scripts/render-config.js` 按主机文件渲染出 `out/<host>.yaml`；**发布、拉取、systemd、本机 ensure** 在私有仓 `sshopt-private` 的 `scripts/mihomo/`（说明见该仓 `docs/mihomo/CLASH_OVERRIDE_OPS.md`）。下面是单机在 Clash Party 里直接导入脚本的用法。
 
 只想先让分流工作起来，不需要配置家宽 IP 或自定义节点：
 
@@ -177,28 +177,20 @@ Sentry、Datadog、Intercom、Statsig、Stripe、WorkOS、SendGrid 等共享基�
 
 Exit Node 转发流量默认继续使用正常分流规则。只有明确要把 Exit Node 转发流量强制指定到某个目标时，才开启 `forceExitNodeTraffic`。
 
-## 默认工作流：headless 渲染 + 主机拉取（不需要 Clash Party）
+## 默认工作流：headless 渲染（部署见 sshopt-private）
 
-一台渲染主机持有秘密，按主机文件为每台机器渲染一份通用 mihomo 配置；各主机的 mihomo 内核通过 tailnet 拉取自己的那一份并热重载。Clash Party 变为可选的查看器，或继续按下文「导入顺序」自己跑覆写。
-
-```mermaid
-flowchart LR
-  A["secrets.env + hosts/&lt;host&gt;.js"] --> B["render-config.js<br/>订阅 → 凭证步骤 → 完全覆写.js → runtime → mihomo -t"]
-  B --> C["out/&lt;host&gt;.yaml"] --> D["serve-configs.js<br/>tailnet only · 每主机 token · ETag"]
-  D --> E["主机 mihomo-pull.sh<br/>304 跳过 / 校验 → 替换 → PUT /configs → 恢复选择"]
-```
+本仓只负责**生成**配置：
 
 ```bash
 npm install
-cp secrets.env.example secrets.env && chmod 600 secrets.env
-cp hosts/overseas-cloud.example.js hosts/myhost.js
-node scripts/render-config.js --host myhost            # out/myhost.yaml，自动 mihomo -t
-node scripts/serve-configs.js --listen 100.x.y.z:7898  # 渲染主机的 tailnet IP
-# 目标主机：
-mihomo-pull.sh /etc/mihomo-pull.env                    # 配合 examples/systemd 的 timer 或 cron
+cp secrets.env.example secrets.env && chmod 600 secrets.env   # 不进 git
+cp hosts/overseas-cloud.example.js hosts/myhost.js            # 真实 hosts/*.js 不进 git
+node scripts/render-config.js --host myhost                   # → out/myhost.yaml，默认 mihomo -t
 ```
 
-完整说明（主机文件字段、回滚与选择恢复、安全边界）见 [docs/headless-render.md](./docs/headless-render.md)。
+主机文件字段（`location`、`roles`、`runtime`、`selections`、`options.front` 等）与 Clash Party 覆写语义一致；出口用 `secret:KEY` 引用，协议字段完整透传。
+
+**不进本仓**：`serve-configs.js`、`mihomo-pull.sh`、systemd/timer、本机 `clash-ensure`/`clash-regen`、真实主机清单与运维说明。这些在私有仓 [`sshopt-private`](https://github.com/ada20204/sshopt-private) → `scripts/mihomo/` 与 `docs/mihomo/CLASH_OVERRIDE_OPS.md`（含 🇨🇳 国内 / 🌐 国外 / 🐟 兜底、🔗 前置、测 IP 站与 grok-bot 约定）。有权限的维护者从那里部署；公开读者用上面的 Clash Party 导入即可。
 
 ## 导入顺序
 
@@ -268,8 +260,6 @@ tests/
 
 scripts/
   render-config.js         headless 渲染：每台主机一份 mihomo 配置（不需要 Clash Party）
-  serve-configs.js         tailnet 配置发布器（每主机 token、ETag/304）
-  mihomo-pull.sh           主机侧拉取、校验、热重载、回滚、恢复选择
   lib/proxy-uri.js         代理 URI 解析（http/socks5/ss/vless/trojan/hy2）
   update-interface-name.js 自动探测并写入 Tailscale 网卡名
   proxy-reliability-test.py 批量测试出口代理稳定性
@@ -285,18 +275,17 @@ rules/
 hosts/
   *.example.js             主机文件样例（真实 hosts/*.js 不进 git）
 
-examples/                  mihomo-pull 的 systemd timer、cron 与 env 样例
-
 docs/
-  headless-render.md       默认工作流：渲染 → 发布 → 拉取 → 热重载
   配置教程.md              面向首次使用者的完整操作说明
   规则维护与调研记录.md    调查证据与后续增量维护步骤
+  （部署/拉取/systemd → sshopt-private docs/mihomo/CLASH_OVERRIDE_OPS.md）
 ```
 
 `src/家宽IP-链式代理.js` 与 `src/MiyaIP 凭证_样本.js` 是历史参考脚本，不是当前推荐入口。新配置使用 `出口IP凭证.js` 加 `完全覆写.js`。
 
 ## 进一步阅读
 
+- 部署与运维（有权限）：私有仓 `sshopt-private` → `docs/mihomo/CLASH_OVERRIDE_OPS.md`。
 - [低门槛配置教程](./docs/配置教程.md)：逐步导入、无订阅、前置代理、家宽 IP、公司内网和 Tailscale。
 - [规则维护与调研记录](./docs/规则维护与调研记录.md)：社区来源、服务分类边界、更新工具和本次调查结果。
 - [出口凭证样本](./src/出口IP凭证_样本.js)：本地出口配置的唯一入口。

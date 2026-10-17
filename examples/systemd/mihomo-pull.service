@@ -1,9 +1,0 @@
-# /etc/systemd/system/mihomo-pull.service
-[Unit]
-Description=Pull mihomo config from render host and hot-reload
-After=network-online.target tailscaled.service
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/mihomo-pull.sh /etc/mihomo-pull.env
