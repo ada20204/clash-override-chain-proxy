@@ -217,13 +217,12 @@ function testDefaultConfig() {
   const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 前置"; });
   assert(relayGroup, "前置组应存在");
   assert.strictEqual(relayGroup.type, "select");
-  assert.strictEqual(relayGroup.proxies[0], "⚡ 前置自动", "前置默认应为 ⚡ 前置自动");
+  assert.strictEqual(relayGroup.proxies[0], "DIRECT", "🔗 前置 默认 DIRECT（不走前置）");
   ["🇸🇬 SG Auto 01", "🇺🇸 US Auto 01"].forEach(function (name) {
     assert(relayGroup.proxies.indexOf(name) >= 0, "前置应包含可直连的订阅节点：" + name);
   });
   assert(relayGroup.proxies.indexOf(EXPECTED.homeChainedNodeName) < 0, "家宽IP链式不能当前置（防循环）");
-  const relayAutoGroup = output["proxy-groups"].find(function (g) { return g.name === "⚡ 前置自动"; });
-  assert(relayAutoGroup && relayAutoGroup.type === "url-test", "⚡ 前置自动 应为 url-test");
+  assert(!output["proxy-groups"].some(function (g) { return g.name === "⚡ 前置自动"; }), "前置不再自动测速跳变");
 
   // 家宽IP节点不在节点选择中（在组生成之后注入）
   const nodeSelGroup = output["proxy-groups"].find(function (g) { return g.name === "节点选择"; });
@@ -1363,8 +1362,8 @@ function testStandaloneHomeOnlyWithoutSubscription() {
   assert.strictEqual(homeNode["dialer-proxy"], undefined, "没有可用跳板时家宽IP不应绑定 dialer-proxy");
 
   const relayGroup = output["proxy-groups"].find(function (g) { return g.name === "🔗 前置"; });
-  assert(!relayGroup || relayGroup.proxies.every(function (n) { return n === EXPECTED.homeNodeName; }),
-    "没有订阅和自定义节点时，🔗 前置 最多只有可直连的家宽IP");
+  assert(!relayGroup || relayGroup.proxies.every(function (n) { return n === EXPECTED.homeNodeName || n === "DIRECT"; }),
+    "没有订阅和自定义节点时，🔗 前置 只有 DIRECT 和可直连的家宽IP");
 
   const chainGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.chainGroupName; });
   assert(chainGroup, "无订阅固定 IP 模式应创建家宽IP组");

@@ -39,7 +39,7 @@ var USER_OPTIONS = {
   location: "cn", // 本机所在位置："cn" 在中国大陆（默认）；"overseas" 在境外。规则对所有主机相同，只有 🇨🇳 国内 / 🌐 国外 / 🐟 兜底 三个策略组的默认选项跟着变
   domesticExit: [], // 🇨🇳 国内 组的回国出口候选：_customProxies 名称、订阅节点或策略组名。overseas 默认选第一个；cn 默认 DIRECT
   // 🔗 前置：本机能直连的节点都可以当前置。excludePorts 端口上的节点视为“需中转”（自定义节点/家宽IP 自动 dialer-proxy 到 🔗 前置，且不进前置候选）；
-  // excludeKeywords 只过滤 ⚡ 前置自动 的测速候选；prefer 为正则字符串，命中的节点排在 🔗 前置 手动候选前面。节点可写 via: "名称" 指定专门的前置，direct: false 强制标为需中转。
+  // 🔗 前置 是固定选择的 select，默认 DIRECT（不走前置）；excludeKeywords 过滤不想当前置的节点；prefer 为正则字符串，命中的节点排在 DIRECT 之后。节点可写 via: "名称" 指定专门的前置，direct: false 强制标为需中转。
   relay: { enable: true, excludePorts: [], excludeKeywords: [], prefer: [] },
   autoSelectGroupName: "自动选择", // 订阅中的自动选择组名（url-test），Smart 内核会自动追加 "(Smart Group)" 后缀
   autoSelectExcludeKeywords: ["公司代理"], // 只过滤自动选择组；公司代理仍会保留在节点选择里供手动使用
@@ -94,8 +94,7 @@ var BASE = {
     tailscaleProcess: "🧩 Tailscale 进程",
     tailnetDirect: "🧩 Tailnet 内部直连",
     tailscaleExit: "🧩 Tailscale Exit Node",
-    relay: "🔗 前置",
-    relayAuto: "⚡ 前置自动"
+    relay: "🔗 前置"
   },
   // 策略组：决定“哪类流量走哪里”，对所有主机相同；默认选项按 location 切换。
   policyNames: {
@@ -3307,7 +3306,8 @@ function isRelayCandidateProxy(proxy, unreachableLookup) {
   return !isBuiltinInfoNodeName(proxy.name);
 }
 
-// 生成 ⚡ 前置自动（url-test，只测订阅节点）和可见的 🔗 前置（select：⚡ 前置自动 + 全部可直连节点）。
+// 生成可见的 🔗 前置（纯 select，固定选择，不自动跳变）：[DIRECT, prefer 命中的节点, 自定义节点, 其余订阅节点]。
+// 默认 DIRECT（不走前置）；本机直连不了需中转节点时，在主机 selections 里固定一个可直连节点。
 function ensureRelayGroups(config, subscriptionNodeNames, unreachableNames) {
   var opts = getRelayOptions();
   var unreachableLookup = buildStringLookup(unreachableNames || []);
@@ -3315,40 +3315,31 @@ function ensureRelayGroups(config, subscriptionNodeNames, unreachableNames) {
   var subscriptionCandidates = [];
   var otherCandidates = [];
   var preferred = [];
-  var autoMembers;
-  var proxies = [];
+  var proxies;
   var i;
   var j;
   if (!opts.enable) return null;
+  function excludedByKeyword(name) {
+    var lowerName = String(name).toLowerCase();
+    for (var k = 0; k < opts.excludeKeywords.length; k++) {
+      if (lowerName.indexOf(String(opts.excludeKeywords[k]).toLowerCase()) >= 0) return true;
+    }
+    return false;
+  }
   for (i = 0; i < config.proxies.length; i++) {
     var proxy = config.proxies[i];
-    if (!isRelayCandidateProxy(proxy, unreachableLookup)) continue;
+    if (!isRelayCandidateProxy(proxy, unreachableLookup) || excludedByKeyword(proxy.name)) continue;
     if (subscriptionLookup[proxy.name]) subscriptionCandidates.push(proxy.name);
     else otherCandidates.push(proxy.name);
   }
   if (subscriptionCandidates.length + otherCandidates.length === 0) return null;
-
-  autoMembers = filterAutoSelectProxyNames(subscriptionCandidates).filter(function (name) {
-    var lowerName = name.toLowerCase();
-    for (var k = 0; k < opts.excludeKeywords.length; k++) {
-      if (lowerName.indexOf(String(opts.excludeKeywords[k]).toLowerCase()) >= 0) return false;
-    }
-    return true;
-  });
-  if (autoMembers.length > 0) {
-    upsertNamedItem(config["proxy-groups"], {
-      name: BASE.nodeNames.relayAuto, type: "url-test", proxies: autoMembers,
-      url: getProxyProbeUrl(), interval: 300, tolerance: 50
-    });
-    proxies.push(BASE.nodeNames.relayAuto);
-  }
   for (i = 0; i < opts.prefer.length; i++) {
     var re = new RegExp(opts.prefer[i]);
     for (j = 0; j < subscriptionCandidates.length; j++) {
       if (re.test(subscriptionCandidates[j])) { preferred.push(subscriptionCandidates[j]); break; }
     }
   }
-  proxies = uniqueStrings(proxies.concat(preferred).concat(otherCandidates).concat(subscriptionCandidates));
+  proxies = uniqueStrings([BASE.ruleTargets.direct].concat(preferred).concat(otherCandidates).concat(subscriptionCandidates));
   upsertNamedItem(config["proxy-groups"], {
     name: BASE.nodeNames.relay, type: "select", proxies: proxies, url: getProxyProbeUrl()
   });
@@ -4616,7 +4607,7 @@ function relayHasCandidateOtherThan(config, relayGroupName, name) {
   var group = relayGroupName ? findProxyGroupByName(config["proxy-groups"], relayGroupName) : null;
   if (!group) return false;
   for (var i = 0; i < group.proxies.length; i++) {
-    if (group.proxies[i] !== name) return true;
+    if (group.proxies[i] !== name && group.proxies[i] !== BASE.ruleTargets.direct) return true;
   }
   return false;
 }
@@ -4633,12 +4624,12 @@ function assertRelayReferencesResolved(config, relayGroupName) {
 }
 
 // 面板顺序：入口（自动选择/节点选择/GLOBAL）→ 策略组段（AI Agent、功能组、自定义规则组、国内/国外/兜底）
-// → 隐藏组 → 节点组段（🏠 家宽IP、🔗 前置、⚡ 前置自动、🔌 全协议回退、地区组）。同段内保持原顺序。
+// → 隐藏组 → 节点组段（🏠 家宽IP、🔗 前置、🔌 全协议回退、地区组）。同段内保持原顺序。
 function orderProxyGroups(config) {
   var groups = config["proxy-groups"];
   var autoNames = [USER_OPTIONS.autoSelectGroupName, USER_OPTIONS.autoSelectGroupName + "(Smart Group)"];
   var policyTail = [BASE.policyNames.domestic, BASE.policyNames.overseas, BASE.policyNames.fallback];
-  var nodeGroups = [ensureChainGroup(), BASE.nodeNames.relay, BASE.nodeNames.relayAuto, BASE.nodeNames.fullProtocolFallback];
+  var nodeGroups = [ensureChainGroup(), BASE.nodeNames.relay, BASE.nodeNames.fullProtocolFallback];
   function rank(g) {
     if (autoNames.indexOf(g.name) >= 0 || g.name === "节点选择" || g.name === "GLOBAL") return 0;
     if (g.name === BASE.nodeNames.aiAgent) return 1;

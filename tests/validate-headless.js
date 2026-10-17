@@ -65,8 +65,10 @@ assert.deepStrictEqual(G("🌐 国外").proxies.slice(0, 2), ["DIRECT", "节点�
 assert.deepStrictEqual(G("🐟 兜底").proxies, ["🌐 国外", "🇨🇳 国内"]);
 assert.strictEqual(cfg.rules[cfg.rules.length - 1], "MATCH,🐟 兜底");
 const relay = G("🔗 前置").proxies;
-assert.deepStrictEqual(relay.slice(0, 2), ["⚡ 前置自动", "🇺🇸 US B"], "前置默认自动，prefer 命中的节点排在手动候选前面");
-assert(!relay.includes("🇺🇸 US A") && !G("⚡ 前置自动").proxies.includes("🇺🇸 US A"), "excludePorts(443) 的节点不能当前置");
+assert.strictEqual(G("🔗 前置").type, "select");
+assert.deepStrictEqual(relay.slice(0, 2), ["DIRECT", "🇺🇸 US B"], "前置默认 DIRECT，prefer 命中的节点紧随其后");
+assert(!cfg["proxy-groups"].some(g => g.name === "⚡ 前置自动"), "不再生成自动测速前置");
+assert(!relay.includes("🇺🇸 US A"), "excludePorts(443) 的节点不能当前置");
 assert(!relay.includes("回国SS"), "dedicated 节点不当前置");
 assert(!relay.includes("家宽IP") && !relay.includes("家宽IP链式"), "需中转的家宽IP / 链式节点不能当前置");
 assert(cfg.proxies.some(p => p.name === "家宽IP链式" && p["dialer-proxy"] === "🔗 前置"));
