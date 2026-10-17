@@ -60,13 +60,21 @@ assert(/^# cocp-selections: \{"🤖 AI Agent":"🏠 家宽IP"\}$/m.test(text));
 const cfg = YAML.parse(text);
 const cn = cfg.proxies.find(p => p.name === "回国SS");
 assert.deepStrictEqual([cn.type, cn.cipher, cn.password, cn.port], ["ss", "aes-256-gcm", "cnpw", 8443], "ss 字段应完整透传");
-assert(!("scope" in cn), "管理字段不应进入节点");
+assert(!("scope" in cn) && !("dedicated" in cn), "管理字段不应进入节点");
 assert(!cfg.proxies.some(p => p.name === "可选出口"), "optional 缺失时跳过");
 const G = n => cfg["proxy-groups"].find(g => g.name === n);
 assert.deepStrictEqual(G("🇨🇳 国内").proxies, ["回国SS", "DIRECT", "节点选择"], "overseas 下 🇨🇳 国内 默认回国出口");
 assert.deepStrictEqual(G("🌐 国外").proxies.slice(0, 2), ["DIRECT", "节点选择"]);
 assert.deepStrictEqual(G("🐟 兜底").proxies, ["🌐 国外", "🇨🇳 国内"]);
 assert.strictEqual(cfg.rules[cfg.rules.length - 1], "MATCH,🐟 兜底");
+// 独立生成也沿用主覆写的检测清单，不维护第二份路由逻辑。
+for (const [domain, target] of [["ipip.net", "DIRECT"], ["ip.sb", "🔗 前置"], ["ipwho.is", "节点选择"],
+  ["ipapi.is", "🤖 AI Agent"], ["ip.net.coffee", "🤖 AI Agent"], ["ping0.cc", "🤖 AI Agent"], ["ipinfo.io", "🤖 AI Agent"]]) {
+  assert(cfg.rules.includes("DOMAIN-SUFFIX," + domain + "," + target));
+  assert.strictEqual(cfg.rules.includes("AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX," + domain + ")),REJECT"), target !== "DIRECT");
+  assert(cfg.dns["nameserver-policy"]["+." + domain].every(server => server.endsWith("#" + target)));
+  assert(cfg.sniffer["force-domain"].includes("+." + domain));
+}
 assert.strictEqual(G("🔗 家宽跳板").proxies[0], "🇺🇸 US B", "家宽跳板应优先非 443 美国节点");
 assert(cfg.proxies.some(p => p.name === "家宽IP链式" && p["dialer-proxy"] === "🔗 家宽跳板"));
 assert.deepStrictEqual(G("🔗 前置").proxies, ["DIRECT", "⤴ 🇺🇸 US B", "⤴ 🇭🇰 HK A"], "🔗 前置：DIRECT + 可直连副本；443 与 dedicated 节点不进");
@@ -147,6 +155,86 @@ assert.throws(() => renderFixture("runtime-cycle", {
   roles: { home: { secret: "T_HOME" } },
   runtime: { extra: { "proxy-groups": [{ name: "loop", type: "select", proxies: ["loop"] }] } }
 }), error => /循环引用/.test(String(error.stderr)), "runtime.extra 修改后的引用也应检查");
+
+const sharedSpec = {
+  location: "overseas", subscriptions: [{ url: sub }],
+  roles: { home: { secret: "T_HOME" }, cnReturn: [
+    { name: "shared-cn", secret: "T_CN", optional: true, allowAsFront: true }
+  ] }
+};
+const shared = renderFixture("shared-cn", sharedSpec).config;
+const sharedGroup = name => shared["proxy-groups"].find(g => g.name === name);
+assert.strictEqual(shared.proxies.filter(p => p.name === "shared-cn").length, 1, "国内和前置共用一个节点定义");
+assert.strictEqual(sharedGroup("🇨🇳 国内").proxies[0], "shared-cn");
+assert(sharedGroup("🔗 前置").proxies.includes("shared-cn"));
+assert.strictEqual(sharedGroup("🔗 前置").proxies[0], "DIRECT");
+assert(!sharedGroup("节点选择").proxies.includes("shared-cn"));
+assert(!("allowAsFront" in shared.proxies.find(p => p.name === "shared-cn")));
+const absent = renderFixture("optional-shared-cn", sharedSpec, { T_CN: "" }).config;
+assert.strictEqual(absent["proxy-groups"].find(g => g.name === "🇨🇳 国内").proxies[0], "DIRECT", "没配置国内节点时仍可生成");
+assert(!absent["proxy-groups"].find(g => g.name === "🔗 前置").proxies.includes("shared-cn"));
+
+const groupSpec = JSON.parse(JSON.stringify(sharedSpec));
+delete groupSpec.roles.cnReturn[0].allowAsFront;
+groupSpec.options = { front: { include: ["shared-cn"] } };
+const included = renderFixture("front-include-cn", groupSpec).config;
+assert.deepStrictEqual(included, shared, "前置组授权专用节点应与旧 allowAsFront 生成相同配置");
+const skipped = renderFixture("front-include-optional", groupSpec, { T_CN: "" }).config;
+assert.deepStrictEqual(skipped, absent, "optional 国内节点缺失时连同其前置引用一起跳过");
+const missingInclude = JSON.parse(JSON.stringify(groupSpec));
+missingInclude.options.front.include.push("typo-cn");
+assert.throws(() => renderFixture("front-include-typo", missingInclude, { T_CN: "" }),
+  error => /front.include.*typo-cn/.test(String(error.stderr)), "只忽略明确跳过的可选节点，不能吞掉拼写错误");
+const optionalCustom = {
+  subscriptions: [{ url: sub }],
+  customProxies: [{ name: "optional-front", secret: "T_CN", optional: true, dedicated: true }],
+  options: { front: { include: [" optional-front "], excludePorts: [443] } }
+};
+const absentCustom = renderFixture("front-optional-custom", optionalCustom, { T_CN: "" }).config;
+assert(!absentCustom["proxy-groups"].find(g => g.name === "🔗 前置").proxies.includes("optional-front"));
+const presentCustom = renderFixture("front-present-custom", optionalCustom).config;
+assert(presentCustom["proxy-groups"].find(g => g.name === "🔗 前置").proxies.includes("optional-front"));
+
+[
+  { fields: {}, dedicated: true },
+  { fields: { dedicated: true }, dedicated: true },
+  { fields: { dedicated: false }, dedicated: false },
+  { fields: { scope: "dedicated" }, dedicated: true },
+  { fields: { scope: "ordinary" }, dedicated: false },
+  { fields: { dedicated: false, scope: "ordinary" }, dedicated: false }
+].forEach((entry, index) => {
+  const spec = {
+    location: "overseas", subscriptions: [{ url: sub }],
+    roles: { cnReturn: [Object.assign({ name: "boolean-cn", secret: "T_CN" }, entry.fields)] }
+  };
+  const result = renderFixture("dedicated-return-" + index, spec).config;
+  const node = result.proxies.find(p => p.name === "boolean-cn");
+  assert(!("dedicated" in node) && !("scope" in node));
+  const group = name => result["proxy-groups"].find(g => g.name === name);
+  assert.strictEqual(group("🇨🇳 国内").proxies[0], "boolean-cn");
+  assert.strictEqual(group("节点选择").proxies.includes("boolean-cn"), !entry.dedicated,
+    "回国节点默认专用，但须尊重显式 false 和旧 scope");
+});
+
+const customFlags = renderFixture("dedicated-custom", {
+  subscriptions: [{ url: sub }],
+  customProxies: [
+    { name: "private-custom", secret: "T_CN", dedicated: true, allowAsFront: true },
+    { name: "ordinary-custom", type: "http", server: "203.0.113.30", port: 8080, dedicated: false }
+  ]
+}).config;
+const customFlagGroup = name => customFlags["proxy-groups"].find(g => g.name === name);
+assert(customFlagGroup("🔗 前置").proxies.includes("private-custom"));
+assert(!customFlagGroup("节点选择").proxies.includes("private-custom"));
+assert(customFlagGroup("节点选择").proxies.includes("ordinary-custom"));
+assert.strictEqual(customFlags.proxies.find(p => p.name === "ordinary-custom")["dialer-proxy"], "🔗 前置");
+assert(customFlagGroup("🔗 前置").proxies.includes("⤴ ordinary-custom"));
+assert.strictEqual(customFlags.proxies.find(p => p.name === "⤴ ordinary-custom")["dialer-proxy"], undefined);
+assert(customFlags.proxies.every(p => !("dedicated" in p) && !("scope" in p)));
+assert.throws(() => renderFixture("dedicated-conflict", {
+  subscriptions: [{ url: sub }],
+  roles: { cnReturn: [{ name: "conflict", secret: "T_CN", dedicated: false, scope: "dedicated" }] }
+}), error => /dedicated 与 scope 配置冲突/.test(String(error.stderr)));
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("validate-headless: ok");

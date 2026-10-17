@@ -1,5 +1,5 @@
 /**
- * 家宽IP-直连覆写脚本测试
+ * 完全覆写脚本行为与回归测试
  */
 const assert = require("assert");
 const fs = require("fs");
@@ -32,6 +32,11 @@ const EXPECTED = {
   tailnetDirectGroupName: "🧩 Tailnet 内部直连",
   tailscaleExitGroupName: "🧩 Tailscale Exit Node"
 };
+
+const EXPECTED_NETWORK_PROBES = [
+  ["ipip.net", "direct"], ["ip.sb", "front"], ["ipwho.is", "node"],
+  ["ipapi.is", "ai"], ["ip.net.coffee", "ai"], ["ping0.cc", "ai"], ["ipinfo.io", "ai"]
+];
 
 // ─── sandbox ────────────────────────────────────────────────────────────────
 
@@ -489,10 +494,10 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.net.coffee," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,DIRECT");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipip.net,🔗 前置");
-  assert(output.rules.indexOf("DOMAIN-SUFFIX,ipip.net,🔗 前置") < output.rules.indexOf("GEOSITE,cn,🇨🇳 国内"),
-    "ipip.net 必须先于 GeoSite cn 命中 🔗 前置");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipip.net,DIRECT");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,🔗 前置");
+  assert(output.rules.indexOf("DOMAIN-SUFFIX,ip.sb,🔗 前置") < output.rules.indexOf("GEOSITE,cn,🇨🇳 国内"),
+    "ip.sb 必须先于 GeoSite cn 命中 🔗 前置");
 
   // 媒体规则指向媒体组
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com," + EXPECTED.mediaGroupName);
@@ -770,10 +775,10 @@ function testNoCredentialPureOverwrite() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.net.coffee," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,DIRECT");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipip.net,🔗 前置");
-  assert(output.rules.indexOf("DOMAIN-SUFFIX,ipip.net,🔗 前置") < output.rules.indexOf("GEOSITE,cn,🇨🇳 国内"),
-    "ipip.net 必须先于 GeoSite cn 命中 🔗 前置");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipip.net,DIRECT");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,🔗 前置");
+  assert(output.rules.indexOf("DOMAIN-SUFFIX,ip.sb,🔗 前置") < output.rules.indexOf("GEOSITE,cn,🇨🇳 国内"),
+    "ip.sb 必须先于 GeoSite cn 命中 🔗 前置");
 
   // 域名规则正常
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com,🌍 国际媒体");
@@ -790,9 +795,10 @@ function testAiQuicRejectCanBeDisabled() {
   const { output } = runMain(null, function (sandbox) {
     sandbox.USER_OPTIONS.rejectAiQuic = false;
   });
-  assert.strictEqual(output.rules.filter(function (rule) {
+  assert.deepStrictEqual(Array.from(output.rules.filter(function (rule) {
     return rule.indexOf("AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX,") === 0;
-  }).length, 0, "关闭 rejectAiQuic 后不应生成 AI QUIC 拒绝规则");
+  })), EXPECTED_NETWORK_PROBES.filter(([, role]) => role !== "direct").map(([domain]) => aiQuicRejectRule(domain)),
+  "关闭 AI QUIC 保护后只保留独立的检测站保护");
   assertRulesMissing(output.rules, [googleGeositeQuicRejectRule()]);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,openai.com," + EXPECTED.aiGroupName);
 }
@@ -1051,6 +1057,59 @@ function testDedicatedCustomProxyOnlyAppearsInExplicitRuleGroup() {
     "普通自定义出口应保持向后兼容，继续进入 AI Agent");
 }
 
+function testDedicatedBooleanPreservesScopeBehavior() {
+  function render(fields) {
+    const { output } = runMain(function (config) {
+      config._customProxies = [Object.assign({
+        name: "测试出口", type: "socks5", server: "203.0.113.25", port: 1080, udp: true
+      }, fields)];
+      config._customRuleGroups = [{
+        name: "测试业务", proxies: ["测试出口"], rules: ["DOMAIN-SUFFIX,private.example"]
+      }];
+    });
+    return JSON.parse(JSON.stringify(output));
+  }
+
+  const dedicatedOutput = render({ scope: "dedicated" });
+  [{ dedicated: true }, { dedicated: true, scope: "dedicated" }].forEach(function (fields) {
+    assert.deepStrictEqual(render(fields), dedicatedOutput, "布尔专用配置应与旧 scope 生成相同结果");
+  });
+  const ordinaryOutput = render({});
+  [{ dedicated: false }, { scope: "ordinary" }, { dedicated: false, scope: "ordinary" }].forEach(function (fields) {
+    assert.deepStrictEqual(render(fields), ordinaryOutput, "false 和旧 ordinary 应保持默认普通出口行为");
+  });
+  dedicatedOutput["proxy-groups"].forEach(function (group) {
+    if (group.name !== "测试业务") assert(!group.proxies.includes("测试出口"), "专用节点不能进入 " + group.name);
+  });
+  assert(findGroup(ordinaryOutput, "节点选择").proxies.includes("测试出口"));
+  [dedicatedOutput, ordinaryOutput].forEach(function (output) {
+    assert(output.proxies.every(function (proxy) { return !("dedicated" in proxy) && !("scope" in proxy); }),
+      "新旧管理字段不能进入最终节点或前置副本");
+  });
+}
+
+function testDedicatedBooleanRejectsInvalidOrConflictingValues() {
+  function render(fields) {
+    return runMain(function (config) {
+      config._customProxies = [Object.assign({
+        name: "测试出口", type: "http", server: "203.0.113.25", port: 8080
+      }, fields)];
+    });
+  }
+  ["true", "false", 0, 1, null, {}, []].forEach(function (value) {
+    assert.throws(function () { render({ dedicated: value }); }, /dedicated 必须为布尔值/);
+  });
+  [
+    { dedicated: false, scope: "dedicated" },
+    { dedicated: true, scope: "ordinary" }
+  ].forEach(function (fields) {
+    assert.throws(function () { render(fields); }, /dedicated 与 scope 配置冲突/);
+  });
+  assert.throws(function () { render({ dedicated: true, scope: "invalid" }); }, /scope 无效/);
+  assert.throws(function () { render({ dedicated: true }); }, /未被 .*引用/,
+    "布尔专用节点仍需明确用途，不能静默进入通用候选");
+}
+
 function testCustomRuleGroupsCannotOverrideProtectedRules() {
   const protectedCases = [
     {
@@ -1080,8 +1139,21 @@ function testCustomRuleGroupsCannotOverrideProtectedRules() {
     {
       rule: { type: "AND", value: "((NETWORK,udp),(DST-PORT,3478))" },
       identity: "AND,((NETWORK,udp),(DST-PORT,3478))"
+    },
+    {
+      rule: { type: "AND", value: "((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX,ip.sb))" },
+      identity: "AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX,ip.sb))"
     }
   ];
+
+  EXPECTED_NETWORK_PROBES.forEach(([domain, role]) => {
+    const identity = "DOMAIN-SUFFIX," + domain;
+    protectedCases.push({ rule: identity, identity });
+    if (role !== "direct") {
+      const value = "((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX," + domain + "))";
+      protectedCases.push({ rule: { type: "AND", value }, identity: "AND," + value });
+    }
+  });
 
   protectedCases.forEach(function (testCase) {
     assert.throws(function () {
@@ -1119,7 +1191,7 @@ function testDedicatedCustomProxyMustBeReferenced() {
         }
       ];
     });
-  }, /未被 _customRuleGroups\.proxies 引用/);
+  }, /未被 _customRuleGroups\.proxies.*allowAsFront.*引用/);
 }
 
 function testDedicatedCustomProxyRejectsNameCollisions() {
@@ -1175,7 +1247,7 @@ function testDedicatedCustomProxyRejectsNameCollisions() {
   }, /自定义出口名称重复/);
 }
 
-function testFrontProxyAppliesOnlyToSubscriptionNodes() {
+function testFrontProxyAppliesToSubscriptionAndOrdinaryNodes() {
   const { output } = runMain(function (config) {
     delete config._homeProxy;
     config._frontProxy = { name: "一级前置代理", type: "socks5", server: "10.0.0.8", port: 1080 };
@@ -1195,7 +1267,7 @@ function testFrontProxyAppliesOnlyToSubscriptionNodes() {
   });
 
   const customNode = output.proxies.find(function (p) { return p.name === "公司代理"; });
-  assert.strictEqual(customNode["dialer-proxy"], undefined, "自定义出口不应被前置代理覆盖");
+  assert.strictEqual(customNode["dialer-proxy"], "🔗 前置", "普通自定义出口默认跟随前置组");
   assert.strictEqual(customNode.udp, false, "HTTP 自定义出口不应声明 UDP 能力");
 
   const nodeSelGroup = output["proxy-groups"].find(function (g) { return g.name === "节点选择"; });
@@ -1212,9 +1284,9 @@ function testFrontProxyAppliesOnlyToSubscriptionNodes() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.net.coffee," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,DIRECT");
-  assertRulesMissing(output.rules, ["DOMAIN-SUFFIX,ip.sb,一级前置代理"]);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipip.net,🔗 前置");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipip.net,DIRECT");
+  assertRulesMissing(output.rules, ["DOMAIN-SUFFIX,ipip.net,一级前置代理"]);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,🔗 前置");
 }
 
 function testFrontProxyDoesNotOverrideHomeProxyDialer() {
@@ -1267,9 +1339,12 @@ function testStandaloneCustomProxiesWithoutSubscription() {
   const fallbackGroup = output["proxy-groups"].find(function (g) {
     return g.name === EXPECTED.fullProtocolFallbackGroupName;
   });
-  assert(fallbackGroup, "SOCKS5 自定义节点应形成全协议回退组");
-  assert.deepEqual(fallbackGroup.proxies, ["美国固定IP"],
-    "全协议回退组应排除 HTTP 公司代理，只保留 SOCKS5 节点");
+  assert(!fallbackGroup, "前置可切到 HTTP 时，SOCKS5 原节点不能保证整条链路支持 UDP");
+  const udpOnly = createEmptyConfig();
+  udpOnly._customProxies = [{ name: "UDP出口", type: "socks5", server: "203.0.113.2", port: 1080, udp: true }];
+  const udpOutput = runMainWithConfig(udpOnly).output;
+  assert.deepStrictEqual(Array.from(findGroup(udpOutput, EXPECTED.fullProtocolFallbackGroupName).proxies), ["UDP出口"],
+    "全链路都支持 UDP 时仍应保留全协议回退，不放入前置副本");
 }
 
 function testCustomRuleGroupsRouteOnlyMatchedDomains() {
@@ -1404,7 +1479,7 @@ function testStandaloneHomeOnlyWithoutSubscription() {
   assert.strictEqual(aiGroup.proxies[0], EXPECTED.chainGroupName, "固定 IP 应优先出现在 AI Agent");
 }
 
-function testStandaloneFrontProxyOnlyAppliesWhenRequested() {
+function testStandaloneCustomNodesFollowFrontGroup() {
   const config = createEmptyConfig();
   config._frontProxy = { name: "一级前置代理", type: "socks5", server: "10.0.0.8", port: 1080 };
   config._customProxies = [
@@ -1415,7 +1490,7 @@ function testStandaloneFrontProxyOnlyAppliesWhenRequested() {
 
   const normalNode = output.proxies.find(function (p) { return p.name === "公司代理"; });
   const chainedNode = output.proxies.find(function (p) { return p.name === "上游节点"; });
-  assert.strictEqual(normalNode["dialer-proxy"], undefined, "未声明 useFrontProxy 的自定义节点不应走前置代理");
+  assert.strictEqual(normalNode["dialer-proxy"], "🔗 前置", "普通自定义节点默认跟随前置组，无需额外开关");
   assert.strictEqual(chainedNode["dialer-proxy"], "🔗 前置", "声明 useFrontProxy 的自定义节点应走 🔗 前置");
 
   const nodeSelGroup = output["proxy-groups"].find(function (g) { return g.name === "节点选择"; });
@@ -1941,7 +2016,7 @@ function testDomesticExitAllowsForwardReferences() {
   assert.deepStrictEqual(Array.from(findGroup(custom, DOMESTIC_GROUP).proxies), ["回国业务", "DIRECT", "节点选择"]);
 }
 
-// 🔗 前置：订阅节点与 useFrontProxy 节点经它出站；候选为 DIRECT + _frontProxy + 未挂前置的普通自定义节点；via 覆盖。
+// 普通节点默认经前置组，候选只解除自动绑定，不改变显式 via。
 function testFrontGroup() {
   const { output } = runMain(function (config) {
     config._customProxies = [
@@ -1952,14 +2027,15 @@ function testFrontGroup() {
   });
   const byName = function (n) { return output.proxies.find(function (p) { return p.name === n; }); };
   const front = findGroup(output, "🔗 前置");
-  assert.deepStrictEqual(Array.from(front.proxies).slice(0, 3), ["DIRECT", "公司", "⤴ 经前置"],
+  assert.deepStrictEqual(Array.from(front.proxies).slice(0, 3), ["DIRECT", "⤴ 公司", "⤴ 经前置"],
     "候选只解除脚本自动添加的前置，不绕过显式 via");
   assert(front.proxies.indexOf("⤴ 指定") < 0, "显式 via 节点不能生成绕过上游的前置副本");
   assert(front.proxies.indexOf("⤴ 🇸🇬 SG Auto 01") >= 0);
   assert.strictEqual(byName("经前置")["dialer-proxy"], "🔗 前置");
   assert.strictEqual(byName("指定")["dialer-proxy"], "公司", "via 应覆盖默认前置");
   assert(!("via" in byName("指定")), "via 不应进入节点");
-  assert.strictEqual(byName("公司")["dialer-proxy"], undefined, "前置候选自身不挂前置（防循环）");
+  assert.strictEqual(byName("公司")["dialer-proxy"], "🔗 前置", "普通自定义节点默认跟随前置组");
+  assert.strictEqual(byName("⤴ 公司")["dialer-proxy"], undefined, "前置副本自身不挂前置（防循环）");
   assert.strictEqual(byName(EXPECTED.homeNodeName)["dialer-proxy"], undefined, "家宽IP 不挂前置");
   assert.strictEqual(byName(EXPECTED.homeChainedNodeName)["dialer-proxy"], "🔗 家宽跳板", "家宽链式仍走家宽跳板");
   assert(!findGroup(output, EXPECTED.fullProtocolFallbackGroupName),
@@ -1988,10 +2064,161 @@ function testFrontGroup() {
   assert(!findGroup(legacy, "🔗 前置"), "frontGroup=false 不生成 🔗 前置");
   assert.strictEqual(legacy.proxies.find(function (p) { return p.name === "🇸🇬 SG Auto 01"; })["dialer-proxy"], "一级前置",
     "frontGroup=false 时沿用旧的单节点前置");
-  assertRuleExists(legacy.rules, "DOMAIN-SUFFIX,ipip.net,一级前置");
+  assertRuleExists(legacy.rules, "DOMAIN-SUFFIX,ip.sb,一级前置");
+  assertRuleExists(legacy.rules, "DOMAIN-SUFFIX,ipip.net,DIRECT");
   const { output: noFront } = runMain(null, function (sandbox) { sandbox.USER_OPTIONS.frontGroup = false; });
   assertRuleExists(noFront.rules, "DOMAIN-SUFFIX,ipip.net,DIRECT");
   assertRuleExists(noFront.rules, "DOMAIN-SUFFIX,ip.sb,DIRECT");
+}
+
+function testNetworkProbeRoutingAfterSwap() {
+  const audit = require("../scripts/rule-routing-audit");
+  for (const location of ["cn", "overseas"]) {
+    for (const frontGroup of [true, false]) {
+      for (const withFront of [true, false]) {
+        const { output } = runMain(config => {
+          delete config._homeProxy;
+          if (withFront) config._frontProxy = { name: "检测前置", type: "socks5", server: "203.0.113.99", port: 1080 };
+          config.rules.push("DOMAIN-SUFFIX,ip.sb,DIRECT", "DOMAIN-SUFFIX,ipip.net,节点选择");
+        }, sandbox => {
+          sandbox.USER_OPTIONS.location = location;
+          sandbox.USER_OPTIONS.frontGroup = frontGroup;
+          sandbox.USER_OPTIONS.enableChainRegionBrowserProcessProxy = true;
+        });
+        const frontTarget = frontGroup ? "🔗 前置" : withFront ? "检测前置" : "DIRECT";
+        for (const [domain, suffix, target] of [
+          ["ip.sb", "ip.sb", frontTarget], ["api.ip.sb", "ip.sb", frontTarget],
+          ["ipv4.ip.sb", "ip.sb", frontTarget], ["stat.ip.sb", "ip.sb", frontTarget],
+          ["ipip.net", "ipip.net", "DIRECT"], ["www.ipip.net", "ipip.net", "DIRECT"]
+        ]) {
+          const expectedRule = "DOMAIN-SUFFIX," + suffix + "," + target;
+          for (const process of ["chrome.exe", "Clash Party.exe", "codex"]) {
+            for (const port of [80, 443]) {
+              assert.deepStrictEqual(audit.route(output.rules, { domain, process, port, network: "tcp" }),
+                { rule: expectedRule, target }, "检测规则应优先于进程强制代理：" + domain);
+            }
+            const quicRule = "AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX,ip.sb)),REJECT";
+            assert.deepStrictEqual(audit.route(output.rules, { domain, process, port: 443, network: "udp" }),
+              suffix === "ip.sb" ? { rule: quicRule, target: "REJECT" } : { rule: expectedRule, target },
+              "IP.SB 的 QUIC 必须拒绝以避免跳过无 UDP 前置，ipip.net 仍直连");
+          }
+          assert.strictEqual(output.rules.filter(r => r.startsWith("DOMAIN-SUFFIX," + suffix + ",")).length, 1,
+            "不能残留交换前的重复检测规则");
+        }
+      }
+    }
+  }
+}
+
+function testIpSbQuicProtectionIsNarrowAndIndependent() {
+  const audit = require("../scripts/rule-routing-audit");
+  const guard = "AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX,ip.sb)),REJECT";
+  const { output } = runMain(config => {
+    config._customRuleGroups = [{ name: "自定义测试业务", rules: ["DOMAIN-SUFFIX,example.corp"] }];
+  }, sandbox => {
+    sandbox.USER_OPTIONS.rejectAiQuic = false;
+    sandbox.USER_OPTIONS.rejectAppStoreQuic = false;
+  });
+  assert.strictEqual(output.rules.filter(r => r === guard).length, 1);
+  assert.strictEqual(audit.route(output.rules, { domain: "api.ip.sb", process: "Clash Party.exe", network: "udp", port: 443 }).rule, guard);
+  ["example.com", "ip.sb.example.com", "notip.sb", "ipip.net", "api.ipip.net"].forEach(domain => {
+    assert.strictEqual(audit.matches(guard, { domain, network: "udp", port: 443 }), false,
+      "不能扩大到其他网站的 UDP：" + domain);
+  });
+  for (const network of ["tcp", "udp"]) {
+    for (const port of [53, 80, 443, 8443]) {
+      assert.strictEqual(audit.matches(guard, { domain: "api.ip.sb", network, port }), network === "udp" && port === 443);
+    }
+  }
+}
+
+function testNetworkProbeRegistryDrivesAllLayers() {
+  const audit = require("../scripts/rule-routing-audit");
+  for (const location of ["cn", "overseas"]) {
+    for (const frontGroup of [true, false]) {
+      for (const withFront of [true, false]) {
+        const { output, sandbox } = runMain(config => {
+          if (!withFront) delete config._homeProxy;
+          if (withFront) config._frontProxy = { name: "检测前置", server: "203.0.113.99", port: 8080 };
+          config._customRuleGroups = [{ name: "普通业务", rules: ["DOMAIN-SUFFIX,example.corp"] }];
+        }, sandbox => {
+          sandbox.USER_OPTIONS.location = location;
+          sandbox.USER_OPTIONS.frontGroup = frontGroup;
+          sandbox.USER_OPTIONS.enableChainRegionBrowserProcessProxy = true;
+          sandbox.USER_OPTIONS.rejectAiQuic = false;
+        });
+        const targets = { direct: "DIRECT", front: frontGroup ? "🔗 前置" : withFront ? "检测前置" : "DIRECT",
+          node: "节点选择", ai: EXPECTED.aiGroupName };
+        assert.deepStrictEqual(JSON.parse(JSON.stringify(sandbox.NETWORK_PROBES.map(p => [p.domain, p.target]))),
+          EXPECTED_NETWORK_PROBES, "检测站用途保持不变");
+        const expectedBlock = EXPECTED_NETWORK_PROBES.filter(([, role]) => role !== "direct")
+          .map(([domain]) => aiQuicRejectRule(domain))
+          .concat(EXPECTED_NETWORK_PROBES.map(([domain, role]) => "DOMAIN-SUFFIX," + domain + "," + targets[role]));
+        const blockStart = output.rules.indexOf(expectedBlock[0]);
+        assert(blockStart >= 0);
+        assert.deepStrictEqual(Array.from(output.rules.slice(blockStart, blockStart + expectedBlock.length)), expectedBlock,
+          "检测规则应保持连续，且自定义业务不能把 AI 进程规则移到检测规则前面");
+        for (const [suffix, role] of EXPECTED_NETWORK_PROBES) {
+          const target = targets[role];
+          const rule = "DOMAIN-SUFFIX," + suffix + "," + target;
+          assert.strictEqual(output.rules.filter(r => r.startsWith("DOMAIN-SUFFIX," + suffix + ",")).length, 1);
+          for (const domain of [suffix, "api." + suffix]) {
+            for (const process of ["chrome.exe", "Clash Party.exe", "codex"]) {
+              assert.deepStrictEqual(audit.route(output.rules, { domain, process, network: "tcp", port: 443 }), { rule, target });
+              assert.deepStrictEqual(audit.route(output.rules, { domain, process, network: "udp", port: 443 }),
+                role === "direct" ? { rule, target } : { rule: aiQuicRejectRule(suffix), target: "REJECT" });
+            }
+          }
+          const servers = target === "DIRECT" && location === "cn" ? sandbox.BASE.dns.domestic : sandbox.BASE.dns.overseas;
+          assert.deepStrictEqual(Array.from(output.dns["nameserver-policy"]["+." + suffix]),
+            Array.from(sandbox.routeDnsServers(servers, target)), "检测 DNS 跟随观察链路：" + suffix);
+          assert(output.sniffer["force-domain"].includes("+." + suffix));
+          if (location === "cn") {
+            assert.strictEqual(output.dns["fallback-filter"].domain.includes("+." + suffix), role !== "direct");
+          }
+        }
+      }
+    }
+  }
+  const { output } = runMain(null, sandbox => { sandbox.USER_OPTIONS.overseasDnsTarget = "节点选择"; });
+  ["ipapi.is", "ip.net.coffee", "ping0.cc", "ipinfo.io"].forEach(domain => {
+    assert(output.dns["nameserver-policy"]["+." + domain].every(server => server.endsWith("#节点选择")),
+      "AI 检测尊重显式海外 DNS 出口设置");
+  });
+}
+
+function testNetworkProbeRegistryCanBeMaintainedInOnePlace() {
+  const { output } = runMain(null, sandbox => {
+    sandbox.NETWORK_PROBES = sandbox.NETWORK_PROBES.filter(p => p.domain !== "ping0.cc");
+    sandbox.NETWORK_PROBES.push({ domain: "probe.example", target: "node", purpose: "回归检测", rejectQuic: true });
+    sandbox.NETWORK_PROBES.find(p => p.domain === "ipinfo.io").rejectQuic = false;
+  });
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,probe.example,节点选择");
+  assertRuleExists(output.rules, aiQuicRejectRule("probe.example"));
+  assert(output.dns["nameserver-policy"]["+.probe.example"].every(server => server.endsWith("#节点选择")));
+  assert(output.sniffer["force-domain"].includes("+.probe.example"));
+  assert(output.dns["fallback-filter"].domain.includes("+.probe.example"));
+  assert(!JSON.stringify(output).includes("ping0.cc"), "删除清单条目后不能残留旧 AI/DNS/嗅探规则");
+  assertRulesMissing(output.rules, [aiQuicRejectRule("ipinfo.io")]);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipinfo.io," + EXPECTED.aiGroupName);
+}
+
+function testNetworkProbeRegistryRejectsInvalidEntries() {
+  const valid = { domain: "probe.example", target: "node", purpose: "回归检测", rejectQuic: true };
+  const invalid = [null, {}, { domain: "https://probe.example" }, { domain: "*.probe.example" },
+    { domain: "Probe.example" }, { domain: "probe.example:443" }, { target: "unknown" },
+    { purpose: " " }, { rejectQuic: "true" }];
+  invalid.forEach(fields => {
+    const entry = fields === null || Object.keys(fields).length === 0 ? fields : { ...valid, ...fields };
+    assert.throws(() => runMain(null, sandbox => { sandbox.NETWORK_PROBES.push(entry); }), /NETWORK_PROBES/);
+  });
+  assert.throws(() => runMain(null, sandbox => { sandbox.NETWORK_PROBES = {}; }), /NETWORK_PROBES/);
+  for (const domains of [["probe.example", "probe.example"], ["probe.example", "api.probe.example"],
+    ["api.probe.example", "probe.example"]]) {
+    assert.throws(() => runMain(null, sandbox => {
+      sandbox.NETWORK_PROBES = domains.map(domain => ({ ...valid, domain }));
+    }), /后缀重叠/);
+  }
 }
 
 function testFrontCopiesPreserveExplicitDialersAndAvoidNameCollisions() {
@@ -2009,6 +2236,237 @@ function testFrontCopiesPreserveExplicitDialersAndAvoidNameCollisions() {
     assert(front.proxies.indexOf(name) >= 0);
     assert(findGroup(output, "节点选择").proxies.indexOf(name) < 0);
   });
+}
+
+function testDomesticExitCanAlsoBeAnExplicitFrontCandidate() {
+  ["cn", "overseas"].forEach(function (location) { [false, true].forEach(function (legacy) {
+    const { output } = runMain(function (config) {
+      config._customProxies = [{
+        name: "共享国内节点", dedicated: true, allowAsFront: legacy ? true : undefined,
+        type: "socks5", server: "203.0.113.88", port: 1080, udp: true
+      }];
+    }, function (sandbox) {
+      sandbox.USER_OPTIONS.location = location;
+      sandbox.USER_OPTIONS.domesticExit = ["共享国内节点"];
+      if (!legacy) sandbox.USER_OPTIONS.front.include = [" 共享国内节点 ", "共享国内节点"];
+    });
+    const node = output.proxies.filter(function (proxy) { return proxy.name === "共享国内节点"; });
+    assert.strictEqual(node.length, 1, "一个物理节点只生成一份凭证配置");
+    assert.strictEqual(node[0]["dialer-proxy"], undefined, "共享前置节点必须自行直连拨号");
+    assert(!Object.prototype.hasOwnProperty.call(node[0], "allowAsFront"), "角色字段不能进入内核节点配置");
+    const domestic = findGroup(output, "🇨🇳 国内");
+    const front = findGroup(output, "🔗 前置");
+    assert.strictEqual(domestic.proxies[0], location === "cn" ? "DIRECT" : "共享国内节点");
+    assert.strictEqual(front.proxies[0], "DIRECT", "允许当前置不等于默认启用它");
+    assert.strictEqual(front.proxies.filter(function (name) { return name === "共享国内节点"; }).length, 1);
+    ["节点选择", "GLOBAL", "自动选择(Smart Group)", "🤖 AI Agent", "🔗 家宽跳板", "🌍 国际媒体"].forEach(function (name) {
+      const group = findGroup(output, name);
+      assert(!group || group.proxies.indexOf("共享国内节点") < 0, "不能因当前置而混入 " + name);
+    });
+  }); });
+}
+
+function testOrdinaryFrontDefaultsAndLegacyOptOut() {
+  const { output } = runMain(function (config) {
+    config._customProxies = [
+      { name: "自动前置", type: "socks5", server: "10.96.0.100", port: 1080, udp: true,
+        username: "test-user", password: "test-password", interfaceName: "Tailscale", tls: true },
+      { name: "旧直连", type: "http", server: "203.0.113.2", port: 8080, useFrontProxy: false },
+      { name: "旧前置候选", type: "socks5", server: "203.0.113.3", port: 1080, allowAsFront: true },
+      { name: "指定直连", type: "socks5", server: "203.0.113.4", port: 1080, via: "DIRECT" }
+    ];
+  });
+  const proxy = name => output.proxies.find(p => p.name === name);
+  assert.strictEqual(proxy("自动前置")["dialer-proxy"], "🔗 前置");
+  const original = JSON.parse(JSON.stringify(proxy("自动前置")));
+  original.name = "⤴ 自动前置";
+  delete original["dialer-proxy"];
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(proxy(original.name))), original,
+    "前置副本只解除自动绑定，保留认证、接口和协议字段");
+  const front = findGroup(output, "🔗 前置");
+  assert.strictEqual(front.proxies[0], "DIRECT");
+  ["⤴ 自动前置", "旧直连", "旧前置候选", "指定直连"].forEach(name => assert(front.proxies.indexOf(name) >= 0));
+  ["旧直连", "旧前置候选"].forEach(name => assert.strictEqual(proxy(name)["dialer-proxy"], undefined));
+  assert.strictEqual(proxy("指定直连")["dialer-proxy"], "DIRECT");
+  output["proxy-groups"].filter(g => g.name !== "🔗 前置").forEach(g => {
+    assert((g.proxies || []).indexOf("⤴ 自动前置") < 0, "副本不能混入 " + g.name);
+  });
+  assert(output.tun["route-exclude-address"].indexOf("10.96.0.100/32") >= 0);
+  assert(output.proxies.every(p => !("useFrontProxy" in p) && !("allowAsFront" in p)));
+
+  [false, true].forEach(withLegacyFront => {
+    const result = runMain(function (config) {
+      if (withLegacyFront) config._frontProxy = { name: "旧一级", type: "socks5", server: "203.0.113.5", port: 1080 };
+      config._customProxies = [{ name: "普通出口", server: "203.0.113.6", port: 8080 }];
+    }, sandbox => { sandbox.USER_OPTIONS.frontGroup = false; }).output;
+    assert.strictEqual(result.proxies.find(p => p.name === "普通出口")["dialer-proxy"], undefined,
+      "禁用前置组时保留旧的普通节点直连行为");
+  });
+  assert.throws(() => runMain(config => {
+    config._customProxies = [{ name: "错误开关", server: "203.0.113.6", port: 8080, useFrontProxy: "false" }];
+  }), /useFrontProxy.*布尔/);
+  const explicit = runMain(config => {
+    config._customProxies = [{ name: "原生上游", server: "203.0.113.6", port: 8080, "dialer-proxy": "🇸🇬 SG Auto 01" }];
+  }).output;
+  assert.strictEqual(explicit.proxies.find(p => p.name === "原生上游")["dialer-proxy"], "🇸🇬 SG Auto 01");
+  assert(!explicit.proxies.some(p => p.name === "⤴ 原生上游"), "原生显式上游也不能被解除");
+  assert.throws(() => runMain(config => {
+    config._customProxies = [{ name: "冲突上游", server: "203.0.113.6", port: 8080, via: "DIRECT", "dialer-proxy": "🇸🇬 SG Auto 01" }];
+  }), /via 与 dialer-proxy 配置冲突/);
+}
+
+function testFrontIncludeValidatesCandidates() {
+  const { output } = runMain(function (config) {
+    config._customProxies = [{ name: "仅前置", dedicated: true, server: "203.0.113.8", port: 8080 }];
+  }, function (sandbox) { sandbox.USER_OPTIONS.front.include = ["仅前置", "🇸🇬 SG Auto 01"]; });
+  const front = findGroup(output, "🔗 前置");
+  assert.strictEqual(front.proxies[0], "DIRECT");
+  assert(front.proxies.indexOf("仅前置") >= 0);
+  assert.strictEqual(front.proxies.filter(n => n === "⤴ 🇸🇬 SG Auto 01").length, 1);
+  output["proxy-groups"].filter(g => g.name !== "🔗 前置").forEach(g => assert((g.proxies || []).indexOf("仅前置") < 0));
+  ["wrong-type", null, [""], [" "], [1], ["不存在"], ["节点选择"], ["DIRECT"], ["家宽IP"]].forEach(include => {
+    assert.throws(() => runMain(null, s => { s.USER_OPTIONS.front.include = include; }), /front.include/);
+  });
+  assert.throws(() => runMain(null, s => {
+    s.USER_OPTIONS.frontGroup = false;
+    s.USER_OPTIONS.front.include = ["🇸🇬 SG Auto 01"];
+  }), /front.include.*frontGroup/);
+  assert.throws(() => runMain(null, s => {
+    s.USER_OPTIONS.front = { include: ["🇸🇬 SG Auto 01"], excludeKeywords: ["SG Auto"] };
+  }), /front.include.*排除条件/);
+  assert.throws(() => runMain(config => {
+    config._customProxies = [{ name: "显式链路", server: "203.0.113.8", port: 8080, via: "🇸🇬 SG Auto 01" }];
+  }, s => { s.USER_OPTIONS.front.include = ["显式链路"]; }), /front.include.*显式上游/);
+  assert.throws(() => runMain(config => {
+    config._customProxies = [{ name: "专用链路", dedicated: true, server: "203.0.113.8", port: 8080, useFrontProxy: true }];
+  }, s => { s.USER_OPTIONS.front.include = ["专用链路"]; }), /front.include.*显式上游/);
+  assert.throws(() => runMain(config => {
+    config._customProxies = [{ name: "原生链路", dedicated: true, server: "203.0.113.8", port: 8080, "dialer-proxy": "🇸🇬 SG Auto 01" }];
+  }, s => { s.USER_OPTIONS.front.include = ["原生链路"]; }), /front.include.*显式上游/);
+}
+
+function testCombinedCredentialSample() {
+  const sample = fs.readFileSync(path.join(repoRoot, "src", "出口IP凭证_样本.js"), "utf8");
+  const disabled = {};
+  vm.runInNewContext(sample, disabled);
+  assert.deepStrictEqual(disabled.main({}), {}, "不启用任何样本时不应注入节点");
+  const existing = createBaseConfig();
+  const original = JSON.stringify(existing);
+  assert.strictEqual(disabled.main(existing), existing);
+  assert.strictEqual(JSON.stringify(existing), original, "未启用样本不能覆盖已有配置");
+  // Enable only commented code lines, leaving the Chinese instructions and auth hints as comments.
+  const enabledCode = sample.replace("// testUrl:", "testUrl:").split(/\r?\n/).map(line => {
+    const content = line.replace(/^  \/\/ /, "");
+    return /^(config\._|[}\]];| {2,}[a-zA-Z{}\[\],"/])/.test(content) ? content : line;
+  }).join("\n");
+  const enabled = {};
+  vm.runInNewContext(enabledCode, enabled);
+  function configuredSample(withSubscription) {
+    const config = enabled.main(withSubscription ? createBaseConfig() : createEmptyConfig());
+    config._homeProxy.server = "203.0.113.10";
+    config._customProxies.forEach((p, i) => { p.server = "203.0.113." + (20 + i); });
+    const subnetProxy = config._customProxies.find(p => p.name === "Tailscale子网代理");
+    subnetProxy.server = "192.168.88.10";
+    subnetProxy.interfaceName = "Tailscale";
+    return config;
+  }
+  for (const withSubscription of [true, false]) {
+    for (const location of ["cn", "overseas"]) {
+      for (const withLegacyFront of [true, false]) {
+        const config = configuredSample(withSubscription);
+        assert.strictEqual(config._customProxies.length, 3, "样本中的普通、国内和子网节点应共存而不是相互覆盖");
+        assert.strictEqual(config._customRuleGroups.length, 2, "同一文件同时维护代理业务与直连业务");
+        if (withLegacyFront) config._frontProxy = { name: "迁入的旧前置", server: "203.0.113.30", port: 1080 };
+        const result = runMainWithConfig(config, sandbox => {
+          sandbox.USER_OPTIONS.location = location;
+          sandbox.USER_OPTIONS.domesticExit = ["阿里云回国"];
+          sandbox.USER_OPTIONS.front.include = ["阿里云回国"];
+        }).output;
+        const front = findGroup(result, "🔗 前置");
+        assert.strictEqual(front.proxies[0], withLegacyFront ? "迁入的旧前置" : "DIRECT");
+        assert(front.proxies.includes("阿里云回国"));
+        assert(front.proxies.includes("⤴ 普通备用出口"));
+        assert(findGroup(result, "指定业务").proxies.includes("Tailscale子网代理"));
+        assert.strictEqual(findGroup(result, "指定业务").url, "http://connect.rom.miui.com/generate_204");
+        assert(findGroup(result, "节点选择").proxies.indexOf("Tailscale子网代理") < 0);
+        assert(findGroup(result, "节点选择").proxies.indexOf("本机直连业务") < 0);
+        const subnetProxy = result.proxies.find(p => p.name === "Tailscale子网代理");
+        assert.strictEqual(subnetProxy["dialer-proxy"], "DIRECT", "子网代理不能跟随前置选择，须通过本机路由连接");
+        assert.strictEqual(subnetProxy["interface-name"], "Tailscale");
+        assert(result.tun["route-exclude-address"].includes("192.168.88.10/32"));
+        assertRuleExists(result.rules, "IP-CIDR,192.168.88.10/32,DIRECT,no-resolve");
+        assertRuleExists(result.rules, "DOMAIN,service.example.test,指定业务");
+        assertRuleExists(result.rules, "DOMAIN-SUFFIX,internal.example.test,指定业务");
+        assertRuleExists(result.rules, "IP-CIDR,198.51.100.0/24,指定业务,no-resolve");
+        assertRuleExists(result.rules, "IP-CIDR,10.0.0.0/8,🎯 直连,no-resolve");
+        assert(!result.rules.some(rule => /^IP-CIDR,/.test(rule) && rule.includes(",指定业务") &&
+          !rule.startsWith("IP-CIDR,198.51.100.0/24,")), "不能把代理所在子网或全部私有网段送入业务代理");
+        assertRuleExists(result.rules, "DOMAIN-SUFFIX,local.example.test,本机直连业务");
+        assert.strictEqual(findGroup(result, "本机直连业务").proxies[0], "DIRECT");
+      }
+    }
+  }
+  const homeOnly = configuredSample(false);
+  delete homeOnly._customProxies;
+  delete homeOnly._customRuleGroups;
+  assert(findGroup(runMainWithConfig(homeOnly).output, EXPECTED.chainGroupName));
+
+  const ordinaryOnly = configuredSample(false);
+  delete ordinaryOnly._homeProxy;
+  delete ordinaryOnly._customRuleGroups;
+  ordinaryOnly._customProxies = ordinaryOnly._customProxies.slice(0, 1);
+  assert(findGroup(runMainWithConfig(ordinaryOnly).output, "节点选择").proxies.includes("普通备用出口"));
+
+  const subnetOnly = configuredSample(false);
+  delete subnetOnly._homeProxy;
+  delete subnetOnly._customRuleGroups;
+  subnetOnly._customProxies = subnetOnly._customProxies.filter(p => p.name === "Tailscale子网代理");
+  subnetOnly._customProxies[0].dedicated = false;
+  const subnetResult = runMainWithConfig(subnetOnly).output;
+  assert(findGroup(subnetResult, "节点选择").proxies.includes("Tailscale子网代理"),
+    "子网位置不决定用途，改为普通节点后可由通用组选择");
+  assert(findGroup(subnetResult, "🔗 前置").proxies.includes("Tailscale子网代理"));
+  assert(!subnetResult.proxies.some(p => p.name === "⤴ Tailscale子网代理"), "固定 DIRECT 的节点不需要前置副本");
+  assert.strictEqual(subnetResult.proxies.find(p => p.name === "Tailscale子网代理")["dialer-proxy"], "DIRECT");
+
+  const directRulesOnly = configuredSample(false);
+  delete directRulesOnly._homeProxy;
+  delete directRulesOnly._customProxies;
+  directRulesOnly._customRuleGroups = directRulesOnly._customRuleGroups.slice(1);
+  assertRuleExists(runMainWithConfig(directRulesOnly).output.rules,
+    "DOMAIN-SUFFIX,local.example.test,本机直连业务");
+}
+
+function testExplicitFrontCandidatesRejectUnsafeConfiguration() {
+  [{ allowAsFront: "true" }, { allowAsFront: true, useFrontProxy: true },
+    { allowAsFront: true, via: "节点选择" }].forEach(function (fields) {
+    assert.throws(function () {
+      runMain(function (config) {
+        config._customProxies = [Object.assign({
+          name: "共享国内节点", scope: "dedicated", type: "http", server: "203.0.113.88", port: 8080
+        }, fields)];
+      }, function (sandbox) { sandbox.USER_OPTIONS.domesticExit = ["共享国内节点"]; });
+    }, /allowAsFront/, "显式前置必须为布尔配置，且不能再次依赖前置或业务组");
+  });
+  assert.throws(function () {
+    runMain(function (config) {
+      config._customProxies = [{ name: "共享国内节点", scope: "dedicated", allowAsFront: true,
+        type: "http", server: "203.0.113.88", port: 8080 }];
+    }, function (sandbox) { sandbox.USER_OPTIONS.frontGroup = false; });
+  }, /allowAsFront/, "没有前置组时不能静默忽略前置角色");
+  assert.throws(function () {
+    runMain(function (config) {
+      config._customProxies = [{ name: "共享国内节点", scope: "dedicated", allowAsFront: true,
+        type: "http", server: "203.0.113.88", port: 8080 }];
+    }, function (sandbox) { sandbox.USER_OPTIONS.front = { excludePorts: [8080] }; });
+  }, /allowAsFront.*front/, "显式引用与前置过滤冲突时应指出配置问题");
+
+  const { output } = runMain(function (config) {
+    config._customProxies = [{ name: "仅前置", scope: "dedicated", allowAsFront: true,
+      type: "http", server: "203.0.113.89", port: 8080 }];
+  });
+  assert(findGroup(output, "🔗 前置").proxies.indexOf("仅前置") >= 0, "前置角色本身就是 dedicated 的显式引用");
+  assert(findGroup(output, "🇨🇳 国内").proxies.indexOf("仅前置") < 0, "前置角色不自动授予国内业务出口角色");
 }
 
 function testProxyGraphRejectsCycles() {
@@ -2218,17 +2676,19 @@ testAuthCredentials();
 testCustomProxiesAppearInGlobal();
 testNoCredentialAiAgentIncludesCustomAndRawNodes();
 testDedicatedCustomProxyOnlyAppearsInExplicitRuleGroup();
+testDedicatedBooleanPreservesScopeBehavior();
+testDedicatedBooleanRejectsInvalidOrConflictingValues();
 testCustomRuleGroupsCannotOverrideProtectedRules();
 testDedicatedCustomProxyMustBeReferenced();
 testDedicatedCustomProxyRejectsNameCollisions();
-testFrontProxyAppliesOnlyToSubscriptionNodes();
+testFrontProxyAppliesToSubscriptionAndOrdinaryNodes();
 testFrontProxyDoesNotOverrideHomeProxyDialer();
 testStandaloneCustomProxiesWithoutSubscription();
 testCustomRuleGroupsRouteOnlyMatchedDomains();
 testProbeUrlsAreSplitByGroupPurpose();
 testStandaloneCustomRuleGroupsWithoutSubscription();
 testStandaloneHomeOnlyWithoutSubscription();
-testStandaloneFrontProxyOnlyAppliesWhenRequested();
+testStandaloneCustomNodesFollowFrontGroup();
 testTailnetCustomProxyServerBypassesTunRoute();
 testProxyServerAddressesUseDirectRules();
 testHostnameProxyServerResolvedIpsUseDirectRules();
@@ -2267,6 +2727,16 @@ testCommunityExactDomainsAndSharedServices();
 testCommunityQuicOptionCoversNewDomains();
 testOverseasPreservesIpv6AndCommunityDnsOptions();
 testFrontGroup();
+testNetworkProbeRoutingAfterSwap();
+testIpSbQuicProtectionIsNarrowAndIndependent();
+testNetworkProbeRegistryDrivesAllLayers();
+testNetworkProbeRegistryCanBeMaintainedInOnePlace();
+testNetworkProbeRegistryRejectsInvalidEntries();
 testFrontCopiesPreserveExplicitDialersAndAvoidNameCollisions();
+testDomesticExitCanAlsoBeAnExplicitFrontCandidate();
+testExplicitFrontCandidatesRejectUnsafeConfiguration();
+testOrdinaryFrontDefaultsAndLegacyOptOut();
+testFrontIncludeValidatesCandidates();
+testCombinedCredentialSample();
 
 console.log("validate-direct.js: all checks passed");

@@ -1,5 +1,9 @@
 # 本地凭证文件
 src/MiyaIP 凭证.js
+出口IP凭证.js
+前置代理.js
+自定义规则组.js
+家宽IP凭证.js
 
 # 本地草稿目录
 docs/superpowers/

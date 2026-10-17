@@ -247,17 +247,22 @@ async function renderHost(name, args, secrets) {
   if (front) config._frontProxy = front;
   const custom = [];
   const cnNames = [];
+  const skippedOptionalNames = new Set();
+  function noteSkippedOptional(spec) {
+    if (spec && spec.optional === true && typeof spec.name === "string") skippedOptionalNames.add(spec.name);
+  }
   for (const [i, spec] of (roles.cnReturn || []).entries()) {
     if (typeof spec === "string" && !spec.startsWith("secret:")) { cnNames.push(spec); continue; } // 订阅节点或组名
     const n = resolveExit(spec, secrets, `roles.cnReturn[${i}]`);
-    if (!n) continue;
+    if (!n) { noteSkippedOptional(spec); continue; }
     n.name = n.name || "回国出口" + (i + 1);
-    n.scope = n.scope || "dedicated";
+    if (typeof n.dedicated === "undefined" && typeof n.scope === "undefined") n.dedicated = true;
     custom.push(n); cnNames.push(n.name);
   }
   for (const [i, spec] of (host.customProxies || []).entries()) {
     const n = resolveExit(spec, secrets, `customProxies[${i}]`);
     if (n) custom.push(n);
+    else noteSkippedOptional(spec);
   }
   if (custom.length) config._customProxies = custom;
   if (host.customRuleGroups) {
@@ -266,6 +271,15 @@ async function renderHost(name, args, secrets) {
     if (missing.length) throw new Error("customRuleGroups 缺少 secret " + missing.join(","));
   }
   if (cnNames.length) options.domesticExit = cnNames;
+  // Only remove references to known optional nodes whose credentials were absent;
+  // unknown names must still fail validation in the main override.
+  if (options.front && Array.isArray(options.front.include) && skippedOptionalNames.size) {
+    const availableNames = new Set(config.proxies.concat(custom, front ? [front] : []).map(n => n.name));
+    options.front = Object.assign({}, options.front, {
+      include: options.front.include.filter(n => typeof n !== "string" ||
+        !skippedOptionalNames.has(n.trim()) || availableNames.has(n.trim()))
+    });
+  }
 
   // 3) 主覆写
   config = runOverride(config, options, rendered => {

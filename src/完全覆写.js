@@ -1,15 +1,15 @@
 /**
- * Clash 家宽IP-直连覆写脚本
+ * Clash Party / Mihomo 完全覆写脚本
  *
  * 作用：
- * 1. 注入家宽IP代理节点（真直连 + 可选链式），以及媒体地区组。
- * 2. 让域外 AI、支撑平台和受管浏览器进程稳定命中家宽IP出口。
- * 3. 让媒体域名命中 `mediaRegion` 对应的普通地区组。
- * 4. 覆写 DNS、Sniffer 和 DIRECT 保留规则，并校验关键目标是否命中预期出口。
+ * 1. 保留订阅节点，重建策略组，并按需注入家宽和自定义出口。
+ * 2. AI、媒体、国内外业务和 IP 检测分别使用对应策略，支持国内与海外环境。
+ * 3. 统一前置候选、家宽直连/链式路径及专用节点授权，检查引用和循环。
+ * 4. 同步生成 DNS、Sniffer、QUIC 与 Tailscale/TUN 特殊策略。
  *
- * 与「链式代理」版本的区别：
+ * 家宽链路：
  * - 家宽IP真直连节点不挂 dialer-proxy；有可用跳板时额外生成家宽IP链式节点。
- * - 适合自有家宽 HTTP/SOCKS5 代理、无需 MiyaIP 服务的场景。
+ * - 家宽未配置时仍保留 AI Agent 及普通分流，不要求固定出口凭证。
  *
  * 结构：
  * 1. 用户参数
@@ -19,8 +19,9 @@
  * 5. 派生分类与统一入口
  * 6. DNS / 代理链路 / 规则注入 / 主流程
  *
- * 依赖：
- * - 需先执行 `家宽IP凭证.js`，向 `config._homeProxy` 注入凭证。
+ * 输入：
+ * - Clash Party 提供订阅配置；可选的 `出口IP凭证.js` 在本脚本之前注入节点。
+ * - 独立生成器也调用同一 main(config)，脚本本身不依赖 Node.js。
  *
  * 兼容性：
  * - 运行环境为 Clash Party 的 JavaScriptCore。
@@ -38,12 +39,13 @@ var USER_OPTIONS = {
   enableIPv6: false, // 是否启用 IPv6；同时控制 Mihomo 全局与 DNS 的 ipv6，默认关闭
   location: "cn", // 本机所在位置："cn" 在中国大陆（默认）；"overseas" 在境外。规则对所有主机相同，只有 🇨🇳 国内 / 🌐 国外 / 🐟 兜底 三个策略组的默认选项跟着变
   domesticExit: [], // 🇨🇳 国内 组的回国出口候选：_customProxies 名称、订阅节点或策略组名。overseas 默认选第一个；cn 默认 DIRECT
-  // 🔗 前置：一级跳（相当于常驻的 前置代理.js 开关）。订阅节点和 useFrontProxy 的自定义节点 dialer-proxy 都指向它；
+  // 🔗 前置：订阅和普通自定义节点默认经此组拨号；选择 DIRECT 不加前置，选择节点则增加一跳。
   // 候选 = DIRECT（默认，不走前置）+ _frontProxy 节点 + 本机可直连的全部节点：没挂前置的自定义节点直接用原节点，
   // 其余仅解除脚本自动绑定的前置，生成副本「⤴ 原名」；显式 via / 原有 dialer-proxy 不绕过。false 时退回旧行为。
   frontGroup: true,
   // 🔗 前置 候选过滤：excludePorts 端口的节点本机连不上（不生成副本）；excludeKeywords 不当前置；prefer 正则命中的排在 DIRECT 之后。
-  front: { excludePorts: [], excludeKeywords: [], prefer: [] },
+  // 普通节点自动成为候选；include 可额外授权专用节点，如 ["阿里云回国"]，不改变默认选择。
+  front: { include: [], excludePorts: [], excludeKeywords: [], prefer: [] },
   autoSelectGroupName: "自动选择", // 订阅中的自动选择组名（url-test），Smart 内核会自动追加 "(Smart Group)" 后缀
   autoSelectExcludeKeywords: ["公司代理"], // 只过滤自动选择组；公司代理仍会保留在节点选择里供手动使用
   urlTestProbeUrl: "", // 直连/界面健康检查默认测速地址；留空按 location 选择（cn: connect.rom.miui.com，overseas: cp.cloudflare.com）；单个分组可用 testUrl 覆盖
@@ -108,7 +110,7 @@ var BASE = {
   },
   ruleTargets: {
     direct: "DIRECT",
-    lan: "🎯 直连" // 局域网/私网段：面板上可见的直连组（出口 IP 防回环、ip.sb 仍写 DIRECT）
+    lan: "🎯 直连" // 局域网/私网段：面板上可见的直连组（出口 IP 防回环、ipip.net 仍写 DIRECT）
   },
   urlTestProbeUrl: "https://www.gstatic.com/generate_204",
   errorPrefix: "[家宽IP-直连] ",
@@ -149,6 +151,61 @@ var BASE = {
     }
   }
 };
+
+// IP 检测清单：只在这里维护域名、观察对象和协议保护，不与业务域名混放。
+// target: direct 本机出口 / front 前置出口 / node 普通节点出口 / ai AI 最终出口。
+// 域名均按后缀匹配（含子域名）；非直连检测拒绝 QUIC，避免无 UDP 出口被跳过。
+var NETWORK_PROBES = [
+  { domain: "ipip.net",      target: "direct", purpose: "本机直连公网出口",       rejectQuic: false },
+  { domain: "ip.sb",         target: "front",  purpose: "前置组当前出口",         rejectQuic: true },
+  { domain: "ipwho.is",      target: "node",   purpose: "节点选择的最终出口",     rejectQuic: true },
+  { domain: "ipapi.is",      target: "ai",     purpose: "AI Agent 最终出口 IP",    rejectQuic: true },
+  { domain: "ip.net.coffee", target: "ai",     purpose: "AI 出口与网络诊断",       rejectQuic: true },
+  { domain: "ping0.cc",      target: "ai",     purpose: "AI 出口辅助检测",         rejectQuic: true },
+  { domain: "ipinfo.io",     target: "ai",     purpose: "AI 出口辅助检测",         rejectQuic: true }
+];
+
+function getNetworkProbes() {
+  if (!Array.isArray(NETWORK_PROBES)) throw createUserError("NETWORK_PROBES 必须为检测站数组");
+  for (var i = 0; i < NETWORK_PROBES.length; i++) {
+    var probe = NETWORK_PROBES[i];
+    if (!probe || typeof probe.domain !== "string" ||
+        !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(probe.domain)) {
+      throw createUserError("NETWORK_PROBES 第 " + (i + 1) + " 项必须填写小写域名，不含 URL、通配符或端口");
+    }
+    if (["direct", "front", "node", "ai"].indexOf(probe.target) < 0 ||
+        typeof probe.rejectQuic !== "boolean" || typeof probe.purpose !== "string" || !probe.purpose.trim()) {
+      throw createUserError("NETWORK_PROBES " + probe.domain + " 的 target、purpose 或 rejectQuic 无效");
+    }
+    for (var j = 0; j < i; j++) {
+      var other = NETWORK_PROBES[j].domain;
+      if (probe.domain === other || probe.domain.slice(-other.length - 1) === "." + other ||
+          other.slice(-probe.domain.length - 1) === "." + probe.domain) {
+        throw createUserError("NETWORK_PROBES 检测域名重复或后缀重叠：" + other + " / " + probe.domain);
+      }
+    }
+  }
+  return NETWORK_PROBES;
+}
+
+function getNetworkProbePatterns(excludeDirect) {
+  var patterns = [];
+  var probes = getNetworkProbes();
+  for (var i = 0; i < probes.length; i++) {
+    if (!excludeDirect || probes[i].target !== "direct") patterns.push("+." + probes[i].domain);
+  }
+  return patterns;
+}
+
+function resolveNetworkProbeTarget(probe, strictAiTarget, frontProxyName) {
+  switch (probe.target) {
+    case "direct": return BASE.ruleTargets.direct;
+    case "front": return getFrontGroupName() || frontProxyName || BASE.ruleTargets.direct;
+    case "node": return "节点选择";
+    case "ai": return strictAiTarget || BASE.nodeNames.aiAgent;
+    default: throw createUserError("未知检测出口：" + probe.target);
+  }
+}
 
 function getLocationName() {
   var location = typeof USER_OPTIONS.location === "undefined" ? "cn" : USER_OPTIONS.location;
@@ -216,8 +273,8 @@ function resolveProxyUdp(proxyConfig) {
 // 注入节点时，管理字段由脚本自行处理；其余协议字段（ss 的 cipher/plugin、vless 的 uuid/tls/reality-opts 等）原样透传。
 var PROXY_MANAGEMENT_KEYS = {
   name: true, type: true, server: true, port: true, udp: true, username: true, password: true,
-  scope: true, useFrontProxy: true, interfaceName: true, "interface-name": true, "dialer-proxy": true,
-  via: true
+  dedicated: true, scope: true, useFrontProxy: true, interfaceName: true, "interface-name": true, "dialer-proxy": true,
+  via: true, allowAsFront: true
 };
 
 function copyProtocolFields(source, node) {
@@ -1975,10 +2032,7 @@ var SOURCE_PATTERNS = {
   },
   policy: {
     dnsFallbackExtra: [
-      "+.cdn.cloudflare.net",
-      "ping0.cc",
-      "ipinfo.io",
-      "+.ip.net.coffee"
+      "+.cdn.cloudflare.net"
     ],
     snifferForceBase: [
       "+.cloudflare.com",
@@ -2408,7 +2462,7 @@ function buildBrowserValidationTargets() {
 
 function applyDnsAndSniffer(config) {
   config.ipv6 = USER_OPTIONS.enableIPv6 === true;
-  config.dns = buildDnsConfig();
+  config.dns = buildDnsConfig(config._frontProxyName);
   config.sniffer = buildSnifferConfig();
 }
 
@@ -2469,7 +2523,7 @@ function getLocalDnsServers() {
   return routeDnsServers(BASE.dns.overseas, BASE.ruleTargets.direct);
 }
 
-function buildNameserverPolicy() {
+function buildNameserverPolicy(frontProxyName) {
   var overseasDnsServers = getOverseasDnsServers();
   var foreignDnsServers = getForeignDnsServers();
   var cnDnsServers = getCnDnsServers();
@@ -2506,6 +2560,15 @@ function buildNameserverPolicy() {
   for (i = 0; i < communityTargets.length; i++) {
     dnsServers = communityTargets[i] === "ai" ? overseasDnsServers : foreignDnsServers;
     assignNameserverPolicyDomains(policy, communityDomainPatterns(communityTargets[i]), dnsServers);
+  }
+  var probes = getNetworkProbes();
+  for (i = 0; i < probes.length; i++) {
+    var probe = probes[i];
+    var target = resolveNetworkProbeTarget(probe, BASE.nodeNames.aiAgent, frontProxyName);
+    var resolvers = target === BASE.ruleTargets.direct && getLocationProfile().localDnsIsDomestic
+      ? BASE.dns.domestic : BASE.dns.overseas;
+    // AI 检测保留海外 DNS 的显式用户设置，其余检测通过自身观察的链路解析。
+    policy["+." + probe.domain] = probe.target === "ai" ? overseasDnsServers : routeDnsServers(resolvers, target);
   }
   return policy;
 }
@@ -2549,6 +2612,7 @@ function buildDnsFakeIpFilter() {
 function buildDnsFallbackFilterDomains() {
   var groups = [
     DERIVED.patterns.strict.all,
+    getNetworkProbePatterns(true),
     DERIVED.patterns.generalEgress,
     DERIVED.patterns.direct.overrides.overseasDns,
     communityDomainPatterns("ai"),
@@ -2609,11 +2673,11 @@ function buildDnsBaseConfig() {
   return config;
 }
 
-function buildDnsConfig() {
+function buildDnsConfig(frontProxyName) {
   var dnsConfig = buildDnsBaseConfig();
   dnsConfig["fake-ip-filter"] = buildDnsFakeIpFilter();
   if (dnsConfig.fallback) dnsConfig["fallback-filter"] = buildDnsFallbackFilter();
-  dnsConfig["nameserver-policy"] = buildNameserverPolicy();
+  dnsConfig["nameserver-policy"] = buildNameserverPolicy(frontProxyName);
   return dnsConfig;
 }
 
@@ -2627,7 +2691,7 @@ function buildSnifferConfig() {
       HTTP: { ports: [80, 8080, 8880], "override-destination": true },
       QUIC: { ports: [443] }
     },
-    "force-domain": DERIVED.patterns.sniffer.force,
+    "force-domain": uniqueStrings(DERIVED.patterns.sniffer.force.concat(getNetworkProbePatterns())),
     "skip-domain":  DERIVED.patterns.sniffer.skip
   };
 }
@@ -3166,7 +3230,7 @@ function injectHomeProxies(config, credentials, relayGroupName) {
 }
 
 // 读取并移除注入到 `config._frontProxy` 的前置代理配置（可选）。
-// 存在时仅给订阅原始节点绑定 dialer-proxy，不影响自定义出口和家宽IP。
+// 默认成为前置组首选；订阅和普通自定义节点跟随该组，家宽真直连不变。
 function takeFrontProxyCredentials(config) {
   if (!config._frontProxy) return null;
   var credentials = config._frontProxy;
@@ -3217,9 +3281,7 @@ function bindFrontProxyToSubscriptionNodes(config, frontProxyName, subscriptionN
   return boundNames;
 }
 
-// 🔗 前置（select）：订阅节点与 useFrontProxy 自定义节点的一级跳。
-// 候选：DIRECT（默认，不走前置）、_frontProxy 节点（配置了就排第一，等同旧 前置代理.js 开启）、未挂 dialer-proxy 的普通自定义节点。
-// 防循环：挂了 🔗 前置 的节点不会成为候选。
+// 候选稍后统一生成；仅脚本自动绑定前置的节点可以生成直连副本，不能剥离用户显式上游。
 function getFrontGroupName() {
   return USER_OPTIONS.frontGroup === false ? null : BASE.nodeNames.frontGroup;
 }
@@ -3253,15 +3315,25 @@ function isBuiltinInfoNodeName(proxyName) {
 
 function getFrontOptions() {
   var f = USER_OPTIONS.front || {};
-  return { excludePorts: f.excludePorts || [], excludeKeywords: f.excludeKeywords || [], prefer: f.prefer || [] };
+  var include = typeof f.include === "undefined" ? [] : f.include;
+  var names = [];
+  if (!Array.isArray(include)) throw createUserError("USER_OPTIONS.front.include 必须为节点名称数组");
+  for (var i = 0; i < include.length; i++) {
+    if (typeof include[i] !== "string" || !include[i].trim()) {
+      throw createUserError("USER_OPTIONS.front.include 必须包含非空节点名称");
+    }
+    names.push(include[i].trim());
+  }
+  if (names.length && !getFrontGroupName()) throw createUserError("front.include 需要启用 USER_OPTIONS.frontGroup");
+  return { include: uniqueStrings(names), excludePorts: f.excludePorts || [], excludeKeywords: f.excludeKeywords || [], prefer: f.prefer || [] };
 }
 
-// 本机能否直接把它当前置：排除被拦截端口、订阅信息节点、关键词、家宽节点和 dedicated 节点。
-function isFrontEligibleProxy(proxy, opts, excludedLookup) {
+// 本机能否直接把它当前置：dedicated 仅允许显式授权，其余安全过滤仍生效。
+function isFrontEligibleProxy(proxy, opts, excludedLookup, explicitLookup) {
   var name = String(proxy && proxy.name || "");
   var lowerName = name.toLowerCase();
   var i;
-  if (!name || excludedLookup[name]) return false;
+  if (!name || (excludedLookup[name] && !(explicitLookup && explicitLookup[name]))) return false;
   if (name === BASE.nodeNames.home || name === BASE.nodeNames.homeChained) return false;
   if (name.indexOf(BASE.nodeNames.frontCopyPrefix) === 0) return false;
   for (i = 0; i < opts.excludePorts.length; i++) {
@@ -3280,12 +3352,13 @@ function isFrontEligibleProxy(proxy, opts, excludedLookup) {
 // 所有组建好之后，把本机可直连的节点补进 🔗 前置：
 // 没挂 dialer-proxy 的节点直接用原节点；挂了的生成「⤴ 原名」副本（不挂 dialer-proxy，只进 🔗 前置，不进其它组）。
 // 顺序：[_frontProxy?] DIRECT → prefer 命中 → 自定义节点 → 其余订阅节点。
-function addFrontCandidates(config, frontNodeName, subscriptionNodeNames, customProxyNames, excludedNames, boundNames) {
+function addFrontCandidates(config, frontNodeName, subscriptionNodeNames, customProxyNames, excludedNames, boundNames, explicitNames) {
   var groupName = getFrontGroupName();
   var group = groupName ? findProxyGroupByName(config["proxy-groups"], groupName) : null;
   var opts = getFrontOptions();
   var excludedLookup = buildStringLookup(excludedNames || []);
   var boundLookup = buildStringLookup(boundNames || []);
+  var explicitLookup = buildStringLookup(explicitNames || []);
   var ordered = [];
   var preferred = [];
   var customNames = [];
@@ -3296,9 +3369,15 @@ function addFrontCandidates(config, frontNodeName, subscriptionNodeNames, custom
 
   function candidateFor(name) {
     var proxy = findProxyByName(config.proxies, name);
-    if (!proxy || !isFrontEligibleProxy(proxy, opts, excludedLookup)) return null;
-    if (!proxy["dialer-proxy"]) return proxy.name;
-    if (!boundLookup[name]) return null;
+    if (!proxy || !isFrontEligibleProxy(proxy, opts, excludedLookup, explicitLookup)) {
+      if (explicitLookup[name]) throw createUserError("front.include / allowAsFront 节点不存在或不可作为前置候选，请检查 front 排除条件：" + name);
+      return null;
+    }
+    if (!proxy["dialer-proxy"] || proxy["dialer-proxy"] === BASE.ruleTargets.direct) return proxy.name;
+    if (!boundLookup[name]) {
+      if (explicitLookup[name]) throw createUserError("front.include / allowAsFront 节点已有显式上游，不能绕过它生成前置候选：" + name);
+      return null;
+    }
     var baseName = BASE.nodeNames.frontCopyPrefix + proxy.name;
     var copyName = baseName;
     var suffix = 2;
@@ -3319,7 +3398,7 @@ function addFrontCandidates(config, frontNodeName, subscriptionNodeNames, custom
   for (i = 0; i < (customProxyNames || []).length; i++) customNames.push(customProxyNames[i]);
   for (i = 0; i < subscriptionNodeNames.length; i++) subNames.push(subscriptionNodeNames[i]);
 
-  var names = uniqueStrings(preferred.concat(customNames).concat(subNames));
+  var names = uniqueStrings(preferred.concat(explicitNames || []).concat(customNames).concat(subNames));
   for (i = 0; i < names.length; i++) {
     var c = candidateFor(names[i]);
     if (c) ordered.push(c);
@@ -3418,30 +3497,58 @@ function takeCustomProxies(config) {
   return Array.isArray(raw) ? raw : [raw];
 }
 
+function isDedicatedCustomProxy(proxyConfig) {
+  var hasDedicated = typeof proxyConfig.dedicated !== "undefined";
+  var hasScope = typeof proxyConfig.scope !== "undefined";
+  if (hasDedicated && typeof proxyConfig.dedicated !== "boolean") {
+    throw createUserError("自定义出口 " + proxyConfig.name + " 的 dedicated 必须为布尔值");
+  }
+  if (hasScope && proxyConfig.scope !== "ordinary" && proxyConfig.scope !== "dedicated") {
+    throw createUserError("自定义出口 " + proxyConfig.name + " 的 scope 无效，仅支持 ordinary 或 dedicated");
+  }
+  if (hasDedicated && hasScope && proxyConfig.dedicated !== (proxyConfig.scope === "dedicated")) {
+    throw createUserError("自定义出口 " + proxyConfig.name + " 的 dedicated 与 scope 配置冲突");
+  }
+  return hasDedicated ? proxyConfig.dedicated : proxyConfig.scope === "dedicated";
+}
+
 function partitionCustomProxies(proxyConfigs) {
   var ordinary = [];
   var dedicated = [];
+  var frontCandidates = getFrontOptions().include;
   var configs = proxyConfigs || [];
   var seenNames = {};
   for (var i = 0; i < configs.length; i++) {
     var proxyConfig = configs[i];
-    var scope = proxyConfig.scope || "ordinary";
     if (!proxyConfig.name) proxyConfig.name = "自定义出口" + (i + 1);
     if (seenNames[proxyConfig.name]) {
       throw createUserError("自定义出口名称重复：" + proxyConfig.name);
     }
     seenNames[proxyConfig.name] = true;
-    if (scope === "dedicated") {
+    var isDedicated = isDedicatedCustomProxy(proxyConfig);
+    if (proxyConfig.via && proxyConfig["dialer-proxy"] && proxyConfig.via !== proxyConfig["dialer-proxy"]) {
+      throw createUserError("自定义出口 " + proxyConfig.name + " 的 via 与 dialer-proxy 配置冲突");
+    }
+    if (typeof proxyConfig.useFrontProxy !== "undefined" && typeof proxyConfig.useFrontProxy !== "boolean") {
+      throw createUserError("自定义出口 " + proxyConfig.name + " 的 useFrontProxy 必须为布尔值");
+    }
+    if (typeof proxyConfig.allowAsFront !== "undefined" && typeof proxyConfig.allowAsFront !== "boolean") {
+      throw createUserError("自定义出口 " + proxyConfig.name + " 的 allowAsFront 必须为布尔值");
+    }
+    if (proxyConfig.allowAsFront === true) {
+      if (!getFrontGroupName()) throw createUserError("allowAsFront 需要启用 USER_OPTIONS.frontGroup：" + proxyConfig.name);
+      if (proxyConfig.useFrontProxy || proxyConfig.via || proxyConfig["dialer-proxy"]) {
+        throw createUserError("allowAsFront 节点必须本机直达，不能同时配置 useFrontProxy、via 或 dialer-proxy：" + proxyConfig.name);
+      }
+      frontCandidates.push(proxyConfig.name);
+    }
+    if (isDedicated) {
       dedicated.push(proxyConfig);
-    } else if (scope === "ordinary") {
-      ordinary.push(proxyConfig);
     } else {
-      throw createUserError(
-        "自定义出口 " + proxyConfig.name + " 的 scope 无效，仅支持 ordinary 或 dedicated"
-      );
+      ordinary.push(proxyConfig);
     }
   }
-  return { ordinary: ordinary, dedicated: dedicated };
+  return { ordinary: ordinary, dedicated: dedicated, frontCandidates: uniqueStrings(frontCandidates) };
 }
 
 function validateDedicatedProxyNameAvailability(config, proxyConfigs, groupConfigs) {
@@ -3464,8 +3571,8 @@ function validateDedicatedProxyNameAvailability(config, proxyConfigs, groupConfi
   }
 }
 
-function validateDedicatedProxyReferences(proxyConfigs, groupConfigs) {
-  var referencedNames = buildStringLookup(getDomesticExitNames());
+function validateDedicatedProxyReferences(proxyConfigs, groupConfigs, frontCandidateNames) {
+  var referencedNames = buildStringLookup(getDomesticExitNames().concat(frontCandidateNames || []));
   var groups = groupConfigs || [];
   var groupProxies;
   var i;
@@ -3480,14 +3587,22 @@ function validateDedicatedProxyReferences(proxyConfigs, groupConfigs) {
     if (!referencedNames[proxyConfigs[i].name]) {
       throw createUserError(
         "专用出口 " + proxyConfigs[i].name +
-        " 未被 _customRuleGroups.proxies 引用（overseas 下也可由 USER_OPTIONS.domesticExit 引用）；dedicated 节点不能进入通用出口"
+        " 未被 _customRuleGroups.proxies、USER_OPTIONS.domesticExit 或 front.include（兼容 allowAsFront）显式引用；dedicated 节点不能进入通用出口"
       );
     }
   }
 }
 
+function usesDefaultFront(proxyConfig) {
+  if (proxyConfig.via || proxyConfig["dialer-proxy"]) return false;
+  if (typeof proxyConfig.useFrontProxy === "boolean") return proxyConfig.useFrontProxy;
+  // 旧 allowAsFront 节点继续直接拨号；专用节点不自动改变其业务链路。
+  return !!getFrontGroupName() && !isDedicatedCustomProxy(proxyConfig) && proxyConfig.allowAsFront !== true;
+}
+
 function buildCustomProxyNode(proxyConfig, frontProxyName) {
   var proxyType = proxyConfig.type || "http";
+  var explicitUpstream = proxyConfig.via || proxyConfig["dialer-proxy"];
   var node = {
     name: proxyConfig.name,
     type: proxyType,
@@ -3500,9 +3615,9 @@ function buildCustomProxyNode(proxyConfig, frontProxyName) {
   if (proxyConfig.interfaceName || proxyConfig["interface-name"]) {
     node["interface-name"] = proxyConfig.interfaceName || proxyConfig["interface-name"];
   }
-  if (proxyConfig.via) {
-    node["dialer-proxy"] = proxyConfig.via; // 指定专门的前置
-  } else if (proxyConfig.useFrontProxy) {
+  if (explicitUpstream) {
+    node["dialer-proxy"] = explicitUpstream;
+  } else if (proxyConfig.useFrontProxy || (frontProxyName && usesDefaultFront(proxyConfig))) {
     if (!frontProxyName) {
       throw createUserError("自定义出口 " + proxyConfig.name + " 启用了 useFrontProxy，但未配置前置代理");
     }
@@ -3734,22 +3849,23 @@ function buildNodeSelectionRules(fullProtocolTarget) {
   return rules;
 }
 
+function buildNetworkProbeQuicRules() {
+  var domains = [];
+  var probes = getNetworkProbes();
+  for (var i = 0; i < probes.length; i++) {
+    if (probes[i].rejectQuic) domains.push(probes[i].domain);
+  }
+  return buildQuicRejectRules(domains);
+}
+
 function buildNetworkProbeRules(strictAiTarget, frontProxyName) {
-  var ruleLines = [];
+  var ruleLines = buildNetworkProbeQuicRules();
   var seenRuleIdentities = {};
-  addRuleIfNotExists(ruleLines, seenRuleIdentities, "DOMAIN-SUFFIX", "ipapi.is", strictAiTarget);
-  addRuleIfNotExists(
-    ruleLines,
-    seenRuleIdentities,
-    "DOMAIN-SUFFIX",
-    "ipwho.is",
-    "节点选择"
-  );
-  // 面板 IP 检测：ip.sb 永远 DIRECT（本机环境直连出口，不经前置）；
-  // ipip.net 走 🔗 前置（显示前置出口，前置=DIRECT 时即直连）。无 🔗 前置 组时退回旧的单节点前置，再退回 DIRECT。
-  addRuleIfNotExists(ruleLines, seenRuleIdentities, "DOMAIN-SUFFIX", "ip.sb", BASE.ruleTargets.direct);
-  addRuleIfNotExists(ruleLines, seenRuleIdentities, "DOMAIN-SUFFIX", "ipip.net",
-    getFrontGroupName() || frontProxyName || BASE.ruleTargets.direct);
+  var probes = getNetworkProbes();
+  for (var i = 0; i < probes.length; i++) {
+    addRuleIfNotExists(ruleLines, seenRuleIdentities, "DOMAIN-SUFFIX", probes[i].domain,
+      resolveNetworkProbeTarget(probes[i], strictAiTarget, frontProxyName));
+  }
   return ruleLines;
 }
 
@@ -3828,14 +3944,13 @@ function buildManagedRules(strictAiTarget, frontProxyName, fullProtocolTarget) {
   rules = rules.concat(buildGooglePlayMtalkRules(fullProtocolTarget));
   rules = rules.concat(buildGeminiChallengeRules(strictAiTarget));
   rules = rules.concat(buildAppStoreQuicRejectRules());
+  // 检测规则保持为连续区段，先于业务分类和应用进程规则。
+  if (strictAiTarget) rules = rules.concat(buildNetworkProbeRules(strictAiTarget, frontProxyName));
   if (strictAiTarget) {
     rules = rules.concat(buildYoutubeSharedPlatformRules());
     rules = rules.concat(buildAiQuicRejectRules());
     rules = rules.concat(buildCommunityAiRules(strictAiTarget));
     rules = rules.concat(buildGoogleConsistencyRules(strictAiTarget, fullProtocolTarget));
-  }
-  if (strictAiTarget) {
-    rules = rules.concat(buildNetworkProbeRules(strictAiTarget, frontProxyName));
   }
   if (strictAiTarget) {
     rules = rules.concat(buildStrictChainRules(strictAiTarget));
@@ -3893,7 +4008,7 @@ function injectManagedRules(config, strictAiTarget, frontProxyName, fullProtocol
   prependRules(config.rules, managedRules);
 }
 
-function buildProtectedManagedRuleLines(strictAiTarget, fullProtocolTarget) {
+function buildProtectedManagedRuleLines(strictAiTarget, fullProtocolTarget, frontProxyName) {
   var rules = [];
   var tailscaleRuleLines = [];
   var seenTailscaleRuleIdentities = {};
@@ -3913,6 +4028,7 @@ function buildProtectedManagedRuleLines(strictAiTarget, fullProtocolTarget) {
     .concat(buildWebRtcUdpRejectRules());
   if (strictAiTarget) {
     rules = rules
+      .concat(buildNetworkProbeRules(strictAiTarget, frontProxyName))
       .concat(buildAiQuicRejectRules())
       .concat(buildCommunityAiRules(strictAiTarget))
       .concat(buildStrictChainRules(strictAiTarget));
@@ -3934,7 +4050,7 @@ function assertCustomRulesDoNotOverrideProtectedRules(ruleLines, protectedIdenti
 function injectCustomRuleGroupRules(config, ruleLines, strictAiTarget, fullProtocolTarget) {
   var ruleIdentities = buildRuleIdentityLookup(ruleLines);
   var protectedIdentities = buildRuleIdentityLookup(
-    buildProtectedManagedRuleLines(strictAiTarget, fullProtocolTarget)
+    buildProtectedManagedRuleLines(strictAiTarget, fullProtocolTarget, config._frontProxyName)
   );
   var protectedRules = [];
   var remainingRules = [];
@@ -4410,7 +4526,7 @@ function assertManagedRuleTarget(ruleLines, type, value, target) {
   var ruleLine = type + "," + value + "," + target;
   if (ruleLines.indexOf(ruleLine) >= 0) return;
   throw createUserError(
-    "关键规则未正确写入: " + ruleLine + "，请检查 mediaRegion 和订阅代理组"
+    "关键规则未正确写入: " + ruleLine + "，请检查目标策略组及规则配置"
   );
 }
 
@@ -4544,7 +4660,7 @@ function main(config) {
   var fullProtocolTarget = null;
 
   ensureProxyContainers(config);
-  validateDedicatedProxyReferences(dedicatedCustomProxies, customRuleGroups);
+  validateDedicatedProxyReferences(dedicatedCustomProxies, customRuleGroups, customProxySets.frontCandidates);
   subscriptionNodeNames = collectProxyNames(config.proxies);
   hasSubscriptionNodes = subscriptionNodeNames.length > 0;
   standaloneMode = !hasSubscriptionNodes;
@@ -4560,7 +4676,7 @@ function main(config) {
     frontNodeName = injectFrontProxy(config, frontProxy, subscriptionNodeNames);
     frontProxyName = frontNodeName;
   }
-  // 有 🔗 前置 组时，订阅节点和 useFrontProxy 节点都挂到组上；否则沿用旧的单节点前置。
+  // 订阅与普通自定义节点统一受前置组控制；禁用该组时兼容旧的单节点前置行为。
   var frontDialer = getFrontGroupName() || frontNodeName;
   if (frontDialer && hasSubscriptionNodes) {
     frontBoundNames = bindFrontProxyToSubscriptionNodes(config, frontDialer, subscriptionNodeNames, !!getFrontGroupName());
@@ -4568,7 +4684,7 @@ function main(config) {
   if (ordinaryCustomProxies.length > 0) {
     customProxyNames = injectCustomProxies(config, ordinaryCustomProxies, frontDialer);
     for (var ci = 0; ci < ordinaryCustomProxies.length; ci++) {
-      if (ordinaryCustomProxies[ci].useFrontProxy && !ordinaryCustomProxies[ci].via) {
+      if (usesDefaultFront(ordinaryCustomProxies[ci])) {
         frontBoundNames.push(ordinaryCustomProxies[ci].name);
       }
     }
@@ -4646,7 +4762,7 @@ function main(config) {
   }
   // 所有引用和前置候选就绪后，再判断每条完整链路的 UDP 能力。
   addFrontCandidates(config, frontNodeName, subscriptionNodeNames, customProxyNames,
-    collectProxyNames(dedicatedCustomProxies), frontBoundNames);
+    collectProxyNames(dedicatedCustomProxies), frontBoundNames, customProxySets.frontCandidates);
   fullProtocolTarget = ensureFullProtocolFallbackGroup(config, subscriptionNodeNames.concat(customProxyNames));
   ensureFallbackPolicyGroup(config, fullProtocolTarget);
 

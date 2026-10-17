@@ -10,6 +10,7 @@
 4. `src/完全覆写.js` 的 `BEGIN GENERATED COMMUNITY RULES` 至 `END GENERATED COMMUNITY RULES` 区段由工具生成，不能手工改。调整来源、排除策略或分类边界应修改 `rules/community-sources.json`，然后运行同步工具。
 5. 社区条目必须保留 `DOMAIN` 与 `DOMAIN-SUFFIX` 的区别；不能将共享登录、CDN、整个云平台或整个厂商 ASN 归入 AI Agent。
 6. 社区数据的路由、DNS、Sniffer 和 QUIC 应一起更新。原有本地补充和 Tailscale、内网、进程、家宽链路的特殊策略仍需保留。
+7. IP 检测域名只在主脚本顶部 `NETWORK_PROBES` 维护，自动派生规则、DNS、Sniffer 和 QUIC；同步更新用途表。当前可执行配置与未实现设计的入口见 `docs/README.md`。
 
 ## 增量更新与验证
 
@@ -18,9 +19,7 @@ node scripts/sync-community-rules.js --dry-run
 node scripts/sync-community-rules.js --refresh
 node scripts/sync-community-rules.js --check
 node --check src/完全覆写.js
-node tests/validate-community.js
-node tests/validate-direct.js
-node tests/validate.js
+npm test
 ```
 
 没有网络或仅修改本地分类策略时，使用 `--render` 从已提交快照重新生成，随后执行检查和测试。遇到未知格式、必需域名消失、目标冲突或分流边界失败，应先调查并增加对应回归测试；不要通过放宽全部匹配、清空规则或跳过验证来解决。
