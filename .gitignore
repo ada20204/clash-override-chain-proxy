@@ -6,3 +6,11 @@ docs/superpowers/
 
 # 系统文件
 .DS_Store
+
+# headless 渲染：秘密、主机文件、生成配置不进 git
+secrets.env
+*.secrets.env
+hosts/*.js
+!hosts/*.example.js
+out/
+node_modules/

@@ -199,6 +199,23 @@ function resolveProxyUdp(proxyConfig) {
   return proxyConfig.udp === true;
 }
 
+// 注入节点时，管理字段由脚本自行处理；其余协议字段（ss 的 cipher/plugin、vless 的 uuid/tls/reality-opts 等）原样透传。
+var PROXY_MANAGEMENT_KEYS = {
+  name: true, type: true, server: true, port: true, udp: true, username: true, password: true,
+  scope: true, useFrontProxy: true, interfaceName: true, "interface-name": true, "dialer-proxy": true
+};
+
+function copyProtocolFields(source, node) {
+  for (var key in source) {
+    if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+    if (PROXY_MANAGEMENT_KEYS[key] || key.charAt(0) === "_") continue;
+    if (source[key] === undefined || source[key] === null) continue;
+    if (Object.prototype.hasOwnProperty.call(node, key)) continue;
+    node[key] = source[key];
+  }
+  return node;
+}
+
 BASE.dns.fallback = BASE.dns.overseas.concat(["https://dns.quad9.net/dns-query"]);
 
 var AUTO_SELECT_INFO_NODE_KEYWORDS = [
@@ -3096,6 +3113,7 @@ function buildHomeProxy(credentials, proxyName, relayGroupName) {
   };
   if (credentials.username) node.username = credentials.username;
   if (credentials.password) node.password = credentials.password;
+  copyProtocolFields(credentials, node);
   if (relayGroupName) node["dialer-proxy"] = relayGroupName;
   return node;
 }
@@ -3140,6 +3158,7 @@ function buildFrontProxy(credentials) {
   };
   if (credentials.username) node.username = credentials.username;
   if (credentials.password) node.password = credentials.password;
+  copyProtocolFields(credentials, node);
   return node;
 }
 
@@ -3341,6 +3360,7 @@ function buildCustomProxyNode(proxyConfig, frontProxyName) {
     }
     node["dialer-proxy"] = frontProxyName;
   }
+  copyProtocolFields(proxyConfig, node);
   return node;
 }
 

@@ -1,0 +1,12 @@
+# /etc/systemd/system/mihomo-pull.timer   启用：systemctl enable --now mihomo-pull.timer
+# 未变化时发布器返回 304，几乎无开销。渲染后想立即生效，可在渲染主机上 ssh <host> systemctl start mihomo-pull.service
+[Unit]
+Description=Periodic mihomo config pull
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target
