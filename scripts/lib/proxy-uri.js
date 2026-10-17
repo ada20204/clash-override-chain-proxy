@@ -41,7 +41,7 @@ function userPass(userinfo, o) {
   return o;
 }
 function tlsCommon(p, q) {
-  if (q.sni || q.peer) p.servername = q.sni || q.peer;
+  if (q.sni || q.peer) p[p.type === "vless" ? "servername" : "sni"] = q.sni || q.peer;
   if (q.fp) p["client-fingerprint"] = q.fp;
   if (q.alpn) p.alpn = q.alpn.split(",");
   if (q.allowInsecure === "1" || q.insecure === "1") p["skip-cert-verify"] = true;

@@ -8,7 +8,7 @@
  *   → 主机偏好（家宽跳板排序）→ runtime（端口、监听、控制器、TUN）→ out/<host>.yaml（600）→ mihomo -t
  *
  * 用法：
- *   node scripts/render-config.js --host grok-bot            # 渲染 hosts/grok-bot.js
+ *   node scripts/render-config.js --host myhost              # 渲染 hosts/myhost.js
  *   node scripts/render-config.js --all                      # 渲染 hosts/ 下所有主机（跳过 *.example.js）
  *   选项：--hosts-dir DIR  --out DIR  --secrets FILE  --offline（只用订阅缓存）
  *         --mihomo BIN（默认 $MIHOMO_BIN 或 PATH 中的 mihomo）  --mihomo-dir DIR（mihomo -t 的工作目录，放 geo 数据）
@@ -31,7 +31,7 @@ try { YAML = require("yaml"); } catch (e) {
 
 const ROOT = path.resolve(__dirname, "..");
 const OVERRIDE = path.join(ROOT, "src", "完全覆写.js");
-const HOME_GROUP = "🏠 家宽IP", RELAY_GROUP = "🔗 家宽跳板";
+const RELAY_GROUP = "🔗 家宽跳板";
 
 function parseArgs(argv) {
   const a = { hosts: [], hostsDir: path.join(ROOT, "hosts"), out: path.join(ROOT, "out"),
@@ -216,8 +216,6 @@ function applyRuntime(config, rt, secrets) {
   if (rt.extra) Object.assign(config, rt.extra);
 }
 
-function hostKey(name) { return name.toUpperCase().replace(/[^A-Z0-9]/g, "_"); }
-
 async function renderHost(name, args, secrets) {
   const file = path.join(args.hostsDir, name + ".js");
   if (!fs.existsSync(file)) throw new Error("主机文件不存在：" + file);
@@ -325,7 +323,7 @@ async function renderHost(name, args, secrets) {
     front: g("🔗 前置") ? g("🔗 前置").proxies : null, match: (config.rules || []).slice(-1)[0],
     relayFirst: g(RELAY_GROUP) ? g(RELAY_GROUP).proxies.slice(0, 2) : null,
     tun: config.tun.enable, mixed: `${config["bind-address"]}:${config["mixed-port"]}`, controller: config["external-controller"],
-    publishToken: !!secrets["PUBLISH_TOKEN_" + hostKey(name)], tested: args.test,
+    tested: args.test,
   };
   console.log(JSON.stringify(summary));
   return summary;

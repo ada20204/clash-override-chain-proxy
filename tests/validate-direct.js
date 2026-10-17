@@ -1007,7 +1007,7 @@ function testDedicatedCustomProxyOnlyAppearsInExplicitRuleGroup() {
         name: "公司代理",
         scope: "dedicated",
         type: "http",
-        server: "10.96.0.100",
+        server: "192.168.88.10",
         port: 3456
       },
       {
@@ -1039,7 +1039,7 @@ function testDedicatedCustomProxyOnlyAppearsInExplicitRuleGroup() {
   assert(companyGroup.proxies.indexOf("公司代理") >= 0, "公司内网规则组应引用专用节点");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,gxatek.com,公司内网");
   assertRuleExists(output.rules, "IP-CIDR,10.0.0.0/8,公司内网,no-resolve");
-  assert(output.rules.indexOf("IP-CIDR,10.96.0.100/32,DIRECT,no-resolve") <
+  assert(output.rules.indexOf("IP-CIDR,192.168.88.10/32,DIRECT,no-resolve") <
       output.rules.indexOf("IP-CIDR,10.0.0.0/8,公司内网,no-resolve"),
     "专用代理服务器直连规则必须优先于公司内网的宽网段规则");
 
@@ -1186,7 +1186,7 @@ function testDedicatedCustomProxyMustBeReferenced() {
           name: "未使用公司代理",
           scope: "dedicated",
           type: "http",
-          server: "10.96.0.100",
+          server: "192.168.88.10",
           port: 3456
         }
       ];
@@ -1202,7 +1202,7 @@ function testDedicatedCustomProxyRejectsNameCollisions() {
           name: "🇺🇸 US Auto 01",
           scope: "dedicated",
           type: "http",
-          server: "10.96.0.100",
+          server: "192.168.88.10",
           port: 3456
         }
       ];
@@ -1223,7 +1223,7 @@ function testDedicatedCustomProxyRejectsNameCollisions() {
           name: "公司内网",
           scope: "dedicated",
           type: "http",
-          server: "10.96.0.100",
+          server: "192.168.88.10",
           port: 3456
         }
       ];
@@ -1500,7 +1500,7 @@ function testStandaloneCustomNodesFollowFrontGroup() {
 function testTailnetCustomProxyServerBypassesTunRoute() {
   const config = createEmptyConfig();
   config._customProxies = [
-    { name: "公司代理", type: "http", server: "10.96.0.100", port: 3456, interfaceName: "utun4" },
+    { name: "公司代理", type: "http", server: "192.168.88.10", port: 3456, interfaceName: "utun4" },
     { name: "公网代理", type: "http", server: "8.8.8.8", port: 8080 }
   ];
   const { output } = runMainWithConfig(config);
@@ -1508,7 +1508,7 @@ function testTailnetCustomProxyServerBypassesTunRoute() {
   const companyNode = output.proxies.find(function (p) { return p.name === "公司代理"; });
 
   assert(routeExcludes, "Tailnet/private 自定义节点服务器应生成 tun.route-exclude-address");
-  assert(routeExcludes.indexOf("10.96.0.100/32") >= 0,
+  assert(routeExcludes.indexOf("192.168.88.10/32") >= 0,
     "作为自定义节点服务器的 Tailnet/private IP 应绕过 TUN，避免节点测速自拨被虚拟网卡截获");
   assert(routeExcludes.indexOf("8.8.8.8/32") < 0, "公网自定义节点服务器不应自动绕过 TUN");
   assert.strictEqual(companyNode["interface-name"], "utun4",
@@ -1593,22 +1593,22 @@ function testProxyServerDirectRulesCanBeDisabled() {
 function testTailnetExistingProxyServerBypassesTunRoute() {
   const config = createEmptyConfig();
   config.proxies = [
-    { name: "公司代理", type: "http", server: "10.96.0.100", port: 3456 },
+    { name: "公司代理", type: "http", server: "192.168.88.10", port: 3456 },
     { name: "公网代理", type: "http", server: "8.8.8.8", port: 8080 }
   ];
   const { output } = runMainWithConfig(config);
   const routeExcludes = output.tun && output.tun["route-exclude-address"];
 
   assert(routeExcludes, "已有代理节点中的 Tailnet/private server 也应生成 tun.route-exclude-address");
-  assert(routeExcludes.indexOf("10.96.0.100/32") >= 0,
+  assert(routeExcludes.indexOf("192.168.88.10/32") >= 0,
     "最终配置内已有的 Tailnet/private 代理服务器应绕过 TUN");
   assert(routeExcludes.indexOf("8.8.8.8/32") < 0, "最终配置内已有的公网代理服务器不应自动绕过 TUN");
 }
 
 function testTunRouteExcludesAreMergedAndConfigurable() {
   const config = createEmptyConfig();
-  config.tun = { enable: true, "route-exclude-address": ["10.96.0.100/32"] };
-  config._frontProxy = { name: "一级前置代理", type: "http", server: "10.96.0.100", port: 3456 };
+  config.tun = { enable: true, "route-exclude-address": ["192.168.88.10/32"] };
+  config._frontProxy = { name: "一级前置代理", type: "http", server: "192.168.88.10", port: 3456 };
   config._customProxies = [
     { name: "公司代理", type: "http", server: "10.166.0.10", port: 8080 }
   ];
@@ -1617,7 +1617,7 @@ function testTunRouteExcludesAreMergedAndConfigurable() {
   });
   const routeExcludes = output.tun["route-exclude-address"];
 
-  assert.strictEqual(routeExcludes.filter(function (cidr) { return cidr === "10.96.0.100/32"; }).length, 1,
+  assert.strictEqual(routeExcludes.filter(function (cidr) { return cidr === "192.168.88.10/32"; }).length, 1,
     "已有 TUN 排除项应保留且去重");
   assert(routeExcludes.indexOf("10.166.0.10/32") >= 0, "新增私网自定义节点服务器应追加到 TUN 排除");
   assert(routeExcludes.indexOf("10.168.100.0/24") >= 0, "用户手工配置的 routeExcludeCidrs 应追加到 TUN 排除");
@@ -2269,7 +2269,7 @@ function testDomesticExitCanAlsoBeAnExplicitFrontCandidate() {
 function testOrdinaryFrontDefaultsAndLegacyOptOut() {
   const { output } = runMain(function (config) {
     config._customProxies = [
-      { name: "自动前置", type: "socks5", server: "10.96.0.100", port: 1080, udp: true,
+      { name: "自动前置", type: "socks5", server: "192.168.88.10", port: 1080, udp: true,
         username: "test-user", password: "test-password", interfaceName: "Tailscale", tls: true },
       { name: "旧直连", type: "http", server: "203.0.113.2", port: 8080, useFrontProxy: false },
       { name: "旧前置候选", type: "socks5", server: "203.0.113.3", port: 1080, allowAsFront: true },
@@ -2291,7 +2291,7 @@ function testOrdinaryFrontDefaultsAndLegacyOptOut() {
   output["proxy-groups"].filter(g => g.name !== "🔗 前置").forEach(g => {
     assert((g.proxies || []).indexOf("⤴ 自动前置") < 0, "副本不能混入 " + g.name);
   });
-  assert(output.tun["route-exclude-address"].indexOf("10.96.0.100/32") >= 0);
+  assert(output.tun["route-exclude-address"].indexOf("192.168.88.10/32") >= 0);
   assert(output.proxies.every(p => !("useFrontProxy" in p) && !("allowAsFront" in p)));
 
   [false, true].forEach(withLegacyFront => {

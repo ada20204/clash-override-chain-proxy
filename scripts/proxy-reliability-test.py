@@ -76,7 +76,7 @@ def proxy_request(index, proxy_url, target_url, timeout, insecure):
             latency_ms = round((time.perf_counter() - start) * 1000, 1)
             return {
                 "index": index,
-                "ok": 200 <= resp.status < 500,
+                "ok": reachable_status(resp.status),
                 "status": resp.status,
                 "latency_ms": latency_ms,
                 "error_type": "",
@@ -87,7 +87,7 @@ def proxy_request(index, proxy_url, target_url, timeout, insecure):
         latency_ms = round((time.perf_counter() - start) * 1000, 1)
         return {
             "index": index,
-            "ok": 200 <= exc.code < 500,
+            "ok": reachable_status(exc.code),
             "status": exc.code,
             "latency_ms": latency_ms,
             "error_type": "HTTPError",
@@ -105,6 +105,11 @@ def proxy_request(index, proxy_url, target_url, timeout, insecure):
             "error": str(exc),
             "sample": ""
         }
+
+
+def reachable_status(status):
+    # Target 4xx can demonstrate reachability; 407 means proxy authentication failed.
+    return 200 <= status < 500 and status != 407
 
 
 def percentile(values, pct):

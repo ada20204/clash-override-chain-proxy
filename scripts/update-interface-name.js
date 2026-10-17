@@ -4,6 +4,7 @@
 var fs = require("fs");
 var os = require("os");
 var childProcess = require("child_process");
+var acorn = require("acorn");
 
 function usage() {
   console.log([
@@ -13,7 +14,7 @@ function usage() {
     "",
     "Options:",
     "  --file       JS credential override file to update",
-    "  --server     Proxy server IP to match, for example 10.96.0.100",
+    "  --server     Proxy server IP to match, for example 192.168.88.10",
     "  --interface  Interface name to write; auto-detected when omitted",
     "  --write      Modify the file. Without this flag, only prints a dry-run preview",
     "  --help       Show this help"
@@ -38,10 +39,6 @@ function parseArgs(argv) {
   return args;
 }
 
-function shellQuote(value) {
-  return "'" + String(value).replace(/'/g, "'\\''") + "'";
-}
-
 function detectInterface(server) {
   var platform = os.platform();
   var output;
@@ -64,112 +61,47 @@ function detectInterface(server) {
   throw new Error("Auto-detect is not supported on " + platform + ". Use --interface <name>.");
 }
 
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function findMatchingBrace(text, startIndex) {
-  var depth = 0;
-  var quote = null;
-  var escaped = false;
-  var lineComment = false;
-  var blockComment = false;
-
-  for (var i = startIndex; i < text.length; i++) {
-    var ch = text[i];
-    var next = text[i + 1];
-
-    if (lineComment) {
-      if (ch === "\n") lineComment = false;
-      continue;
-    }
-    if (blockComment) {
-      if (ch === "*" && next === "/") {
-        blockComment = false;
-        i++;
-      }
-      continue;
-    }
-    if (quote) {
-      if (escaped) {
-        escaped = false;
-      } else if (ch === "\\") {
-        escaped = true;
-      } else if (ch === quote) {
-        quote = null;
-      }
-      continue;
-    }
-
-    if (ch === "/" && next === "/") {
-      lineComment = true;
-      i++;
-      continue;
-    }
-    if (ch === "/" && next === "*") {
-      blockComment = true;
-      i++;
-      continue;
-    }
-    if (ch === "\"" || ch === "'" || ch === "`") {
-      quote = ch;
-      continue;
-    }
-    if (ch === "{") depth++;
-    if (ch === "}") {
-      depth--;
-      if (depth === 0) return i;
-    }
-  }
-  return -1;
-}
-
-function findProxyObject(text, server) {
-  var serverPattern = new RegExp("server\\s*:\\s*['\\\"]" + escapeRegExp(server) + "['\\\"]");
-  var match = serverPattern.exec(text);
-  var start;
-  var end;
-
-  if (!match) throw new Error("Cannot find custom proxy with server: " + server);
-  start = text.lastIndexOf("{", match.index);
-  if (start < 0) throw new Error("Cannot find object start for server: " + server);
-  end = findMatchingBrace(text, start);
-  if (end < 0) throw new Error("Cannot find object end for server: " + server);
-  return { start: start, end: end + 1, body: text.slice(start, end + 1) };
-}
-
-function updateObjectInterfaceName(objectBody, interfaceName) {
-  var quotedInterface = JSON.stringify(interfaceName);
-  var interfacePattern = /(^[ \t]*)(?:(?:interfaceName)|(?:"interface-name")|(?:'interface-name'))\s*:\s*(['"])(?:\\.|(?!\2).)*\2\s*,?/m;
-  var match = interfacePattern.exec(objectBody);
-  var lineMatch;
-  var insertIndex;
-  var indent;
-
-  if (match) {
-    return objectBody.replace(interfacePattern, match[1] + "interfaceName: " + quotedInterface + ",");
-  }
-
-  lineMatch = /(^[ \t]*server\s*:\s*['"][^'"]+['"]\s*,?.*$)/m.exec(objectBody);
-  if (!lineMatch) lineMatch = /(^[ \t]*port\s*:\s*[^,\n]+,?.*$)/m.exec(objectBody);
-  if (!lineMatch) throw new Error("Cannot find insertion point inside proxy object");
-
-  insertIndex = lineMatch.index + lineMatch[0].length;
-  indent = (/^[ \t]*/.exec(lineMatch[0]) || [""])[0];
-  return objectBody.slice(0, insertIndex) +
-    "\n" + indent + "interfaceName: " + quotedInterface + "," +
-    objectBody.slice(insertIndex);
-}
-
 function updateFileContent(text, server, interfaceName) {
-  var objectInfo = findProxyObject(text, server);
-  var updatedBody = updateObjectInterfaceName(objectInfo.body, interfaceName);
-  return {
-    changed: updatedBody !== objectInfo.body,
-    content: text.slice(0, objectInfo.start) + updatedBody + text.slice(objectInfo.end),
-    objectBefore: objectInfo.body,
-    objectAfter: updatedBody
-  };
+  var objects = [];
+  function key(property) {
+    if (property.type !== "Property" || property.computed) return null;
+    return property.key.name || property.key.value;
+  }
+  function visit(node) {
+    if (!node || typeof node !== "object") return;
+    if (node.type === "ObjectExpression" && node.properties.some(function (p) {
+      return key(p) === "server" && p.value.type === "Literal" && p.value.value === server;
+    })) objects.push(node);
+    Object.keys(node).forEach(function (field) {
+      if (Array.isArray(node[field])) node[field].forEach(visit);
+      else if (node[field] && typeof node[field].type === "string") visit(node[field]);
+    });
+  }
+  visit(acorn.parse(text, { ecmaVersion: "latest" }));
+  if (objects.length !== 1) throw new Error("Expected exactly one proxy object matching --server; found " + objects.length);
+  var object = objects[0];
+  if (object.properties.filter(function (p) { return key(p) === "server"; }).length !== 1) {
+    throw new Error("Ambiguous server fields in proxy object");
+  }
+  if (object.properties.some(function (p) { return p.type !== "Property" || p.computed || p.kind !== "init" || p.method || p.shorthand; })) {
+    throw new Error("Proxy must use static properties, without spread, computed keys or accessors");
+  }
+  var interfaces = object.properties.filter(function (p) { return key(p) === "interfaceName" || key(p) === "interface-name"; });
+  if (interfaces.length > 1) throw new Error("Ambiguous interface fields in proxy object");
+  var content;
+  if (interfaces.length) {
+    var value = interfaces[0].value;
+    content = text.slice(0, value.start) + JSON.stringify(interfaceName) + text.slice(value.end);
+  } else {
+    // Insert before the first property, so existing trailing commas and comments stay intact.
+    var first = object.properties[0];
+    var indent = /^[ \t]*/.exec(text.slice(text.lastIndexOf("\n", first.start - 1) + 1, first.start))[0];
+    var separator = text.slice(object.start, object.end).indexOf("\n") >= 0
+      ? (text.indexOf("\r\n") >= 0 ? "\r\n" : "\n") + indent : " ";
+    content = text.slice(0, first.start) + "interfaceName: " + JSON.stringify(interfaceName) + "," + separator + text.slice(first.start);
+  }
+  acorn.parse(content, { ecmaVersion: "latest" });
+  return { changed: content !== text, content: content };
 }
 
 function main() {
@@ -201,12 +133,8 @@ function main() {
     console.log(result.changed ? "updated: yes" : "updated: no-change");
   } else {
     console.log("");
-    console.log("Preview:");
-    console.log(result.objectAfter);
-    console.log("");
-    console.log("Run with --write to modify the file:");
-    console.log("node scripts/update-interface-name.js --file " + shellQuote(args.file) +
-      " --server " + shellQuote(args.server) + " --write");
+    console.log(result.changed ? "Preview: matching proxy interface will be updated (credentials hidden)." : "Preview: no change.");
+    console.log("Repeat the same command, keeping --interface if supplied, and add --write to modify the file.");
   }
 }
 

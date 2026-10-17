@@ -23,6 +23,18 @@ const so = parseProxyUri("socks5://u:p%40ss@198.51.100.9:1080");
 assert.deepStrictEqual([so.type, so.username, so.password, so.udp], ["socks5", "u", "p@ss", undefined]);
 assert.throws(() => parseProxyUri("nope"), e => !/nope/.test(e.message));
 
+for (const scheme of ["vless", "trojan", "hysteria2", "hy2"]) {
+  for (const key of ["sni", "peer"]) {
+    const node = parseProxyUri(scheme + "://fixture@203.0.113.5:443?" + key + "=tls.example.test&alpn=h2,http%2F1.1&fp=chrome&allowInsecure=1");
+    const field = scheme === "vless" ? "servername" : "sni";
+    assert.strictEqual(node[field], "tls.example.test", scheme + " must preserve TLS SNI using its native field");
+    assert.strictEqual(node[field === "sni" ? "servername" : "sni"], undefined);
+    assert.deepStrictEqual(node.alpn, ["h2", "http/1.1"]);
+    assert.strictEqual(node["client-fingerprint"], "chrome");
+    assert.strictEqual(node["skip-cert-verify"], true);
+  }
+}
+
 // 渲染
 const sub = path.join(tmp, "sub.yaml");
 fs.writeFileSync(sub, YAML.stringify({
@@ -52,6 +64,11 @@ const env = Object.assign({}, process.env, {
 });
 const log = execFileSync("node", [path.join(ROOT, "scripts/render-config.js"), "--host", "t1", "--hosts-dir", hostsDir, "--out", out, "--secrets", path.join(tmp, "none.env"), "--no-test"], { env, encoding: "utf8" });
 assert(!/hp@|cnpw|ctrl-secret/.test(log), "日志不能包含秘密");
+const summary = JSON.parse(log.trim().split(/\r?\n/).pop());
+assert.deepStrictEqual(Object.keys(summary).sort(), [
+  "host", "out", "changed", "etag", "proxies", "groups", "rules", "home", "domestic",
+  "front", "match", "relayFirst", "tun", "mixed", "controller", "tested"
+].sort(), "渲染摘要只描述配置生成与校验，不包含发布或运维状态");
 const file = path.join(out, "t1.yaml");
 if (process.platform !== "win32") assert.strictEqual(fs.statSync(file).mode & 0o777, 0o600);
 assert(fs.statSync(file).size > 0, "输出文件应可读取且非空");
@@ -107,6 +124,32 @@ function renderFixture(name, spec, variables) {
   return { config: YAML.parse(fs.readFileSync(path.join(out, name + ".yaml"), "utf8")), log };
 }
 
+// Public samples must render without optional exits and without personal node preferences.
+for (const sampleName of ["cn-desktop", "overseas-cloud"]) {
+  const sample = require(path.join(ROOT, "hosts", sampleName + ".example.js"));
+  for (const withExits of [false, true]) {
+    const result = renderFixture(sampleName + (withExits ? "-exits" : "-minimal"), sample, {
+      SUB_URL_MAIN: sub, CONTROLLER_SECRET: "fixture-controller",
+      HOME_PROXY_URL: withExits ? "http://fixture:fixture@203.0.113.10:8080" : "",
+      CN_EXIT_URL: withExits ? "socks5://fixture:fixture@198.51.100.20:1080" : "",
+      FRONT_PROXY_URL: withExits ? "socks5://fixture:fixture@192.0.2.30:1080" : ""
+    });
+    const group = name => result.config["proxy-groups"].find(g => g.name === name);
+    assert.strictEqual(!!group("🏠 家宽IP"), withExits);
+    assert.strictEqual(group("🔗 前置").proxies[0], "DIRECT", "samples must not force a front selection");
+    assert.strictEqual(group("🇨🇳 国内").proxies[0],
+      sampleName === "overseas-cloud" && withExits ? "国内出口" : "DIRECT");
+    if (withExits) {
+      const dedicated = sampleName === "overseas-cloud" ? "国内出口" : "前置出口";
+      assert(group("🔗 前置").proxies.includes(dedicated));
+      assert(!group("节点选择").proxies.includes(dedicated));
+    }
+    assert.strictEqual(result.config["bind-address"], "127.0.0.1");
+    assert.strictEqual(result.config["allow-lan"], false);
+    assert(!result.log.includes("fixture-controller"));
+  }
+}
+
 const tlsSpec = {
   subscriptions: [{ url: sub }],
   roles: { home: { uri: "https://hu:hp@203.0.113.5:443" } }
@@ -116,6 +159,21 @@ const tlsNodes = tlsResult.config.proxies.filter(p => p.name === "家宽IP" || p
 assert.strictEqual(tlsNodes.length, 2);
 assert(tlsNodes.every(p => p.tls === true),
   "家宽直连和链式节点必须保留 HTTPS 的 TLS 字段");
+
+for (const scheme of ["vless", "trojan", "hy2"]) {
+  const uri = scheme + "://11111111-2222-3333-4444-555555555555@203.0.113.5:443?sni=tls.example.test&security=tls";
+  const result = renderFixture("tls-fields-" + scheme, {
+    subscriptions: [{ url: sub }],
+    roles: { home: { uri, interfaceName: "Tailscale" } },
+    customProxies: [{ name: "protocol-custom", uri, "interface-name": "Tailscale", via: "DIRECT" }]
+  }).config;
+  for (const name of ["家宽IP", "家宽IP链式", "protocol-custom"]) {
+    const node = result.proxies.find(p => p.name === name);
+    assert.strictEqual(node[scheme === "vless" ? "servername" : "sni"], "tls.example.test",
+      "renderer must retain protocol-specific SNI through YAML output");
+    assert.strictEqual(node["interface-name"], "Tailscale");
+  }
+}
 
 const fields = renderFixture("fields", {
   roles: { home: { uri: "secret:T_HOME", password: "secret:T_PASSWORD" } }

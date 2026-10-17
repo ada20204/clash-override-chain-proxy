@@ -1,15 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
   <title id="title">Clash 完全覆写脚本</title>
-  <desc id="desc">把订阅、固定出口和内网代理编排成可选择、可验证的 Mihomo 路由策略。</desc>
+  <desc id="desc">Clash / Mihomo 分流覆写：订阅与可选出口输入完全覆写.js，生成策略组、规则和 DNS 配置；不包含部署或主机管理功能。</desc>
+  <style>
+    text { font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  </style>
 
   <rect width="1200" height="420" rx="24" fill="#111820"/>
-  <text x="56" y="116" fill="#7FD8FF" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="17" font-weight="700" letter-spacing="1.2">MIHOMO / CLASH PARTY / JAVASCRIPT OVERRIDE</text>
+  <text x="56" y="116" fill="#7FD8FF" font-size="17" font-weight="700" letter-spacing="1.2">MIHOMO / CLASH PARTY / JAVASCRIPT OVERRIDE</text>
 
   <g transform="translate(56 194)">
-    <text fill="#F6F8FB" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="54" font-weight="700">Clash 完全覆写脚本</text>
-    <text y="48" fill="#B8C6D1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="23">把订阅、固定出口与内网代理，变成可控的路由策略。</text>
+    <text fill="#F6F8FB" font-size="54" font-weight="700">Clash 完全覆写脚本</text>
+    <text y="48" fill="#B8C6D1" font-size="23">把订阅、固定出口与内网代理，变成可控的路由策略。</text>
 
-    <g transform="translate(0 94)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="16" font-weight="700">
+    <g transform="translate(0 94)" font-size="16" font-weight="700">
       <rect width="108" height="34" rx="17" fill="#173A57"/>
       <text x="54" y="22" text-anchor="middle" fill="#A6E2FF">纯分流</text>
       <rect x="122" width="138" height="34" rx="17" fill="#183C32"/>
@@ -20,41 +23,41 @@
   </g>
 
   <g transform="translate(730 76)">
-    <text fill="#8496A5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" font-weight="700" letter-spacing="1.1">ROUTING CONTROL PLANE</text>
+    <text fill="#9DB0BE" font-size="15" font-weight="700" letter-spacing="1.1">CONFIGURATION OVERVIEW</text>
 
     <g transform="translate(0 28)">
       <rect width="156" height="64" rx="10" fill="#192630" stroke="#385162" stroke-width="2"/>
-      <text x="78" y="27" text-anchor="middle" fill="#F6F8FB" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="20" font-weight="700">配置输入</text>
-      <text x="78" y="49" text-anchor="middle" fill="#9DB0BE" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">订阅 / 凭证 / 规则</text>
+      <text x="78" y="27" text-anchor="middle" fill="#F6F8FB" font-size="20" font-weight="700">配置输入</text>
+      <text x="78" y="49" text-anchor="middle" fill="#B8C6D1" font-size="15">订阅 / 可选出口</text>
 
       <path d="M172 32H196" stroke="#49B9F2" stroke-width="3"/>
       <path d="M188 25L200 32L188 39" fill="none" stroke="#49B9F2" stroke-width="3"/>
 
       <rect x="212" width="190" height="64" rx="10" fill="#124465" stroke="#66CCFF" stroke-width="2"/>
-      <text x="307" y="27" text-anchor="middle" fill="#F6F8FB" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="19" font-weight="700">完全覆写.js</text>
-      <text x="307" y="49" text-anchor="middle" fill="#B6E7FF" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">分组 / DNS / TUN</text>
+      <text x="307" y="27" text-anchor="middle" fill="#F6F8FB" font-size="19" font-weight="700">完全覆写.js</text>
+      <text x="307" y="49" text-anchor="middle" fill="#B6E7FF" font-size="15">分组 / 规则 / DNS</text>
     </g>
 
-    <path d="M307 108V132" fill="none" stroke="#49B9F2" stroke-width="3"/>
-    <path d="M300 124L307 136L314 124" fill="none" stroke="#49B9F2" stroke-width="3"/>
+    <path d="M0 122H125M277 122H402" stroke="#385162" stroke-width="2"/>
+    <text x="201" y="128" text-anchor="middle" fill="#B8C6D1" font-size="17">生成分流配置</text>
 
     <g transform="translate(0 148)">
       <rect width="192" height="66" rx="10" fill="#193A31" stroke="#46C98A" stroke-width="2"/>
-      <text x="96" y="29" text-anchor="middle" fill="#F6F8FB" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="20" font-weight="700">AI Agent</text>
-      <text x="96" y="52" text-anchor="middle" fill="#A8DCC1" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">AI 域名 / 进程</text>
+      <text x="96" y="29" text-anchor="middle" fill="#F6F8FB" font-size="20" font-weight="700">AI Agent</text>
+      <text x="96" y="52" text-anchor="middle" fill="#A8DCC1" font-size="16">AI 域名 / 进程</text>
 
       <rect x="210" width="192" height="66" rx="10" fill="#243244" stroke="#8298AE" stroke-width="2"/>
-      <text x="306" y="29" text-anchor="middle" fill="#F6F8FB" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="20" font-weight="700">节点选择</text>
-      <text x="306" y="52" text-anchor="middle" fill="#BAC9D6" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14">地区 / 订阅 / 出口</text>
+      <text x="306" y="29" text-anchor="middle" fill="#F6F8FB" font-size="20" font-weight="700">节点选择</text>
+      <text x="306" y="52" text-anchor="middle" fill="#BAC9D6" font-size="16">地区 / 订阅 / 出口</text>
     </g>
 
     <g transform="translate(0 230)">
       <rect width="192" height="52" rx="10" fill="#392E1E" stroke="#E2A959" stroke-width="2"/>
-      <text x="96" y="33" text-anchor="middle" fill="#FFE0AC" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="19" font-weight="700">全协议回退</text>
+      <text x="96" y="33" text-anchor="middle" fill="#FFE0AC" font-size="19" font-weight="700">按服务分流</text>
       <rect x="210" width="192" height="52" rx="10" fill="#1C2932" stroke="#456271" stroke-width="2"/>
-      <text x="306" y="33" text-anchor="middle" fill="#D0DEE8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="19" font-weight="700">DNS / Tailnet</text>
+      <text x="306" y="33" text-anchor="middle" fill="#D0DEE8" font-size="19" font-weight="700">DNS / 内网保护</text>
     </g>
   </g>
 
-  <text x="56" y="396" fill="#8496A5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16">可选出口，不写死路径。规则优先级可检查，运行结果可观察。</text>
+  <text x="56" y="396" fill="#AEBECA" font-size="17">脚本生成配置；实际出口以客户端当前选择和新连接记录为准。</text>
 </svg>

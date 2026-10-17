@@ -1,12 +1,14 @@
 {
   "name": "clash-override-chain-proxy",
   "private": true,
-  "description": "Mihomo override scripts + headless per-host renderer (deploy/ops in sshopt-private)",
+  "description": "Clash / Mihomo traffic routing rules, JavaScript override and configuration generator",
   "scripts": {
     "render": "node scripts/render-config.js --all",
-    "test": "node tests/validate-community.js && node tests/validate-direct.js && node tests/validate-headless.js && node tests/validate-headless-cache.js && node tests/validate-docs.js"
+    "test:kernel": "node tests/validate-kernel.js",
+    "test": "node tests/validate-community.js && node tests/validate-direct.js && node tests/validate-regressions.js && node tests/validate-headless.js && node tests/validate-headless-cache.js && node tests/validate-tools.js && node tests/validate-docs.js"
   },
   "dependencies": {
+    "acorn": "^8.15.0",
     "yaml": "^2.5.0"
   }
 }

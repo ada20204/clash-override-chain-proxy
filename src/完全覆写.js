@@ -28,7 +28,6 @@
  * - 使用 ES5 语法，不依赖箭头函数、解构赋值、模板字符串、
  *   展开语法、`Object.values()`、`Object.fromEntries()` 等 ES6+ 特性。
  *
- * @version 1.0
  */
 
 // ---------------------------------------------------------------------------
@@ -58,8 +57,8 @@ var USER_OPTIONS = {
   rejectAppStoreQuic: true, // 拒绝 App Store 启动接口 UDP/443，避免 QUIC 在 TUN 中超时；系统会回退 HTTPS/TCP
   rejectWebRtcUdp: true, // 拒绝常用 STUN UDP 端口，避免 HTTP 出口不支持 UDP 时 WebRTC 暴露本地公网 IP
   fullProtocolFallback: null, // HTTP 出口保留给 TCP/443；其余流量回退到支持完整隧道的订阅节点；null 按 location（cn 开启，overseas 关闭，非 443 流量直接走通用出海）
-  enableChainRegionBrowserProcessProxy: false, // 是否让受管浏览器按应用名强制走家宽出口
-  enableChainRegionAiCliProcessProxy: true,   // 是否让常见 AI CLI 按应用名强制走家宽出口
+  enableChainRegionBrowserProcessProxy: false, // 受管浏览器按应用名走 AI Agent 当前选择
+  enableChainRegionAiCliProcessProxy: true,   // 常见 AI CLI 按应用名走 AI Agent 当前选择
   tailscale: {
     enable: true,
     monitorGroups: true,
@@ -113,7 +112,7 @@ var BASE = {
     lan: "🎯 直连" // 局域网/私网段：面板上可见的直连组（出口 IP 防回环、ipip.net 仍写 DIRECT）
   },
   urlTestProbeUrl: "https://www.gstatic.com/generate_204",
-  errorPrefix: "[家宽IP-直连] ",
+  errorPrefix: "[完全覆写] ",
   webRtcStunPorts: [3478, 5349, 19302],
   dns: {
     overseas: [
@@ -286,6 +285,22 @@ function copyProtocolFields(source, node) {
     node[key] = source[key];
   }
   return node;
+}
+
+function buildProxyNode(credentials, name, defaultType) {
+  var node = {
+    name: name,
+    type: credentials.type || defaultType,
+    server: credentials.server,
+    port: credentials.port,
+    udp: resolveProxyUdp(credentials)
+  };
+  if (credentials.username) node.username = credentials.username;
+  if (credentials.password) node.password = credentials.password;
+  if (credentials.interfaceName || credentials["interface-name"]) {
+    node["interface-name"] = credentials.interfaceName || credentials["interface-name"];
+  }
+  return copyProtocolFields(credentials, node);
 }
 
 BASE.dns.fallback = BASE.dns.overseas.concat(["https://dns.quad9.net/dns-query"]);
@@ -2031,12 +2046,8 @@ var SOURCE_PATTERNS = {
     }
   },
   policy: {
-    dnsFallbackExtra: [
-      "+.cdn.cloudflare.net"
-    ],
     snifferForceBase: [
-      "+.cloudflare.com",
-      "+.cdn.cloudflare.net"
+      "+.cloudflare.com"
     ],
     snifferSkipBase: [
       "+.push.apple.com",
@@ -2287,11 +2298,8 @@ function buildDerived() {
     flattenGroupedPatterns(SOURCE_PATTERNS.chain.generalEgress),
     directAll
   );
-  var validationExtra  = uniqueStrings(SOURCE_PATTERNS.policy.dnsFallbackExtra.slice());
   var strictAi         = excludeStrings(aiPatterns, directAll);
-  var strictSupport    = [];
-  var strictValidation = excludeStrings(validationExtra, directAll);
-  var strictAll        = mergeStringGroups([strictAi, strictSupport, strictValidation]);
+  var strictAll        = strictAi;
 
   var specs = [
     {
@@ -2364,8 +2372,6 @@ function buildDerived() {
       strict: {
         ai: strictAi,
         sharedInfrastructure: aiSharedInfrastructure,
-        support: strictSupport,
-        validation: strictValidation,
         all: strictAll
       },
       direct: {
@@ -2538,8 +2544,6 @@ function buildNameserverPolicy(frontProxyName) {
   var spec;
   var dnsServers;
   assignNameserverPolicyDomains(policy, DERIVED.patterns.strict.ai,              overseasDnsServers);
-  assignNameserverPolicyDomains(policy, DERIVED.patterns.strict.support,         overseasDnsServers);
-  assignNameserverPolicyDomains(policy, DERIVED.patterns.strict.validation,      overseasDnsServers);
   assignNameserverPolicyDomains(policy, DERIVED.patterns.generalEgress,           foreignDnsServers);
   assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.overrides.domesticDns, cnDnsServers);
   assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.overrides.overseasDns, foreignDnsServers);
@@ -2706,11 +2710,7 @@ function ensureProxyContainers(config) {
   if (!config.rules)            config.rules = [];
 }
 
-// 清空订阅原有代理组和规则，保留 Smart Group 或原始 url-test 组。
-// Smart 内核会将 url-test 转为 smart 类型并追加 "(Smart Group)" 后缀；
-// 未启用 Smart 内核时保留原始 url-test 组供 dialer-proxy 引用。
-// 清空订阅原有代理组和规则，保留 Smart Group 或原始 url-test 组的定义。
-// 保留的组不立即插入（由 appendTailGroups 放到底部），仅暂存到 config._savedAutoGroup。
+// Rebuild groups, retaining the auto group and dependencies of surviving upstream references.
 function resetSubscriptionGroupsAndRules(config) {
   var smartName = USER_OPTIONS.autoSelectGroupName + "(Smart Group)";
   var baseName  = USER_OPTIONS.autoSelectGroupName;
@@ -2720,9 +2720,36 @@ function resetSubscriptionGroupsAndRules(config) {
     if (group.name === smartName) { savedGroup = group; break; }
     if (group.name === baseName && !savedGroup) { savedGroup = group; }
   }
+  var originalGroups = config["proxy-groups"];
+  var dependencies = [];
+  var visited = Object.create(null);
+  function retain(name) {
+    if (!name || visited[name]) return;
+    visited[name] = true;
+    var dependency = findProxyGroupByName(originalGroups, name);
+    if (!dependency) return; // Final graph validation reports missing references.
+    if (dependency !== savedGroup) dependencies.push(dependency);
+    var members = dependency.proxies || [];
+    for (var j = 0; j < members.length; j++) retain(members[j]);
+    retain(dependency["dialer-proxy"]);
+  }
+  if (savedGroup) retain(savedGroup.name);
+  for (var p = 0; p < config.proxies.length; p++) retain(config.proxies[p]["dialer-proxy"]);
   config["proxy-groups"] = [];
   config.rules = [];
-  config._savedAutoGroup = savedGroup; // 暂存，appendTailGroups 使用后删除
+  config._savedAutoGroup = savedGroup;
+  config._savedDependencyGroups = dependencies;
+}
+
+function restoreSubscriptionDependencies(config) {
+  var dependencies = config._savedDependencyGroups || [];
+  for (var i = 0; i < dependencies.length; i++) {
+    if (hasProxyOrGroup(config, dependencies[i].name)) {
+      throw createUserError("订阅依赖组与覆写名称冲突，请重命名原订阅组及其引用：" + dependencies[i].name);
+    }
+    config["proxy-groups"].push(dependencies[i]);
+  }
+  delete config._savedDependencyGroups;
 }
 
 function findNamedItem(items, targetName) {
@@ -2910,8 +2937,7 @@ function collectRegionNodeNames(config, regionRegex) {
 }
 
 // 生成锚点组（节点选择）并按 BASE.regionOrder 顺序收集可用的地区节点。
-// 节点选择的成员为 [自动选择, 地区组..., 自定义节点..., DIRECT]，选组而不是选裸节点。
-// 地区组和 GLOBAL 由 appendTailGroups 插入底部。
+// 节点选择同时提供组与裸节点；最终面板顺序由 orderProxyGroups 统一处理。
 function ensureAnchorGroups(config, options) {
   var opts = options || {};
   var enableAutoSelect = opts.enableAutoSelect !== false;
@@ -3133,7 +3159,6 @@ function buildFunctionalGroups(config, regionGroupNames) {
   }
 }
 
-// 将不需要频繁操作的组插入到底部：GLOBAL → 地区 url-test 组 → 自动选择组
 // 将不需要频繁操作的组插入到底部：地区 url-test 组
 function appendTailGroups(config, regionGroupDefs) {
   for (var i = 0; i < regionGroupDefs.length; i++) {
@@ -3197,17 +3222,7 @@ function takeHomeProxyCredentials(config) {
 
 // 把家宽IP凭证转成 Clash 代理节点对象。
 function buildHomeProxy(credentials, proxyName, relayGroupName) {
-  var proxyType = credentials.type || "http";
-  var node = {
-    name: proxyName,
-    type: proxyType,
-    server: credentials.server,
-    port: credentials.port,
-    udp: resolveProxyUdp(credentials)
-  };
-  if (credentials.username) node.username = credentials.username;
-  if (credentials.password) node.password = credentials.password;
-  copyProtocolFields(credentials, node);
+  var node = buildProxyNode(credentials, proxyName, "http");
   if (relayGroupName) node["dialer-proxy"] = relayGroupName;
   return node;
 }
@@ -3242,18 +3257,7 @@ function buildFrontProxy(credentials) {
   if (!credentials.server || !credentials.port) {
     throw createUserError("前置代理配置不完整，请检查 server 和 port 字段");
   }
-  var proxyType = credentials.type || "socks5";
-  var node = {
-    name: credentials.name || BASE.nodeNames.front,
-    type: proxyType,
-    server: credentials.server,
-    port: credentials.port,
-    udp: resolveProxyUdp(credentials)
-  };
-  if (credentials.username) node.username = credentials.username;
-  if (credentials.password) node.password = credentials.password;
-  copyProtocolFields(credentials, node);
-  return node;
+  return buildProxyNode(credentials, credentials.name || BASE.nodeNames.front, "socks5");
 }
 
 function injectFrontProxy(config, credentials, subscriptionNodeNames) {
@@ -3286,20 +3290,14 @@ function getFrontGroupName() {
   return USER_OPTIONS.frontGroup === false ? null : BASE.nodeNames.frontGroup;
 }
 
-function ensureFrontGroup(config, frontNodeName, customProxyNames) {
+function ensureFrontGroup(config, frontNodeName) {
   var groupName = getFrontGroupName();
-  var candidates = [];
-  var proxy;
   if (!groupName) return null;
-  for (var i = 0; i < (customProxyNames || []).length; i++) {
-    proxy = findProxyByName(config.proxies, customProxyNames[i]);
-    if (proxy && !proxy["dialer-proxy"]) candidates.push(proxy.name);
-  }
   var proxies = frontNodeName
     ? [frontNodeName, BASE.ruleTargets.direct]
     : [BASE.ruleTargets.direct];
   upsertNamedItem(config["proxy-groups"], {
-    name: groupName, type: "select", proxies: uniqueStrings(proxies.concat(candidates)), url: getProxyProbeUrl()
+    name: groupName, type: "select", proxies: proxies, url: getProxyProbeUrl()
   });
   return groupName;
 }
@@ -3430,7 +3428,7 @@ function ensureChainGroupWithProxies(config, chainProxies) {
   return chainGroupName;
 }
 
-function buildAiAgentProxies(config, options) {
+function buildAiAgentProxies(options) {
   var proxies = [];
   if (options.chainGroupName) proxies.push(options.chainGroupName);
   proxies.push("节点选择");
@@ -3448,7 +3446,7 @@ function ensureAiAgentGroup(config, options) {
   upsertNamedItem(config["proxy-groups"], {
     name: BASE.nodeNames.aiAgent,
     type: "select",
-    proxies: buildAiAgentProxies(config, options),
+    proxies: buildAiAgentProxies(options),
     url: getProxyProbeUrl()
   });
   return BASE.nodeNames.aiAgent;
@@ -3601,20 +3599,8 @@ function usesDefaultFront(proxyConfig) {
 }
 
 function buildCustomProxyNode(proxyConfig, frontProxyName) {
-  var proxyType = proxyConfig.type || "http";
   var explicitUpstream = proxyConfig.via || proxyConfig["dialer-proxy"];
-  var node = {
-    name: proxyConfig.name,
-    type: proxyType,
-    server: proxyConfig.server,
-    port: proxyConfig.port,
-    udp: resolveProxyUdp(proxyConfig)
-  };
-  if (proxyConfig.username) node.username = proxyConfig.username;
-  if (proxyConfig.password) node.password = proxyConfig.password;
-  if (proxyConfig.interfaceName || proxyConfig["interface-name"]) {
-    node["interface-name"] = proxyConfig.interfaceName || proxyConfig["interface-name"];
-  }
+  var node = buildProxyNode(proxyConfig, proxyConfig.name, "http");
   if (explicitUpstream) {
     node["dialer-proxy"] = explicitUpstream;
   } else if (proxyConfig.useFrontProxy || (frontProxyName && usesDefaultFront(proxyConfig))) {
@@ -3623,7 +3609,6 @@ function buildCustomProxyNode(proxyConfig, frontProxyName) {
     }
     node["dialer-proxy"] = frontProxyName;
   }
-  copyProtocolFields(proxyConfig, node);
   return node;
 }
 
@@ -3934,12 +3919,12 @@ function buildGeminiChallengeRules(strictAiTarget) {
   ];
 }
 
-// strictAiTarget 为 null 时跳过 AI 进程和浏览器进程规则（纯分流模式）。
-function buildManagedRules(strictAiTarget, frontProxyName, fullProtocolTarget) {
+function buildPriorityRules(strictAiTarget, frontProxyName, fullProtocolTarget) {
   var rules = [];
   rules = rules.concat(buildProxyServerDirectRules());
   // Tailscale 的 STUN 也会使用 UDP/3478，必须先于通用 WebRTC 防泄漏规则匹配。
   rules = rules.concat(buildTailscaleProcessRuleLines());
+  rules = rules.concat(buildLocalNetworkRules());
   rules = rules.concat(buildWebRtcUdpRejectRules());
   rules = rules.concat(buildGooglePlayMtalkRules(fullProtocolTarget));
   rules = rules.concat(buildGeminiChallengeRules(strictAiTarget));
@@ -3954,13 +3939,19 @@ function buildManagedRules(strictAiTarget, frontProxyName, fullProtocolTarget) {
   }
   if (strictAiTarget) {
     rules = rules.concat(buildStrictChainRules(strictAiTarget));
-    rules = rules.concat(buildBrowserChainRules(strictAiTarget));
   }
+  return deduplicateManagedRules(rules);
+}
+
+// strictAiTarget 为 null 时跳过 AI 进程和浏览器进程规则（纯分流模式）。
+function buildManagedRules(strictAiTarget, frontProxyName, fullProtocolTarget) {
+  var rules = buildPriorityRules(strictAiTarget, frontProxyName, fullProtocolTarget);
+  if (strictAiTarget) rules = rules.concat(buildBrowserChainRules(strictAiTarget));
   return deduplicateManagedRules(rules
     .concat(buildNodeSelectionRules(fullProtocolTarget))
     .concat(buildGeneralEgressRules(fullProtocolTarget))
     .concat(buildFunctionalRules())
-    .concat(buildDirectRules(fullProtocolTarget)));
+    .concat(buildDirectRules()));
 }
 
 function deduplicateManagedRules(ruleLines) {
@@ -4009,31 +4000,10 @@ function injectManagedRules(config, strictAiTarget, frontProxyName, fullProtocol
 }
 
 function buildProtectedManagedRuleLines(strictAiTarget, fullProtocolTarget, frontProxyName) {
-  var rules = [];
-  var tailscaleRuleLines = [];
-  var seenTailscaleRuleIdentities = {};
-  addRawRulesIfNotExists(
-    tailscaleRuleLines,
-    seenTailscaleRuleIdentities,
-    buildTailscaleRules(false)
-  );
-  rules = rules
-    .concat(buildProxyServerDirectRules())
-    .concat(buildTailscaleProcessRuleLines())
-    .concat(tailscaleRuleLines)
-    .concat(buildGooglePlayMtalkRules(fullProtocolTarget))
-    .concat(buildGeminiChallengeRules(strictAiTarget))
-    .concat(buildAppStoreQuicRejectRules())
-    .concat(buildGoogleConsistencyRules(strictAiTarget, fullProtocolTarget))
-    .concat(buildWebRtcUdpRejectRules());
-  if (strictAiTarget) {
-    rules = rules
-      .concat(buildNetworkProbeRules(strictAiTarget, frontProxyName))
-      .concat(buildAiQuicRejectRules())
-      .concat(buildCommunityAiRules(strictAiTarget))
-      .concat(buildStrictChainRules(strictAiTarget));
-  }
-  return rules;
+  var privateRules = buildPrivateNetworkRules();
+  return buildPriorityRules(strictAiTarget, frontProxyName, fullProtocolTarget).filter(function (rule) {
+    return privateRules.indexOf(rule) < 0;
+  });
 }
 
 function assertCustomRulesDoNotOverrideProtectedRules(ruleLines, protectedIdentities) {
@@ -4056,16 +4026,29 @@ function injectCustomRuleGroupRules(config, ruleLines, strictAiTarget, fullProto
   var remainingRules = [];
   var ruleIdentity;
   assertCustomRulesDoNotOverrideProtectedRules(ruleLines, protectedIdentities);
-  config.rules = filterConflictingRules(config.rules, ruleIdentities);
+  var privateRules = buildPrivateNetworkRules();
+  var privateIdentities = buildRuleIdentityLookup(privateRules);
+  var networkRules = [];
+  var businessRules = [];
+  for (var ri = 0; ri < ruleLines.length; ri++) {
+    if (isPrivateNetworkRule(ruleLines[ri])) networkRules.push(ruleLines[ri]);
+    else businessRules.push(ruleLines[ri]);
+  }
   for (var i = 0; i < config.rules.length; i++) {
     ruleIdentity = getRuleIdentity(config.rules[i]);
-    if (ruleIdentity && protectedIdentities[ruleIdentity]) {
+    // Locate the boundary before removing defaults that custom rules replace.
+    if (privateRules.indexOf(config.rules[i]) >= 0 && networkRules.length) {
+      protectedRules = protectedRules.concat(networkRules);
+      networkRules = [];
+    }
+    if (ruleIdentity && ruleIdentities[ruleIdentity]) continue;
+    if (ruleIdentity && (protectedIdentities[ruleIdentity] || privateIdentities[ruleIdentity])) {
       protectedRules.push(config.rules[i]);
     } else {
       remainingRules.push(config.rules[i]);
     }
   }
-  config.rules = protectedRules.concat(ruleLines).concat(remainingRules);
+  config.rules = protectedRules.concat(networkRules).concat(businessRules).concat(remainingRules);
 }
 
 function addRuleIfNotExists(ruleLines, seenRuleIdentities, type, value, target) {
@@ -4206,6 +4189,37 @@ function parseIpv4Address(value) {
     numbers.push(part);
   }
   return numbers;
+}
+
+function isPrivateNetworkRule(rule) {
+  var fields = rule.split(",");
+  if (fields[0] !== "IP-CIDR" && fields[0] !== "IP-CIDR6") return false;
+  var cidr = fields[1].split("/");
+  if (cidr.length !== 2 || !/^\d+$/.test(cidr[1])) return false;
+  var bits = Number(cidr[1]);
+  if (fields[0] === "IP-CIDR") {
+    var ip = parseIpv4Address(cidr[0]);
+    if (!ip || bits > 32) return false;
+    var value = ((ip[0] * 256 + ip[1]) * 256 + ip[2]) * 256 + ip[3];
+    for (var i = 0; i < DERIVED.networkRules.direct.length; i++) {
+      var range = DERIVED.networkRules.direct[i];
+      if (range.type !== "IP-CIDR") continue;
+      var parts = range.value.split("/");
+      if (bits < Number(parts[1])) continue;
+      var base = parseIpv4Address(parts[0]);
+      var start = ((base[0] * 256 + base[1]) * 256 + base[2]) * 256 + base[3];
+      var size = Math.pow(2, 32 - Number(parts[1]));
+      if (Math.floor(value / size) === Math.floor(start / size)) return true;
+    }
+    return false;
+  }
+  if (bits > 128) return false;
+  var address = cidr[0].toLowerCase();
+  var first = /^[0-9a-f]{1,4}:/.test(address) ? parseInt(address.split(":")[0], 16) : -1;
+  // IPv6 local ranges: unique-local /7, link-local /10 and the loopback host.
+  return (first >= 0xfc00 && first <= 0xfdff && bits >= 7) ||
+    (first >= 0xfe80 && first <= 0xfebf && bits >= 10) ||
+    (bits === 128 && /^[0:]*1$/.test(address) && address.indexOf(":") >= 0);
 }
 
 function isPrivateOrTailnetIpv4(value) {
@@ -4485,12 +4499,10 @@ function buildTailscaleProcessRules() {
   return rules;
 }
 
-function buildDirectRules(fullProtocolTarget) {
+function buildPrivateNetworkRules() {
   var ruleLines = [];
   var seenRuleIdentities = {};
   var directNetworkRules = [];
-  var directPatternGroups = DERIVED.patterns.direct.groups;
-  var domesticTarget = getDomesticTarget();
   var i;
   for (i = 0; i < DERIVED.networkRules.direct.length; i++) {
     directNetworkRules.push({
@@ -4501,7 +4513,29 @@ function buildDirectRules(fullProtocolTarget) {
     });
   }
   addRawRulesIfNotExists(ruleLines, seenRuleIdentities, directNetworkRules);
-  addRawRulesIfNotExists(ruleLines, seenRuleIdentities, buildTailscaleRules(false));
+  return ruleLines;
+}
+
+function buildLocalNetworkRules() {
+  var rules = [];
+  var sourceRules = [];
+  var tailscaleRules = buildTailscaleRules(false);
+  for (var i = 0; i < tailscaleRules.length; i++) {
+    if (tailscaleRules[i].type === "SRC-IP-CIDR") sourceRules.push(tailscaleRules[i]);
+    else addRawRulesIfNotExists(rules, {}, [tailscaleRules[i]]);
+  }
+  rules = rules.concat(buildPrivateNetworkRules());
+  // A forced exit applies to public destinations only, after local destinations are excluded.
+  addRawRulesIfNotExists(rules, {}, sourceRules);
+  return rules;
+}
+
+function buildDirectRules() {
+  var ruleLines = [];
+  var seenRuleIdentities = {};
+  var directPatternGroups = DERIVED.patterns.direct.groups;
+  var domesticTarget = getDomesticTarget();
+  var i;
   // directPatternGroups = [国内 DNS 例外, 海外 DNS 例外]；国内例外跟随 domesticTarget。
   for (i = 0; i < directPatternGroups.length; i++) {
     addSuffixRulesIfNotExists(
@@ -4690,7 +4724,7 @@ function main(config) {
     }
   }
   resetSubscriptionGroupsAndRules(config);
-  ensureFrontGroup(config, frontNodeName, customProxyNames);
+  ensureFrontGroup(config, frontNodeName);
 
   // ① 自动选择组（最上面）：订阅有就用，没有就自建 url-test
   if (!standaloneMode) ensureAutoSelectGroup(config);
@@ -4760,6 +4794,7 @@ function main(config) {
   if (customRuleGroups) {
     customRuleGroupRules = injectCustomRuleGroups(config, customRuleGroups, customGroupInsertionIndex);
   }
+  restoreSubscriptionDependencies(config);
   // 所有引用和前置候选就绪后，再判断每条完整链路的 UDP 能力。
   addFrontCandidates(config, frontNodeName, subscriptionNodeNames, customProxyNames,
     collectProxyNames(dedicatedCustomProxies), frontBoundNames, customProxySets.frontCandidates);
@@ -4771,19 +4806,11 @@ function main(config) {
   applyTunRouteExcludes(config, customProxies, frontProxy, credentials);
   ensureTunDnsHijack(config);
   applyProxyServerDirectRules(config);
-  if (hasHomeProxy) {
-    injectManagedRules(config, aiAgentTarget, frontProxyName, fullProtocolTarget);
-    if (customRuleGroupRules.length > 0) {
-      injectCustomRuleGroupRules(config, customRuleGroupRules, aiAgentTarget, fullProtocolTarget);
-    }
-    validateManagedRouting(config, routingTargets);
-  } else {
-    // 无家宽凭证：AI 规则指向 AI Agent，用户可在组内选择支持 AI 的订阅节点。
-    injectManagedRules(config, aiAgentTarget, frontProxyName, fullProtocolTarget);
-    if (customRuleGroupRules.length > 0) {
-      injectCustomRuleGroupRules(config, customRuleGroupRules, aiAgentTarget, fullProtocolTarget);
-    }
+  injectManagedRules(config, aiAgentTarget, frontProxyName, fullProtocolTarget);
+  if (customRuleGroupRules.length > 0) {
+    injectCustomRuleGroupRules(config, customRuleGroupRules, aiAgentTarget, fullProtocolTarget);
   }
+  if (hasHomeProxy) validateManagedRouting(config, routingTargets);
 
   orderProxyGroups(config);
   validateLocationRouting(config);

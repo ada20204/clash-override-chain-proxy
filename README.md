@@ -1,7 +1,7 @@
 # Clash 完全覆写脚本
 
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="Clash 完全覆写脚本：将订阅、固定出口与内网代理编排成可控、可验证的 Mihomo 路由策略。">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Clash 完全覆写脚本：订阅与可选出口生成策略组、分流规则和 DNS 配置。">
 </p>
 
 <p align="center">
@@ -15,15 +15,15 @@
 
 ## 从这里开始
 
-> 多台机器、或不想安装 Clash Party：用本仓 `scripts/render-config.js` 按主机文件渲染出 `out/<host>.yaml`；**发布、拉取、systemd、本机 ensure** 在私有仓 `sshopt-private` 的 `scripts/mihomo/`（说明见该仓 `docs/mihomo/CLASH_OVERRIDE_OPS.md`）。下面是单机在 Clash Party 里直接导入脚本的用法。
+本项目只维护 Clash / Mihomo 分流规则、覆写配置和相关验证。推荐在 Clash Party 中导入脚本；不使用 Clash Party 时，也可用[独立生成器](./docs/配置生成.md)生成 YAML。
 
 只想先让分流工作起来，不需要配置家宽 IP 或自定义节点：
 
 1. 在 Clash Party 的覆写列表导入 [`src/完全覆写.js`](./src/完全覆写.js)。
-2. 使用规则模式；需要接管应用流量时开启 TUN。
+2. 使用规则模式，通过 TUN、系统代理或应用显式代理让请求进入 Mihomo。
 3. 打开代理组，在 `节点选择` 选一个正常节点；AI 相关服务则在 `🤖 AI Agent` 单独选择出口。
 
-脚本会保留你的订阅节点，重建它管理的策略组、DNS 和规则。它不会把密码或凭证写入仓库；固定出口、前置代理与公司节点均放在单独的本地凭证脚本中。
+脚本会保留你的订阅节点，重建它管理的策略组、DNS 和规则。固定出口与前置代理等信息填写在本地凭证脚本中，不要提交；覆写后生成的 YAML 同样含有节点凭证。
 
 > 详细的 Clash Party 操作、美国静态 IP、无订阅模式和排障步骤见 [低门槛配置教程](./docs/配置教程.md)。
 
@@ -36,36 +36,35 @@
 - **把“节点”变成“策略”**：订阅节点自动组织为地区组、节点选择和功能组，AI 与普通出海可选不同出口。
 - **把复杂出口留在可选层**：前置代理、家宽 IP、链式代理、Tailscale 子网节点和无订阅配置按需启用，不影响纯分流模式。
 - **把流量路径做成可验证结果**：网络信息检测源、分组测速、连接图、规则顺序与本地测试分别覆盖不同层面。
-- **让 Tailscale 与 TUN 共存**：Tailnet、MagicDNS 与出口节点转发保留在 Tailscale 的职责范围内，避免被 Clash 再代理。
+- **让 Tailscale 与 TUN 共存**：优先保护 Tailnet 目的地，并提供 TUN 排除配置；子网可达性和 MagicDNS 仍需由本机网络正确配置。
 
 ## 流量如何决定
 
 <p align="center">
-  <img src="./assets/readme/routing-priority.svg" width="100%" alt="策略概览：代理服务器、Tailnet、安全与 IP 检测、AI Agent、通用服务、国内及兜底；实际顺序以生成规则为准。">
+  <img src="./assets/readme/routing-priority.svg" width="100%" alt="按用途展示分流策略：代理服务器与内网保护、安全与检测、AI 和 Google 一致性、功能组、国内与兜底，以及普通出海的可选全协议回退。不是逐条规则顺序，完整说明见正文。">
 </p>
 
 以下是策略概览，不是逐条规则顺序；实际命中以生成配置及连接日志为准：
 
 1. 代理服务器地址直连，避免局域网内多层 Clash 再代理订阅节点（只被订阅信息节点使用的假地址，如 `www.baidu.com`，不生成直连规则）。
-2. Tailnet 地址与 `*.ts.net` 保持 Tailscale 直连，MagicDNS 不进入 Fake-IP 或普通上游 DNS。
+2. Tailnet 地址与 `*.ts.net` 走 Tailnet 直连规则，后者排除 Fake-IP；普通局域网/私网段进入 `🎯 直连`。这些基础目的地规则先于 AI/浏览器进程规则；MagicDNS 解析还依赖系统 DNS 配置。
 3. AI 域名的 UDP/443 与常见 WebRTC STUN UDP 默认被拒绝；支持回退的 HTTPS 客户端可改用 TCP，但这不是对所有 UDP 或 WebRTC 泄漏的完整保证。
-4. Claude、OpenAI、Gemini、AI Studio、Antigravity、Kiro、Perplexity、Mistral、xAI 及已覆盖的 AI 进程进入 `🤖 AI Agent`。
-5. 开发服务、通用 Google 服务和明确的境外域名再进入 `节点选择` 或 `🌐 国外`。
+4. Claude、OpenAI、Gemini、AI Studio、Antigravity、Kiro、Perplexity、Mistral、xAI 及已覆盖的 AI 进程进入 `🤖 AI Agent`。默认也统一 Google 账号与其他 Google 服务的出口，YouTube、Play、FCM 保留例外。
+5. Bing 和指定开发服务进入 `节点选择`；媒体、GitHub 等进入各自功能组，其他明确的境外域名进入 `🌐 国外`。
 6. 国内域名/IP（少量显式例外、GeoSite 与 GeoIP）进入 `🇨🇳 国内`；`GEOIP,cn` 不带 `no-resolve`，不在 GeoSite 里的国内站会经 mihomo DNS 解析后按 IP 命中国内；其余流量由最后一条 `MATCH,🐟 兜底` 决定走国内还是国外。
-7. 局域网/私网段（10/8、172.16/12、192.168/16、169.254/16、127/8、::1、fc00::/7、fe80::/10）进入 `🎯 直连`，面板可见；出口 IP 防回环的 IP-CIDR 与 `ipip.net` 仍直接写 `DIRECT`。
 
-国内直连以 Mihomo 的 `GEOSITE,cn` 和 `GEOIP,cn` 为主，不重复维护腾讯、阿里、WPS 等整套域名清单。脚本只显式保留 `rivotek.com`（国内 DNS，不在 GeoSite 里）和 `typeless.com`；其中 `typeless.com` 使用海外 DNS，但业务流量仍保持直连。
+国内业务以 Mihomo 的 `GEOSITE,cn` 和 `GEOIP,cn` 为主，不重复维护整套域名清单。另显式保留 `rivotek.com` 走国内组与国内 DNS，`typeless.com` 使用海外 DNS、业务流量直连；GeoSite 的实际覆盖范围取决于本机数据版本。
 
 ### 可选：全协议回退
 
-`USER_OPTIONS.fullProtocolFallback` 默认 `null`，随 `location` 取值：cn 开启，overseas 关闭；显式 true/false 优先。它只影响原本走 `节点选择`、`🌐 国外` 的普通流量（cn 下 `🐟 兜底` 也多一个 `🔌 全协议回退` 候选）：
+`USER_OPTIONS.fullProtocolFallback` 默认 `null`，随 `location` 取值：cn 开启，overseas 关闭；显式 true/false 优先。它主要影响原本走 `节点选择`、`🌐 国外` 的普通流量；生成回退组后，`🐟 兜底` 也会增加该候选：
 
 - TCP/443 仍使用当前 `节点选择` / `🌐 国外` 的选择结果，例如你手动选中的公司代理。
 - HTTP、IMAP、其他 TCP 端口和 UDP 会进入隐藏的 `🔌 全协议回退`。
 - 回退组只收录明确配置 `udp: true` 且完整链路均支持 UDP 的订阅节点或普通自定义出口；HTTP 家宽 IP、HTTP 公司代理，以及经过 HTTP 前置代理的节点不会被放入其中。
 - 手动选择组会检查全部候选，而非只看默认项。`🔗 前置` 包含 HTTP 或未声明 UDP 的候选时，依赖它的节点不能保证全协议能力；可用 `front.excludeKeywords` 排除不适合作为前置的节点，普通节点选择不受此过滤影响。
 - 如果没有符合条件的节点，回退组不会生成，原有的 `节点选择` / `🌐 国外` 行为保持不变。
-- AI Agent、AI DNS、AI QUIC、Tailnet 与已有功能组不使用回退组。
+- AI Agent、AI DNS、AI QUIC、Tailnet 和普通功能组规则保持原目标。FCM（开启 Google 一致性时）及 `mtalk.google.com:5228` 是显式例外：有回退组时用它，否则走国际媒体。
 
 需要恢复旧逻辑时，在 `完全覆写.js` 顶部设置：
 
@@ -88,25 +87,25 @@ fullProtocolFallback: false
 复制 [`src/出口IP凭证_样本.js`](./src/出口IP凭证_样本.js) 为本地 `出口IP凭证.js`，配置 `_homeProxy`。脚本会生成：
 
 - `🏠 家宽IP`：真直连与可选链式家宽出口的选择组。
-- `🔗 家宽跳板`：家宽链式节点使用的上游选择组。
+- `🔗 家宽跳板`：有可用订阅或普通自定义跳板时才生成，作为家宽链式节点的上游。
 - `🔗 前置`：订阅和普通自定义节点的一级跳选择组，默认 `DIRECT`（不加前置）。
 - `🤖 AI Agent`：默认优先选择 `🏠 家宽IP`，同时保留普通节点选择。
 
 ### 无订阅与自定义出口
 
-先导入 [`src/无订阅基础配置.yaml`](./src/无订阅基础配置.yaml)，再用 `出口IP凭证.js` 填写 `_customProxies`、`_homeProxy` 或自定义规则组。没有订阅时不会创建地区组或自动选择组；没有任何出口时脚本会直接报错，而不是生成不可用配置。
+先导入 [`src/无订阅基础配置.yaml`](./src/无订阅基础配置.yaml)，再用 `出口IP凭证.js` 填写 `_customProxies`、`_homeProxy` 或 `_customRuleGroups`。没有订阅时不会创建地区组或自动选择组；上述三项也全部为空时才报错。仅配置使用 `DIRECT` 的自定义业务组也可运行，不必强行添加代理。
 
 ## 代理组模型
 
 **日常可见的组**
 
-- `节点选择`：默认普通代理出口，包含自动选择、地区组、普通自定义出口、订阅节点和 `DIRECT`。
+- `节点选择`：默认普通代理出口，包含自动选择、地区组、普通自定义出口、订阅节点、可选的 `🏠 家宽IP` 和 `DIRECT`。
 - `自动选择`默认过滤订阅状态信息和名称含“公司代理”的节点；被过滤节点仍保留在`节点选择`中供手动使用，可通过 `USER_OPTIONS.autoSelectExcludeKeywords` 调整。
 - `GLOBAL`：全局模式的选择入口；有前置代理时可在这里显式选择它。
 - `🤖 AI Agent`：AI 域名与 AI 应用的独立出口选择。
 - `🌍 国际媒体`、`📲 Telegram`、`🐙 GitHub`、`Ⓜ️ 微软服务`、`🎮 游戏平台`、`🍎 Apple`、`🎯 直连`：按业务拆分的策略组。`Ⓜ️ 微软服务`、`🍎 Apple` 候选为 `DIRECT`（默认）→ `🇨🇳 国内` → `节点选择` → 地区组。
-- `🇨🇳 国内`、`🌐 国外`、`🐟 兜底`：位置无关的三个策略组，规则对所有主机相同，只有默认选项随 `location` 变（见下文）。
-- 节点组段：`🏠 家宽IP`、`🔗 家宽跳板`（配置家宽 IP 时）、`🔗 前置`、地区 url-test 组。
+- `🇨🇳 国内`、`🌐 国外`、`🐟 兜底`：共用业务分类，默认选择、DNS 和全协议回退随 `location` 变化；并非所有环境生成逐字相同的规则。
+- 节点组段：`🏠 家宽IP`（配置家宽时）、`🔗 家宽跳板`（另需可用跳板）、`🔗 前置`、地区 url-test 组。
 
 **隐藏的内部组**
 
@@ -140,8 +139,7 @@ AI、国际媒体、Telegram/Discord 和 GitHub 的基础域名来自社区维�
 node scripts/sync-community-rules.js --dry-run
 node scripts/sync-community-rules.js --refresh
 node scripts/sync-community-rules.js --check
-node tests/validate-community.js
-node tests/validate-direct.js
+npm test
 ```
 
 离线或仅调整本地分类策略时使用 `--render`。不要手工修改主脚本中的生成区段；工具会记录每次规则增删和上游版本。
@@ -168,7 +166,7 @@ Sentry、Datadog、Intercom、Statsig、Stripe、WorkOS、SendGrid 等共享基�
 
 | 策略组 | 谁指向它 | cn 默认 | overseas 默认 |
 |---|---|---|---|
-| `🇨🇳 国内` | 国内例外域名、`GEOSITE,cn`、`GEOIP,cn` | `DIRECT` | `domesticExit` 第一个（如 阿里云回国） |
+| `🇨🇳 国内` | 国内例外域名、`GEOSITE,cn`、`GEOIP,cn` | `DIRECT` | `domesticExit` 第一个，未配置时 `DIRECT` |
 | `🌐 国外` | 明确的境外域名 | `节点选择` | `DIRECT` |
 | `🐟 兜底` | 最后一条 `MATCH` | `🇨🇳 国内` | `🌐 国外` |
 
@@ -182,20 +180,22 @@ Sentry、Datadog、Intercom、Statsig、Stripe、WorkOS、SendGrid 等共享基�
 
 前置副本只解除本次脚本自动绑定的 `🔗 前置`；用户显式填写的 `via` 和订阅原有 `dialer-proxy` 会保留，不生成绕过它们的直连副本。副本名称与已有节点或策略组冲突时自动追加编号。
 
+原订阅自动选择组和保留的节点上游引用所需的依赖组也会保留，无关订阅组仍清理。依赖组与覆写生成组重名时会明确报错，应重命名原订阅组及引用，不能静默改成另一条链路。
+
 国内出口与前置可以复用同一个节点：节点写 `dedicated: true`，`domesticExit: ["阿里云回国"]` 授权国内业务，`front.include: ["阿里云回国"]` 授权前置候选。它不会因此进入自动选择、普通节点选择或家宽跳板。专用前置必须本机可直达；引用不存在、被过滤或依赖其他上游的节点会报错，不能强行剥离显式上游。
 
 ### Tailscale
 
-默认配置保留 `100.64.0.0/10`、`100.100.100.100/32`、Tailnet IPv6 前缀和 `*.ts.net` 的直连路径，并排除 TUN 路由。Tailscale 控制面和进程默认 `DIRECT`，但可通过 `USER_OPTIONS.tailscale` 改为前置代理或节点选择。
+默认规则将 `100.64.0.0/10`、`100.100.100.100/32`、Tailnet IPv6 前缀和 `*.ts.net` 指向直连。TUN 默认排除的是前两个 IPv4 网段，以及节点服务器为私网/Tailnet IPv4 字面地址时的 `/32`，不是自动排除所有 IPv6 或子网路由。额外 TUN 排除需填写 `routeExcludeCidrs`。Tailscale 控制面和进程默认 `DIRECT`，可通过 `USER_OPTIONS.tailscale` 修改。
 
-Exit Node 转发流量默认继续使用正常分流规则。只有明确要把 Exit Node 转发流量强制指定到某个目标时，才开启 `forceExitNodeTraffic`。
+Exit Node 转发流量默认继续使用正常分流规则。显式开启 `forceExitNodeTraffic` 后，先排除本地目的地，再把匹配的公网访问送往强制目标，这会优先于普通 AI、业务及检测站规则。
 
-## 默认工作流：headless 渲染（部署见 sshopt-private）
+## 可选：独立生成 YAML
 
 本仓只负责**生成**配置：
 
 ```bash
-npm install
+npm ci
 cp secrets.env.example secrets.env && chmod 600 secrets.env   # 不进 git
 cp hosts/overseas-cloud.example.js hosts/myhost.js            # 真实 hosts/*.js 不进 git
 node scripts/render-config.js --host myhost                   # → out/myhost.yaml，默认 mihomo -t
@@ -204,8 +204,6 @@ node scripts/render-config.js --host myhost                   # → out/myhost.y
 主机文件字段（`location`、`roles`、`runtime`、`selections`、`options.front` 等）与 Clash Party 覆写语义一致；出口用 `secret:KEY` 引用，协议字段完整透传。
 
 本地路径、Windows 盘符与 `file://` 订阅、缓存隔离、凭证和输出权限说明见[配置生成](docs/配置生成.md)。`selections` 只是配置头部元数据，渲染器不会连接客户端或应用运行时选择。
-
-**不进本仓**：`serve-configs.js`、`mihomo-pull.sh`、systemd/timer、本机 `clash-ensure`/`clash-regen`、真实主机清单与运维说明。这些在私有仓 [`sshopt-private`](https://github.com/ada20204/sshopt-private) → `scripts/mihomo/` 与 `docs/mihomo/CLASH_OVERRIDE_OPS.md`（含 🇨🇳 国内 / 🌐 国外 / 🐟 兜底、🔗 前置、测 IP 站与 grok-bot 约定）。有权限的维护者从那里部署；公开读者用上面的 Clash Party 导入即可。
 
 ## 导入顺序
 
@@ -247,6 +245,8 @@ node scripts/render-config.js --host myhost                   # → out/myhost.y
 
 ## 本地校验
 
+需要 Node.js 和 Python 3。`npm test` 会运行临时文件、loopback 代理测试，不使用真实出口凭证；Python 不在 PATH 时可设置 `PYTHON` 为解释器路径。
+
 ```bash
 npm ci
 npm test
@@ -258,7 +258,9 @@ node scripts/check-claude-rules.js    # 可选的联网调查，不属于离线�
 
 `check-claude-rules.js` 会把当前内嵌 AI 规则和本地 Anthropic 补充与参考页的具体域名、CIDR 比对，保留精确/后缀匹配的区别。关键词、ASN 和 GeoSite 建议只输出提示，不会自动扩大匹配范围。
 
-对家宽 IP、公司代理或自定义 HTTP/SOCKS5 出口，可使用 [`scripts/proxy-reliability-test.py`](./scripts/proxy-reliability-test.py) 独立压测连通率与延迟；它验证代理本身，不替代 Clash 的规则命中检查。
+可另外执行隔离的 `mihomo -t`，方法与测试边界见 [文档索引](./docs/README.md#回归保护与隔离校验)。
+
+对家宽 IP、公司代理或自定义 HTTP/HTTPS 出口，可使用 [`scripts/proxy-reliability-test.py`](./scripts/proxy-reliability-test.py) 独立压测连通率与延迟；它不支持 SOCKS5，也不替代 Clash 的规则命中检查。
 
 ## 文件地图
 
@@ -270,9 +272,12 @@ src/
 
 tests/
   validate-direct.js       主覆写行为与回归测试
+  validate-regressions.js  审查问题、组合开关、顺序和 ES5 兼容性回归
   validate-community.js    社区解析、分类边界与增量更新测试
   validate-headless.js     headless 渲染器回归（URI 解析、字段透传、runtime、ETag 稳定）
   validate-headless-cache.js 订阅缓存隔离与离线回退
+  validate-tools.js        网卡更新 CLI、loopback 代理故障回归
+  validate-kernel.js       可选的隔离 mihomo -t 校验
   validate-docs.js         文档索引、本地链接与章节锚点
 
 scripts/
@@ -298,14 +303,12 @@ docs/
   配置生成.md              无 Clash Party 的配置生成与凭证说明
   规则维护与调研记录.md    调查证据与后续增量维护步骤
   统一配置参考.md          尚未实现的重构方案，不是当前配置格式
-  （部署/拉取/systemd → sshopt-private docs/mihomo/CLASH_OVERRIDE_OPS.md）
 ```
 
 历史 MiyaIP 链式脚本及其专用测试已移除，旧版本可从 Git 历史查阅。当前只维护 `完全覆写.js`，`出口IP凭证.js` 按需使用。
 
 ## 进一步阅读
 
-- 部署与运维（有权限）：私有仓 `sshopt-private` → `docs/mihomo/CLASH_OVERRIDE_OPS.md`。
 - [低门槛配置教程](./docs/配置教程.md)：逐步导入、无订阅、前置代理、家宽 IP 和 Tailscale 子网代理。
 - [规则维护与调研记录](./docs/规则维护与调研记录.md)：社区来源、服务分类边界、更新工具和本次调查结果。
 - [出口凭证样本](./src/出口IP凭证_样本.js)：本地出口与自定义业务规则的统一入口。
