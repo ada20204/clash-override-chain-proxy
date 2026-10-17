@@ -107,12 +107,15 @@ function resolveExit(spec, secrets, label) {
   return raw ? Object.assign(parseProxyUri(raw, fields.name), fields) : fields;
 }
 
-async function loadSubscription(sub, idx, secrets, args) {
+async function loadSubscription(sub, idx, secrets, args, hostName) {
   const name = sub.name || "sub" + idx;
+  const url = sub.secret ? secrets[sub.secret] : resolveSecrets(sub.url, secrets, []);
+  if (!url || typeof url !== "string") throw new Error(`订阅 ${name}: 缺少 URL（secret ${sub.secret || "?"}）`);
+  const ua = sub.ua || "clash-verge/v1.7.7";
   const cacheDir = path.join(args.out, ".cache");
   fs.mkdirSync(cacheDir, { recursive: true, mode: 0o700 });
-  const cache = path.join(cacheDir, "sub-" + crypto.createHash("sha1").update(name).digest("hex").slice(0, 12) + ".yaml");
-  const url = sub.secret ? secrets[sub.secret] : resolveSecrets(sub.url, secrets, []);
+  const identity = JSON.stringify([hostName, name, url, ua]);
+  const cache = path.join(cacheDir, "sub-" + crypto.createHash("sha256").update(identity).digest("hex") + ".yaml");
   const parse = text => {
     const doc = YAML.parse(text);
     if (!doc || !Array.isArray(doc.proxies) || !doc.proxies.length) throw new Error("订阅 " + name + " 无节点");
@@ -122,20 +125,24 @@ async function loadSubscription(sub, idx, secrets, args) {
     const file = url.startsWith("file:") ? fileURLToPath(url) : url;
     return parse(fs.readFileSync(file, "utf8"));
   }
-  if (url && !args.offline) {
+  if (!args.offline) {
     try {
-      const res = await fetch(url, { headers: { "User-Agent": sub.ua || "clash-verge/v1.7.7" }, signal: AbortSignal.timeout(30000) });
+      const res = await fetch(url, { headers: { "User-Agent": ua }, signal: AbortSignal.timeout(30000) });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const text = await res.text();
       const doc = parse(text);
-      fs.writeFileSync(cache + ".tmp", text, { mode: 0o600 }); fs.renameSync(cache + ".tmp", cache);
+      const tmp = cache + "." + process.pid + "." + crypto.randomBytes(6).toString("hex") + ".tmp";
+      try {
+        fs.writeFileSync(tmp, text, { mode: 0o600, flag: "wx" });
+        fs.renameSync(tmp, cache);
+      } finally {
+        if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+      }
       console.log(`  订阅 ${name}: 拉取成功 ${doc.proxies.length} 个节点`);
       return doc;
     } catch (e) {
-      console.log(`  订阅 ${name}: 拉取失败（${e.message}），改用缓存`);
+      console.log(`  订阅 ${name}: 拉取或解析失败，改用该订阅的缓存`);
     }
-  } else if (!url && !fs.existsSync(cache)) {
-    throw new Error(`订阅 ${name}: 缺少 URL（secret ${sub.secret || "?"}）且无缓存`);
   }
   if (!fs.existsSync(cache)) throw new Error(`订阅 ${name}: 无缓存可用`);
   const doc = parse(fs.readFileSync(cache, "utf8"));
@@ -208,7 +215,7 @@ async function renderHost(name, args, secrets) {
   const subs = host.subscriptions || [];
   let config = { proxies: [], "proxy-groups": [], rules: [] };
   for (let i = 0; i < subs.length; i++) {
-    const doc = await loadSubscription(subs[i], i, secrets, args);
+    const doc = await loadSubscription(subs[i], i, secrets, args, name);
     if (i === 0) config = doc;
     else {
       const seen = new Set(config.proxies.map(p => p.name));

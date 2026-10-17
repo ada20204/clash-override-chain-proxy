@@ -4,7 +4,7 @@
   "description": "Mihomo override scripts + headless per-host renderer (deploy/ops in sshopt-private)",
   "scripts": {
     "render": "node scripts/render-config.js --all",
-    "test": "node tests/validate-community.js && node tests/validate-direct.js && node tests/validate.js && node tests/validate-headless.js"
+    "test": "node tests/validate-community.js && node tests/validate-direct.js && node tests/validate.js && node tests/validate-headless.js && node tests/validate-headless-cache.js"
   },
   "dependencies": {
     "yaml": "^2.5.0"
