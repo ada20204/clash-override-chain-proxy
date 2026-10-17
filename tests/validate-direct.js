@@ -482,6 +482,9 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,DIRECT");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipip.net,🔗 前置");
+  assert(output.rules.indexOf("DOMAIN-SUFFIX,ipip.net,🔗 前置") < output.rules.indexOf("GEOSITE,cn,🇨🇳 国内"),
+    "ipip.net 必须先于 GeoSite cn 命中 🔗 前置");
 
   // 媒体规则指向媒体组
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com," + EXPECTED.mediaGroupName);
@@ -762,6 +765,9 @@ function testNoCredentialPureOverwrite() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,DIRECT");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipip.net,🔗 前置");
+  assert(output.rules.indexOf("DOMAIN-SUFFIX,ipip.net,🔗 前置") < output.rules.indexOf("GEOSITE,cn,🇨🇳 国内"),
+    "ipip.net 必须先于 GeoSite cn 命中 🔗 前置");
 
   // 域名规则正常
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com,🌍 国际媒体");
@@ -1198,7 +1204,9 @@ function testFrontProxyAppliesOnlyToSubscriptionNodes() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.net.coffee," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipapi.is," + EXPECTED.aiGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipwho.is,节点选择");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,一级前置代理");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.sb,DIRECT");
+  assertRulesMissing(output.rules, ["DOMAIN-SUFFIX,ip.sb,一级前置代理"]);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,ipip.net,🔗 前置");
 }
 
 function testFrontProxyDoesNotOverrideHomeProxyDialer() {
@@ -1957,6 +1965,10 @@ function testFrontGroup() {
   assert(!findGroup(legacy, "🔗 前置"), "frontGroup=false 不生成 🔗 前置");
   assert.strictEqual(legacy.proxies.find(function (p) { return p.name === "🇸🇬 SG Auto 01"; })["dialer-proxy"], "一级前置",
     "frontGroup=false 时沿用旧的单节点前置");
+  assertRuleExists(legacy.rules, "DOMAIN-SUFFIX,ipip.net,一级前置");
+  const { output: noFront } = runMain(null, function (sandbox) { sandbox.USER_OPTIONS.frontGroup = false; });
+  assertRuleExists(noFront.rules, "DOMAIN-SUFFIX,ipip.net,DIRECT");
+  assertRuleExists(noFront.rules, "DOMAIN-SUFFIX,ip.sb,DIRECT");
 }
 
 function testProxyGraphRejectsCycles() {

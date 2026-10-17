@@ -221,7 +221,8 @@ mihomo-pull.sh /etc/mihomo-pull.env                    # 配合 examples/systemd
 | `ip.net.coffee` | `🤖 AI Agent` | 观察 AI 出口、DNS、协议和端到端表现 |
 | `ipapi.is` | `🤖 AI Agent` | 确认 AI 最终出口 IP |
 | `ipwho.is` | `节点选择` | 确认普通代理最终出口 |
-| `ip.sb` | 前置代理或 `DIRECT` | 确认订阅节点前的第一跳 |
+| `ip.sb` | `DIRECT`（永不经前置） | 确认本机环境的直连出口 |
+| `ipip.net` | `🔗 前置` | 确认前置出口（前置为 `DIRECT` 时即直连） |
 
 在 Clash Party 中结合三处信息判断：
 

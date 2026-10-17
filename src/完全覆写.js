@@ -3734,7 +3734,11 @@ function buildNetworkProbeRules(strictAiTarget, frontProxyName) {
     "ipwho.is",
     "节点选择"
   );
-  addRuleIfNotExists(ruleLines, seenRuleIdentities, "DOMAIN-SUFFIX", "ip.sb", frontProxyName || BASE.ruleTargets.direct);
+  // 面板 IP 检测：ip.sb 永远 DIRECT（本机环境直连出口，不经前置）；
+  // ipip.net 走 🔗 前置（显示前置出口，前置=DIRECT 时即直连）。无 🔗 前置 组时退回旧的单节点前置，再退回 DIRECT。
+  addRuleIfNotExists(ruleLines, seenRuleIdentities, "DOMAIN-SUFFIX", "ip.sb", BASE.ruleTargets.direct);
+  addRuleIfNotExists(ruleLines, seenRuleIdentities, "DOMAIN-SUFFIX", "ipip.net",
+    getFrontGroupName() || frontProxyName || BASE.ruleTargets.direct);
   return ruleLines;
 }
 
