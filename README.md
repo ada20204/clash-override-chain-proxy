@@ -158,7 +158,7 @@ Sentry、Datadog、Intercom、Statsig、Stripe、WorkOS、SendGrid 等共享基�
 
 海外和未知域名的 DoH 默认通过 `🤖 AI Agent` 建立连接，国内域名、直连域名和代理服务器解析则使用国内 DNS。DNS 检测页显示的是递归 DNS 提供商的地址，不会等于家宽出口 IP；关键判断是海外解析是否仍显示中国大陆递归 DNS。
 
-电脑或云主机在境外时，把 `USER_OPTIONS.location` 改为 `overseas`：`🇨🇳 国内` 默认改选回国出口（成员来自 `domesticExit`，例如一台国内 VPS），`🌐 国外` 与 `🐟 兜底` 默认直连/国外，DNS 也换成本机直连的境外 DoH。默认 `cn` 的输出保持不变，详见[配置教程](docs/配置教程.md#境外使用location)。
+电脑或云主机在境外时，把 `USER_OPTIONS.location` 改为 `overseas`：`🇨🇳 国内` 默认改选回国出口（成员来自 `domesticExit`，例如一台国内 VPS），`🌐 国外` 与 `🐟 兜底` 默认直连/国外，DNS 也换成本机直连的境外 DoH。`cn` 的最终兜底默认进入 `🇨🇳 国内`，未收录的境外域名也可能直连；希望未知流量代理时，在 `🐟 兜底` 手动选择 `🌐 国外`。详见[配置教程](docs/配置教程.md#境外使用location)。
 
 | 策略组 | 谁指向它 | cn 默认 | overseas 默认 |
 |---|---|---|---|
@@ -192,6 +192,8 @@ node scripts/render-config.js --host myhost                   # → out/myhost.y
 ```
 
 主机文件字段（`location`、`roles`、`runtime`、`selections`、`options.front` 等）与 Clash Party 覆写语义一致；出口用 `secret:KEY` 引用，协议字段完整透传。
+
+本地路径、Windows 盘符与 `file://` 订阅、缓存隔离、凭证和输出权限说明见[配置生成](docs/配置生成.md)。`selections` 只是配置头部元数据，渲染器不会连接客户端或应用运行时选择。
 
 **不进本仓**：`serve-configs.js`、`mihomo-pull.sh`、systemd/timer、本机 `clash-ensure`/`clash-regen`、真实主机清单与运维说明。这些在私有仓 [`sshopt-private`](https://github.com/ada20204/sshopt-private) → `scripts/mihomo/` 与 `docs/mihomo/CLASH_OVERRIDE_OPS.md`（含 🇨🇳 国内 / 🌐 国外 / 🐟 兜底、🔗 前置、测 IP 站与 grok-bot 约定）。有权限的维护者从那里部署；公开读者用上面的 Clash Party 导入即可。
 
