@@ -50,7 +50,7 @@
 6. 国内域名/IP（少量显式例外、GeoSite 与 GeoIP）进入 `🇨🇳 国内`；`GEOIP,cn` 不带 `no-resolve`，不在 GeoSite 里的国内站会经 mihomo DNS 解析后按 IP 命中国内；其余流量由最后一条 `MATCH,🐟 兜底` 决定走国内还是国外。
 7. 局域网/私网段（10/8、172.16/12、192.168/16、169.254/16、127/8、::1、fc00::/7、fe80::/10）进入 `🎯 直连`，面板可见；出口 IP 防回环的 IP-CIDR 与 `ip.sb` 仍直接写 `DIRECT`。
 
-国内直连以 Mihomo 的 `GEOSITE,cn` 和 `GEOIP,cn` 为主，不重复维护腾讯、阿里、WPS 等整套域名清单。脚本只显式保留 `rivotek.com`、`larksuite.com`、`larkoffice.com`、`dashscope.aliyuncs.com`、`feishu.net`、`feishucdn.com`、`dingtalkapps.com` 和 `typeless.com`，用于提前兜底或指定合适的 DNS；其中 `typeless.com` 使用海外 DNS，但业务流量仍保持直连。
+国内直连以 Mihomo 的 `GEOSITE,cn` 和 `GEOIP,cn` 为主，不重复维护腾讯、阿里、WPS 等整套域名清单。脚本只显式保留 `rivotek.com`（国内 DNS，不在 GeoSite 里）和 `typeless.com`；其中 `typeless.com` 使用海外 DNS，但业务流量仍保持直连。
 
 ### 可选：全协议回退
 

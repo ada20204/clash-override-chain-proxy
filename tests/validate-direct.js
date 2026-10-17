@@ -538,14 +538,12 @@ function testDefaultConfig() {
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,nintendo.co.jp," + EXPECTED.japanServicesGroupName);
 
   const domesticDnsDirectOverrides = [
-    "rivotek.com",
-    "larksuite.com",
-    "larkoffice.com",
-    "dashscope.aliyuncs.com",
-    "feishu.net",
-    "feishucdn.com",
-    "dingtalkapps.com"
+    "rivotek.com"
   ];
+  // 已被 GEOSITE,cn 覆盖，不再写死：
+  ["larksuite.com", "larkoffice.com", "dashscope.aliyuncs.com", "feishu.net", "feishucdn.com", "dingtalkapps.com"].forEach(function (domain) {
+    assertRulesMissing(output.rules, ["DOMAIN-SUFFIX," + domain + ",🇨🇳 国内"]);
+  });
   const overseasDnsDirectOverrides = ["typeless.com"];
   // 国内业务域名统一进 🇨🇳 国内（cn 默认 DIRECT）；海外 DNS 例外仍直接 DIRECT。
   domesticDnsDirectOverrides.forEach(function (domain) {
@@ -1758,7 +1756,8 @@ function testLocationDefaultsToCn() {
   assert.strictEqual(sandbox.USER_OPTIONS.location, "cn");
   assertRuleExists(output.rules, "GEOSITE,cn,🇨🇳 国内");
   assertRuleExists(output.rules, "GEOIP,cn,🇨🇳 国内");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,feishu.net,🇨🇳 国内");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,rivotek.com,🇨🇳 国内");
+  assertRulesMissing(output.rules, ["DOMAIN-SUFFIX,feishu.net,🇨🇳 国内"]);
   assert.deepStrictEqual(Array.from(findGroup(output, DOMESTIC_GROUP).proxies), ["DIRECT", "节点选择"], "cn 下 🇨🇳 国内 默认 DIRECT");
   assertRuleExists(output.rules, "GEOSITE,cn," + DOMESTIC_GROUP);
   assert.deepStrictEqual(Array.from(output.dns["default-nameserver"]), ["223.5.5.5", "119.29.29.29"]);
@@ -1790,8 +1789,11 @@ function testOverseasRoutesDomesticTrafficToReturnGroup() {
   assertRuleExists(output.rules, "GEOSITE,cn," + DOMESTIC_GROUP);
   assertRuleExists(output.rules, "GEOIP,cn," + DOMESTIC_GROUP);
   assertRulesMissing(output.rules, ["GEOSITE,cn,DIRECT", "GEOIP,cn,DIRECT,no-resolve"]);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,feishu.net," + DOMESTIC_GROUP);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,dingtalkapps.com," + DOMESTIC_GROUP);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,rivotek.com," + DOMESTIC_GROUP);
+  assertRulesMissing(output.rules, [
+    "DOMAIN-SUFFIX,feishu.net," + DOMESTIC_GROUP,
+    "DOMAIN-SUFFIX,dingtalkapps.com," + DOMESTIC_GROUP
+  ]);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,typeless.com,DIRECT");
   // 回国节点服务器本身必须直连，否则会自我代理。
   assertRuleExists(output.rules, "IP-CIDR,198.51.100.20/32,DIRECT,no-resolve");
@@ -1833,7 +1835,8 @@ function testOverseasDnsProfile() {
   assert(!dns.fallback && !dns["fallback-filter"], "overseas 不需要 CN GeoIP fallback");
   assert(dns.nameserver.every(function (s) { return /#DIRECT$/.test(s); }), "未知域名本机直连解析");
   assert(policy["geosite:cn"].every(function (s) { return s.indexOf("#" + DOMESTIC_GROUP) > 0; }), "国内域名经回国组解析");
-  assert(policy["+.feishu.net"].every(function (s) { return s.indexOf("#" + DOMESTIC_GROUP) > 0; }));
+  assert(policy["+.rivotek.com"].every(function (s) { return s.indexOf("#" + DOMESTIC_GROUP) > 0; }));
+  assert(!policy["+.feishu.net"], "feishu.net 已由 geosite:cn 覆盖，不再单独写 DNS policy");
   assert(policy["+.apple.com"].every(function (s) { return /#DIRECT$/.test(s); }), "直连功能组用本地 DNS");
   assert(policy["geosite:openai"].every(function (s) { return s.indexOf("#" + EXPECTED.aiGroupName) > 0; }), "AI DNS 仍随 AI Agent");
   [].concat(dns["proxy-server-nameserver"], dns["direct-nameserver"]).forEach(function (s) {

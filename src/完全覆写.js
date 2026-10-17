@@ -1966,13 +1966,7 @@ var SOURCE_PATTERNS = {
   direct: {
     overrides: {
       domesticDns: [
-        "+.rivotek.com",
-        "+.larksuite.com",
-        "+.larkoffice.com",
-        "+.dashscope.aliyuncs.com",
-        "+.feishu.net",
-        "+.feishucdn.com",
-        "+.dingtalkapps.com"
+        "+.rivotek.com" // 其余飞书/钉钉/DashScope 已由 GEOSITE,cn 覆盖，不再写死
       ],
       overseasDns: [
         "+.typeless.com"
