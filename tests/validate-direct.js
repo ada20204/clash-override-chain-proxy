@@ -367,8 +367,8 @@ function testDefaultConfig() {
   assertTransportAwareDomainRules(output.rules, "google.com", "节点选择");
   assertTransportAwareDomainRules(output.rules, "google.ca", "节点选择");
   assertTransportAwareDomainRules(output.rules, "googleapis.com", "节点选择");
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,cloudcode-pa.googleapis.com," + EXPECTED.aiGroupName);
-  assertRuleExists(output.rules, "DOMAIN-SUFFIX,daily-cloudcode-pa.googleapis.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN,cloudcode-pa.googleapis.com," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "DOMAIN,daily-cloudcode-pa.googleapis.com," + EXPECTED.aiGroupName);
   const googleDeepMindRule = "GEOSITE,google-deepmind," + EXPECTED.aiGroupName;
   const googleCatchAllRule = "GEOSITE,google," + EXPECTED.aiGroupName;
   const youtubeGeositeRule = "GEOSITE,youtube," + EXPECTED.mediaGroupName;
@@ -451,11 +451,9 @@ function testDefaultConfig() {
   assert(output.rules.indexOf("DOMAIN,www.google.com," + EXPECTED.aiGroupName) <
       output.rules.indexOf("DOMAIN-SUFFIX,google.com," + EXPECTED.fullProtocolFallbackGroupName),
     "Gemini 挑战域名必须先命中 AI Agent，不能落入通用 Google 规则");
-  const generatedAiQuicRules = output.rules.filter(function (rule) {
-    return rule.indexOf("AND,((NETWORK,udp),(DST-PORT,443),(DOMAIN-SUFFIX,") === 0;
+  sandbox.DERIVED.patterns.strict.all.forEach(function (pattern) {
+    assertRuleExists(output.rules, aiQuicRejectRule(sandbox.toSuffix(pattern)));
   });
-  assert.strictEqual(generatedAiQuicRules.length, sandbox.DERIVED.patterns.strict.all.length,
-    "每个 AI Agent 域名都应自动生成一条 QUIC 拒绝规则");
 
   // 网络信息检测源：AI / 普通代理 / 前置或直连，各司其职
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,ip.net.coffee," + EXPECTED.aiGroupName);
@@ -466,7 +464,7 @@ function testDefaultConfig() {
   // 媒体规则指向媒体组
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,youtube.com," + EXPECTED.mediaGroupName);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,netflix.com," + EXPECTED.mediaGroupName);
-  ["youtubei.googleapis.com", "youtube.googleapis.com", "yt3.ggpht.com"].forEach(function (domain) {
+  ["youtubei.googleapis.com", "youtube.googleapis.com", "ggpht.com"].forEach(function (domain) {
     var mediaRule = "DOMAIN-SUFFIX," + domain + "," + EXPECTED.mediaGroupName;
     assertRuleExists(output.rules, mediaRule);
     assert(output.rules.indexOf(mediaRule) < output.rules.indexOf(
@@ -644,6 +642,41 @@ function testDefaultConfig() {
   assertNoDuplicateRuleIdentities(output.rules);
 }
 
+function testIpv6IsDisabledByDefault() {
+  [undefined, false, true].forEach(function (subscriptionIpv6) {
+    const { output } = runMain(function (config) {
+      config.ipv6 = subscriptionIpv6;
+      config.dns = { ipv6: true };
+    });
+    assert.strictEqual(output.ipv6, false, "默认应关闭全局 IPv6，即使订阅原先开启");
+    assert.strictEqual(output.dns.ipv6, false, "默认应同时关闭 DNS IPv6");
+  });
+}
+
+function testIpv6CanBeEnabled() {
+  const { output } = runMain(function (config) {
+    config.ipv6 = false;
+    config.dns = { ipv6: false };
+  }, function (sandbox) {
+    sandbox.USER_OPTIONS.enableIPv6 = true;
+  });
+  assert.strictEqual(output.ipv6, true, "用户开启 IPv6 后应覆盖订阅的关闭设置");
+  assert.strictEqual(output.dns.ipv6, true, "用户开启 IPv6 后 DNS 应同步开启");
+}
+
+function testIpv6OptionAppliesWithoutSubscription() {
+  [false, true].forEach(function (enableIPv6) {
+    const config = createEmptyConfig();
+    config._homeProxy = Object.assign({}, TEST_HOME_CREDENTIALS);
+    config.ipv6 = !enableIPv6;
+    const { output } = runMainWithConfig(config, function (sandbox) {
+      sandbox.USER_OPTIONS.enableIPv6 = enableIPv6;
+    });
+    assert.strictEqual(output.ipv6, enableIPv6, "无订阅家宽模式应遵循 IPv6 开关");
+    assert.strictEqual(output.dns.ipv6, enableIPv6, "无订阅模式的 DNS 应同步遵循 IPv6 开关");
+  });
+}
+
 function testTunDnsHijackPreservesExistingEntries() {
   const { output } = runMain(function (config) {
     config.tun = {
@@ -804,27 +837,27 @@ function testHttpFrontProxyExcludesChainedSubscriptionFromFallback() {
 }
 
 function testFullProtocolFallbackChecksDialerProxyGroupsRecursively() {
-  const { output } = runMain(function (config) {
-    config.proxies[0]["dialer-proxy"] = "自动选择(Smart Group)";
-    config.proxies[1]["dialer-proxy"] = "HTTP 末跳";
-    config.proxies[2]["dialer-proxy"] = "循环跳板 A";
-    config.proxies.push(
-      { name: "UDP 中继", type: "socks5", server: "10.0.0.11", port: 1080, udp: true, "dialer-proxy": "UDP 末跳" },
-      { name: "UDP 末跳", type: "socks5", server: "10.0.0.12", port: 1080, udp: true },
-      { name: "HTTP 末跳", type: "http", server: "10.0.0.13", port: 8080, udp: false },
-      { name: "循环跳板 A", type: "socks5", server: "10.0.0.14", port: 1080, udp: true, "dialer-proxy": "循环跳板 B" },
-      { name: "循环跳板 B", type: "socks5", server: "10.0.0.15", port: 1080, udp: true, "dialer-proxy": "循环跳板 A" }
-    );
-    config["proxy-groups"][1].proxies = ["UDP 中继"];
-  });
-  const fallbackGroup = output["proxy-groups"].find(function (group) {
-    return group.name === EXPECTED.fullProtocolFallbackGroupName;
-  });
-  assert(fallbackGroup.proxies.indexOf("🇸🇬 SG Auto 01") >= 0,
+  const config = createBaseConfig();
+  config.proxies[0]["dialer-proxy"] = "自动选择(Smart Group)";
+  config.proxies[1]["dialer-proxy"] = "HTTP 末跳";
+  config.proxies[2]["dialer-proxy"] = "循环跳板 A";
+  config.proxies.push(
+    { name: "UDP 中继", type: "socks5", server: "10.0.0.11", port: 1080, udp: true, "dialer-proxy": "UDP 末跳" },
+    { name: "UDP 末跳", type: "socks5", server: "10.0.0.12", port: 1080, udp: true },
+    { name: "HTTP 末跳", type: "http", server: "10.0.0.13", port: 8080, udp: false },
+    { name: "循环跳板 A", type: "socks5", server: "10.0.0.14", port: 1080, udp: true, "dialer-proxy": "循环跳板 B" },
+    { name: "循环跳板 B", type: "socks5", server: "10.0.0.15", port: 1080, udp: true, "dialer-proxy": "循环跳板 A" }
+  );
+  config["proxy-groups"][1].proxies = ["UDP 中继"];
+  const sandbox = loadSandbox();
+  const fallbackNames = sandbox.collectFullProtocolProxyNames(config, config.proxies.map(function (proxy) {
+    return proxy.name;
+  }));
+  assert(fallbackNames.indexOf("🇸🇬 SG Auto 01") >= 0,
     "经 UDP 策略组和 UDP 多跳链路的节点应进入全协议回退组");
-  assert(fallbackGroup.proxies.indexOf("🇭🇰 HK Auto 01") < 0,
+  assert(fallbackNames.indexOf("🇭🇰 HK Auto 01") < 0,
     "经 HTTP 策略组的节点不应进入全协议回退组");
-  assert(fallbackGroup.proxies.indexOf("🇺🇸 US Auto 01") < 0,
+  assert(fallbackNames.indexOf("🇺🇸 US Auto 01") < 0,
     "循环 dialer-proxy 链路不应进入全协议回退组");
 }
 
@@ -980,6 +1013,14 @@ function testDedicatedCustomProxyOnlyAppearsInExplicitRuleGroup() {
 
 function testCustomRuleGroupsCannotOverrideProtectedRules() {
   const protectedCases = [
+    {
+      rule: "DOMAIN-SUFFIX,muse.ai",
+      identity: "DOMAIN-SUFFIX,muse.ai"
+    },
+    {
+      rule: "DOMAIN,ai.developer.meta.com",
+      identity: "DOMAIN,ai.developer.meta.com"
+    },
     {
       rule: "DOMAIN-SUFFIX,chatgpt.com",
       identity: "DOMAIN-SUFFIX,chatgpt.com"
@@ -1640,7 +1681,6 @@ function testAutoSelectFiltersSubscriptionInfoNodes() {
     "公司代理不应进入自动选择测速组");
 }
 
-
 // ─── location profiles ──────────────────────────────────────────────────────
 
 const DOMESTIC_GROUP = "🇨🇳 回国";
@@ -1796,9 +1836,240 @@ function testLocationValidation() {
   }, /受保护的基础路由/, "location 不应放松受保护规则检查");
 }
 
+function testLocationRejectsInvalidValues() {
+  ["constructor", "toString", "__proto__", "", null, false, 17, [], {}].forEach(function (location) {
+    assert.throws(function () {
+      runMain(null, function (sandbox) { sandbox.USER_OPTIONS.location = location; });
+    }, /location 无效/, "仅允许明确的 cn 或 overseas");
+  });
+  const { output } = runMain(null, function (sandbox) { delete sandbox.USER_OPTIONS.location; });
+  assertRuleExists(output.rules, "GEOSITE,cn,DIRECT");
+}
+
+function testDomesticExitNormalizesCandidates() {
+  const { output } = runOverseas(null, function (sandbox) {
+    sandbox.USER_OPTIONS.domesticExit = ["DIRECT", " " + DOMESTIC_EXIT.name + " ", "DIRECT", DOMESTIC_EXIT.name];
+  });
+  assert.deepStrictEqual(Array.from(findGroup(output, DOMESTIC_GROUP).proxies), [DOMESTIC_EXIT.name, "DIRECT"]);
+  const { output: single } = runOverseas(null, function (sandbox) {
+    sandbox.USER_OPTIONS.domesticExit = DOMESTIC_EXIT.name;
+  });
+  assert.deepStrictEqual(Array.from(findGroup(single, DOMESTIC_GROUP).proxies), [DOMESTIC_EXIT.name, "DIRECT"]);
+}
+
+function testDomesticExitRejectsInvalidValues() {
+  [17, {}, false, [""], ["  "], [null], [17], [["节点选择"]]].forEach(function (domesticExit) {
+    assert.throws(function () {
+      runMain(null, function (sandbox) {
+        sandbox.USER_OPTIONS.location = "overseas";
+        sandbox.USER_OPTIONS.domesticExit = domesticExit;
+      });
+    }, /domesticExit/, "无效的候选应在生成前指出字段");
+  });
+}
+
+function testDomesticExitAllowsForwardReferences() {
+  const choices = ["🇭🇰|香港", EXPECTED.chainGroupName, EXPECTED.aiGroupName, "🔗 家宽跳板"];
+  const { output } = runMain(null, function (sandbox) {
+    sandbox.USER_OPTIONS.location = "overseas";
+    sandbox.USER_OPTIONS.domesticExit = choices;
+  });
+  assert.deepStrictEqual(Array.from(findGroup(output, DOMESTIC_GROUP).proxies), choices.concat("DIRECT"));
+  const { output: custom } = runOverseas(function (config) {
+    config._customRuleGroups = [{ name: "回国业务", proxies: [DOMESTIC_EXIT.name], rules: [] }];
+  }, function (sandbox) { sandbox.USER_OPTIONS.domesticExit = ["回国业务"]; });
+  assert.deepStrictEqual(Array.from(findGroup(custom, DOMESTIC_GROUP).proxies), ["回国业务", "DIRECT"]);
+}
+
+function testProxyGraphRejectsCycles() {
+  assert.throws(function () {
+    runMain(function (config) {
+      config._customRuleGroups = [{ name: "回国中转", proxies: [DOMESTIC_GROUP], rules: [] }];
+    }, function (sandbox) {
+      sandbox.USER_OPTIONS.location = "overseas";
+      sandbox.USER_OPTIONS.domesticExit = ["回国中转"];
+    });
+  }, function (error) {
+    const cycle = error.message.split("代理循环引用：")[1];
+    if (!cycle) return false;
+    const names = cycle.split(" -> ");
+    return names.length === 3 && names[0] === names[2] &&
+      names.indexOf(DOMESTIC_GROUP) >= 0 && names.indexOf("回国中转") >= 0;
+  }, "错误应显示完整循环路径");
+  assert.throws(function () {
+    runMain(function (config) {
+      config._customRuleGroups = [{ name: "自循环业务", proxies: ["自循环业务"], rules: [] }];
+    });
+  }, /循环引用.*自循环业务.*自循环业务/);
+  assert.throws(function () {
+    runMain(function (config) {
+      config.proxies[0]["dialer-proxy"] = config.proxies[1].name;
+      config.proxies[1]["dialer-proxy"] = config.proxies[0].name;
+    });
+  }, /循环引用.*SG Auto 01.*HK Auto 01.*SG Auto 01/);
+  assert.throws(function () {
+    runMain(function (config) { config.proxies[0]["dialer-proxy"] = EXPECTED.relayGroupName; });
+  }, /循环引用.*SG Auto 01.*Smart Group.*SG Auto 01/, "必须覆盖节点与组混合循环");
+}
+
+function testProxyGraphRejectsMissingReferences() {
+  assert.throws(function () {
+    runMain(function (config) {
+      config._customRuleGroups = [{ name: "缺失出口业务", proxies: ["不存在的节点"], rules: [] }];
+    });
+  }, /引用不存在.*缺失出口业务.*不存在的节点/);
+  assert.throws(function () {
+    runMain(function (config) { config.proxies[0]["dialer-proxy"] = "不存在的跳板"; });
+  }, /引用不存在.*SG Auto 01.*不存在的跳板/);
+  assert.throws(function () {
+    runMain(function (config) { config["proxy-groups"][1].proxies = ["Ghost Proxy"]; });
+  }, /引用不存在.*Smart Group.*Ghost Proxy/);
+}
+
+function testProxyNamesCannotBeOverwritten() {
+  assert.throws(function () {
+    runMain(function (config) {
+      config._customProxies = [{ name: config.proxies[0].name, server: "203.0.113.20", port: 8080 }];
+    });
+  }, /重名/, "普通自定义出口不能覆盖订阅节点");
+  assert.throws(function () {
+    runMain(function (config) {
+      config._customRuleGroups = [{ name: "内嵌出口业务", proxy: {
+        name: config.proxies[0].name, server: "203.0.113.20", port: 8080
+      }, rules: [] }];
+    });
+  }, /重名/, "内嵌出口不能覆盖订阅节点");
+  assert.throws(function () {
+    runMain(function (config) {
+      config.proxies.push({ name: EXPECTED.homeNodeName, type: "socks5" });
+    });
+  }, /重名/, "注入家宽节点不能覆盖同名订阅节点");
+  assert.throws(function () {
+    runMain(function (config) { config.proxies.push(Object.assign({}, config.proxies[0])); });
+  }, /重名/, "原始订阅中的重名节点也应被拒绝");
+}
+
+function testProxyGroupNamesCannotBeOverwritten() {
+  ["节点选择", EXPECTED.aiGroupName, "🇭🇰|香港", DOMESTIC_GROUP].forEach(function (name) {
+    assert.throws(function () {
+      runMain(function (config) {
+        config._customRuleGroups = [{ name, proxies: ["DIRECT"], rules: [] }];
+      }, function (sandbox) { sandbox.USER_OPTIONS.location = "overseas"; });
+    }, /重名/, "自定义组不能覆盖受管组：" + name);
+  });
+  assert.throws(function () {
+    runMain(function (config) {
+      config._customRuleGroups = [{ name: "重复业务", rules: [] }, { name: "重复业务", rules: [] }];
+    });
+  }, /重名/);
+  assert.throws(function () {
+    runOverseas(function (config) {
+      config._customProxies.push({ name: DOMESTIC_GROUP, type: "http", server: "203.0.113.20", port: 8080 });
+    });
+  }, /重名/, "节点与组使用同一个名字也应被拒绝");
+}
+
+function testProxyGraphAllowsSharedReferences() {
+  const { output } = runMain(function (config) {
+    config._customRuleGroups = [
+      { name: "共享出口 A", proxies: ["共享出口 C"], rules: [] },
+      { name: "共享出口 B", proxies: ["共享出口 C"], rules: [] },
+      { name: "共享出口 C", proxies: ["DIRECT", "REJECT"], rules: [] }
+    ];
+  });
+  assert.deepStrictEqual(Array.from(findGroup(output, "共享出口 A").proxies), ["共享出口 C", "DIRECT"]);
+  assert.deepStrictEqual(Array.from(findGroup(output, "共享出口 B").proxies), ["共享出口 C", "DIRECT"]);
+}
+
+function testCommunityServiceBoundaries() {
+  const audit = require("../scripts/rule-routing-audit");
+  const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "rules", "community-sources.json"), "utf8"));
+  [true, false].forEach(function (withHome) {
+    const { output } = runMain(function (config) {
+      if (!withHome) delete config._homeProxy;
+    });
+    audit.assertRoutingCases(output.rules, manifest.routingCases);
+    assertNoDuplicateRuleIdentities(output.rules);
+    ["ai.developer.meta.com", "muse.ai", "copilot.cloud.microsoft", "api.githubcopilot.com"].forEach(function (domain) {
+      assert.strictEqual(audit.route(output.rules, { domain: domain, network: "tcp", port: 443 }).target, EXPECTED.aiGroupName);
+      assert.strictEqual(audit.route(output.rules, { domain: domain, network: "udp", port: 3478 }).target, "REJECT",
+        "社区 AI 路由不能跳过既有的 WebRTC STUN 防泄漏规则");
+    });
+    ["accounts.youtube.com", "accounts.google.com"].forEach(function (domain) {
+      assert.strictEqual(audit.route(output.rules, { domain: domain, network: "tcp", port: 443 }).target, EXPECTED.aiGroupName);
+    });
+  });
+  const { output } = runMain(null, function (sandbox) {
+    sandbox.USER_OPTIONS.googleTrafficConsistency = false;
+  });
+  audit.assertRoutingCases(output.rules, manifest.routingCases);
+  audit.assertRoutingCases(runOverseas().output.rules, manifest.routingCases);
+}
+
+function testCommunityExactDomainsAndSharedServices() {
+  const { output } = runMain();
+  const audit = require("../scripts/rule-routing-audit");
+  assertRuleExists(output.rules, "DOMAIN,ai.developer.meta.com," + EXPECTED.aiGroupName);
+  assertRulesMissing(output.rules, ["DOMAIN-SUFFIX,ai.developer.meta.com," + EXPECTED.aiGroupName]);
+  assert.strictEqual(audit.route(output.rules, {
+    domain: "unrelated.ai.developer.meta.com", network: "tcp", port: 443
+  }).target, EXPECTED.mediaGroupName, "精确 API 规则不得扩展到未知子域名");
+  assert(output.dns["nameserver-policy"]["ai.developer.meta.com"], "精确域名必须有对应 DNS 策略");
+  assert.strictEqual(output.dns["nameserver-policy"]["+.ai.developer.meta.com"], undefined);
+  assert(output.sniffer["force-domain"].indexOf("ai.developer.meta.com") >= 0);
+  ["+.muse.ai", "+.metaaivm.com", "+.copilot.cloud.microsoft", "+.githubcopilot.com"].forEach(function (domain) {
+    assert(output.dns["nameserver-policy"][domain].every(function (server) {
+      return server.endsWith("#" + EXPECTED.aiGroupName);
+    }), domain + " 的 DNS 必须与 AI 出口一致");
+    assert(output.dns["fallback-filter"].domain.indexOf(domain) >= 0);
+    assert(output.sniffer["force-domain"].indexOf(domain) >= 0);
+  });
+  ["sentry.io", "intercom.io", "stripe.com", "host.livekit.cloud", "turn.livekit.cloud", "browser-intake-datadoghq.com", "themeforest.net", "atmeta.com", "muse.com"].forEach(function (domain) {
+    const result = audit.route(output.rules, { domain: domain, network: "tcp", port: 443 });
+    assert(result.target !== EXPECTED.aiGroupName, "共享服务或未确认域名不应被整体送入 AI: " + domain);
+  });
+}
+
+function testCommunityQuicOptionCoversNewDomains() {
+  const audit = require("../scripts/rule-routing-audit");
+  const { output } = runMain(null, function (sandbox) {
+    sandbox.USER_OPTIONS.rejectAiQuic = false;
+  });
+  ["muse.ai", "ai.developer.meta.com", "copilot.cloud.microsoft"].forEach(function (domain) {
+    assert.strictEqual(audit.route(output.rules, { domain: domain, network: "udp", port: 443 }).target, EXPECTED.aiGroupName);
+  });
+}
+
+function testOverseasPreservesIpv6AndCommunityDnsOptions() {
+  const { output } = runOverseas();
+  assert.strictEqual(output.ipv6, false, "境外模式默认也应关闭全局 IPv6");
+  assert.strictEqual(output.dns.ipv6, false, "境外模式默认也应关闭 DNS IPv6");
+  const policy = output.dns["nameserver-policy"];
+  [
+    ["+.muse.ai", EXPECTED.aiGroupName],
+    ["ai.developer.meta.com", EXPECTED.aiGroupName],
+    ["+.facebook.com", "DIRECT"],
+    ["+.youtube.com", "DIRECT"],
+    ["+.telegram.org", "DIRECT"],
+    ["+.github.com", "DIRECT"]
+  ].forEach(function (entry) {
+    assert(policy[entry[0]] && policy[entry[0]].every(function (server) {
+      return server.endsWith("#" + entry[1]);
+    }), entry[0] + " 的社区 DNS 应遵循境外模式的服务分类");
+  });
+  const { output: enabled } = runOverseas(null, function (sandbox) {
+    sandbox.USER_OPTIONS.enableIPv6 = true;
+  });
+  assert.strictEqual(enabled.ipv6, true, "境外模式允许显式开启全局 IPv6");
+  assert.strictEqual(enabled.dns.ipv6, true, "境外模式允许显式开启 DNS IPv6");
+}
+
 // ─── run ─────────────────────────────────────────────────────────────────────
 
 testDefaultConfig();
+testIpv6IsDisabledByDefault();
+testIpv6CanBeEnabled();
+testIpv6OptionAppliesWithoutSubscription();
 testTunDnsHijackPreservesExistingEntries();
 testAiQuicRejectCanBeDisabled();
 testAppStoreQuicRejectCanBeDisabled();
@@ -1852,5 +2123,18 @@ testOverseasWithoutDomesticExitFallsBackToDirect();
 testOverseasStandaloneBoxProfile();
 testOverseasExplicitOptionsWin();
 testLocationValidation();
+testLocationRejectsInvalidValues();
+testDomesticExitNormalizesCandidates();
+testDomesticExitRejectsInvalidValues();
+testDomesticExitAllowsForwardReferences();
+testProxyGraphRejectsCycles();
+testProxyGraphRejectsMissingReferences();
+testProxyNamesCannotBeOverwritten();
+testProxyGroupNamesCannotBeOverwritten();
+testProxyGraphAllowsSharedReferences();
+testCommunityServiceBoundaries();
+testCommunityExactDomainsAndSharedServices();
+testCommunityQuicOptionCoversNewDomains();
+testOverseasPreservesIpv6AndCommunityDnsOptions();
 
 console.log("validate-direct.js: all checks passed");

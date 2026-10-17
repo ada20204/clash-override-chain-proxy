@@ -4,6 +4,7 @@
 var fs = require("fs");
 var path = require("path");
 var https = require("https");
+var vm = require("vm");
 
 var DEFAULT_REFERENCE_URL = "https://ip.net.coffee/claude/site.html";
 var DEFAULT_SCRIPT_PATH = path.join(__dirname, "..", "src", "完全覆写.js");
@@ -184,6 +185,15 @@ function extractConfiguredRules(scriptText) {
   var domains = extractQuotedStrings(anthropicBody).map(stripDomainPrefix).filter(function (value) {
     return value.indexOf(".") >= 0;
   });
+  var domainRules = domains.map(function (value) { return { type: "DOMAIN-SUFFIX", value: value }; });
+  var sandbox = { console: console };
+  vm.runInNewContext(scriptText, sandbox);
+  if (sandbox.COMMUNITY_RULES && sandbox.COMMUNITY_RULES.ai) {
+    sandbox.COMMUNITY_RULES.ai.forEach(function (entry) {
+      domainRules.push({ type: entry[0], value: entry[1] });
+      domains.push(entry[1]);
+    });
+  }
   var ipv4Cidrs = [];
   var ipv6Cidrs = [];
   var cidrRe = /value:\s*["']([^"']+\/\d{1,3})["']/g;
@@ -194,6 +204,7 @@ function extractConfiguredRules(scriptText) {
   }
   return {
     domains: uniqueSorted(domains),
+    domainRules: domainRules,
     ipv4Cidrs: uniqueSorted(ipv4Cidrs),
     ipv6Cidrs: uniqueSorted(ipv6Cidrs)
   };
@@ -201,15 +212,17 @@ function extractConfiguredRules(scriptText) {
 
 function domainCovered(domain, configuredDomains) {
   for (var i = 0; i < configuredDomains.length; i++) {
-    var suffix = configuredDomains[i];
-    if (domain === suffix || domain.slice(-(suffix.length + 1)) === "." + suffix) return true;
+    var rule = configuredDomains[i];
+    var suffix = typeof rule === "string" ? rule : rule.value;
+    if (domain === suffix || ((typeof rule === "string" || rule.type === "DOMAIN-SUFFIX") &&
+        domain.slice(-(suffix.length + 1)) === "." + suffix)) return true;
   }
   return false;
 }
 
 function compareRules(reference, configured) {
   var missingDomains = reference.domains.filter(function (domain) {
-    return !domainCovered(domain, configured.domains);
+    return !domainCovered(domain, configured.domainRules || configured.domains);
   });
   var missingIpv4Cidrs = reference.ipv4Cidrs.filter(function (cidr) {
     return configured.ipv4Cidrs.indexOf(cidr) < 0;
@@ -297,7 +310,8 @@ async function main() {
   if (!result.ok) process.exit(1);
 }
 
-main().catch(function (error) {
+module.exports = { extractConfiguredRules: extractConfiguredRules, domainCovered: domainCovered };
+if (require.main === module) main().catch(function (error) {
   console.error("error: " + error.message);
   process.exit(1);
 });

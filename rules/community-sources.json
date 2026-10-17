@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "repositories": {
+    "metacube": { "repo": "MetaCubeX/meta-rules-dat", "branch": "meta" },
+    "vpsdance": { "repo": "VPSDance/ai-proxy-rules", "branch": "main" }
+  },
+  "sources": [
+    { "id": "ai-core", "repository": "metacube", "path": "geo/geosite/category-ai-!cn.list", "format": "domain-list", "target": "ai", "required": ["DOMAIN-SUFFIX,anthropic.com", "DOMAIN-SUFFIX,claude.ai", "DOMAIN-SUFFIX,chatgpt.com", "DOMAIN-SUFFIX,gemini.google.com", "DOMAIN-SUFFIX,muse.ai", "DOMAIN-SUFFIX,copilot.cloud.microsoft", "DOMAIN-SUFFIX,githubcopilot.com"] },
+    { "id": "meta-ai", "repository": "vpsdance", "path": "rules/clash/meta-ai.yaml", "format": "classical-yaml", "target": "ai", "required": ["DOMAIN,ai.meta.com", "DOMAIN,ai.developer.meta.com", "DOMAIN-SUFFIX,muse.ai"] },
+    { "id": "youtube", "repository": "metacube", "path": "geo/geosite/youtube.list", "format": "domain-list", "target": "media", "required": ["DOMAIN-SUFFIX,youtube.com"] },
+    { "id": "meta-social", "repository": "metacube", "path": "geo/geosite/meta.list", "format": "domain-list", "target": "media", "required": ["DOMAIN-SUFFIX,facebook.com", "DOMAIN-SUFFIX,instagram.com", "DOMAIN-SUFFIX,whatsapp.com"] },
+    { "id": "netflix", "repository": "metacube", "path": "geo/geosite/netflix.list", "format": "domain-list", "target": "media" },
+    { "id": "disney", "repository": "metacube", "path": "geo/geosite/disney.list", "format": "domain-list", "target": "media" },
+    { "id": "spotify", "repository": "metacube", "path": "geo/geosite/spotify.list", "format": "domain-list", "target": "media" },
+    { "id": "twitter", "repository": "metacube", "path": "geo/geosite/twitter.list", "format": "domain-list", "target": "media" },
+    { "id": "reddit", "repository": "metacube", "path": "geo/geosite/reddit.list", "format": "domain-list", "target": "media" },
+    { "id": "tiktok", "repository": "metacube", "path": "geo/geosite/tiktok.list", "format": "domain-list", "target": "media" },
+    { "id": "bbc", "repository": "metacube", "path": "geo/geosite/bbc.list", "format": "domain-list", "target": "media" },
+    { "id": "telegram", "repository": "metacube", "path": "geo/geosite/telegram.list", "format": "domain-list", "target": "telegram" },
+    { "id": "discord", "repository": "metacube", "path": "geo/geosite/discord.list", "format": "domain-list", "target": "telegram" },
+    { "id": "github", "repository": "metacube", "path": "geo/geosite/github.list", "format": "domain-list", "target": "github" }
+  ],
+  "excludedAiDomains": {
+    "atmeta.com": "Shared Meta account infrastructure, not an AI-only service.",
+    "envato.com": "General creative marketplace; an AI feature does not make the entire site an AI Agent.",
+    "envato-static.com": "Shared assets for the general creative marketplace.",
+    "envatousercontent.com": "Shared content for the general creative marketplace.",
+    "themeforest.net": "General theme marketplace.",
+    "browser-intake-datadoghq.com": "Shared telemetry endpoint; AI application processes already have dedicated routing.",
+    "o33249.ingest.sentry.io": "Keep telemetry out of domain-based AI routing; application process rules remain available.",
+    "host.livekit.cloud": "Shared voice transport; cannot attribute every tenant to one AI service.",
+    "turn.livekit.cloud": "Shared TURN transport; does not identify a particular AI service."
+  },
+  "forbiddenAiSuffixes": [
+    "facebook.com", "fbcdn.net", "instagram.com", "cdninstagram.com", "whatsapp.com", "whatsapp.net", "meta.com",
+    "youtube.com", "googlevideo.com", "ytimg.com", "google.com", "googleapis.com", "gstatic.com",
+    "microsoft.com", "cloud.microsoft", "github.com", "githubusercontent.com", "amazonaws.com",
+    "cloudflare.com", "stripe.com", "auth0.com", "sentry.io", "datadoghq.com", "intercom.io", "intercomcdn.com", "livekit.cloud"
+  ],
+  "aiOverrides": {
+    "media": ["meta.ai", "metaaivm.com", "muse.ai", "llama.com"],
+    "github": ["githubcopilot.com", "copilot-proxy.githubusercontent.com", "copilot-workspace.githubnext.com", "copilotprodattachments.blob.core.windows.net", "copilot-telemetry-service.githubusercontent.com", "copilot-telemetry.githubusercontent.com"]
+  },
+  "routingCases": [
+    { "domain": "muse.ai", "target": "ai" },
+    { "domain": "auth.muse.ai", "target": "ai" },
+    { "domain": "session.metaaivm.com", "target": "ai" },
+    { "domain": "meta.ai", "target": "ai" },
+    { "domain": "ai.meta.com", "target": "ai" },
+    { "domain": "ai.developer.meta.com", "target": "ai" },
+    { "domain": "www.llama.com", "target": "ai" },
+    { "domain": "llamameta.net", "target": "ai" },
+    { "domain": "gemini.google.com", "target": "ai" },
+    { "domain": "copilot.microsoft.com", "target": "ai" },
+    { "domain": "copilot.cloud.microsoft", "target": "ai" },
+    { "domain": "api.githubcopilot.com", "target": "ai" },
+    { "domain": "grok.x.com", "target": "ai" },
+    { "domain": "www.facebook.com", "target": "media" },
+    { "domain": "graph.facebook.com", "target": "media" },
+    { "domain": "www.instagram.com", "target": "media" },
+    { "domain": "web.whatsapp.com", "target": "media" },
+    { "domain": "www.meta.com", "target": "media" },
+    { "domain": "www.youtube.com", "target": "media" },
+    { "domain": "youtubei.googleapis.com", "target": "media" },
+    { "domain": "www.netflix.com", "target": "media" },
+    { "domain": "x.com", "target": "media" },
+    { "domain": "github.com", "target": "github" },
+    { "domain": "api.telegram.org", "target": "telegram" }
+  ]
+}
