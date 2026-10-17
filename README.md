@@ -59,6 +59,7 @@
 - TCP/443 仍使用当前 `节点选择` / `🌐 国外` 的选择结果，例如你手动选中的公司代理。
 - HTTP、IMAP、其他 TCP 端口和 UDP 会进入隐藏的 `🔌 全协议回退`。
 - 回退组只收录明确配置 `udp: true` 且完整链路均支持 UDP 的订阅节点或普通自定义出口；HTTP 家宽 IP、HTTP 公司代理，以及经过 HTTP 前置代理的节点不会被放入其中。
+- 手动选择组会检查全部候选，而非只看默认项。`🔗 前置` 包含 HTTP 或未声明 UDP 的候选时，依赖它的节点不能保证全协议能力；可用 `front.excludeKeywords` 排除不适合作为前置的节点，普通节点选择不受此过滤影响。
 - 如果没有符合条件的节点，回退组不会生成，原有的 `节点选择` / `🌐 国外` 行为保持不变。
 - AI Agent、AI DNS、AI QUIC、Tailnet 与已有功能组不使用回退组。
 
@@ -170,6 +171,8 @@ Sentry、Datadog、Intercom、Statsig、Stripe、WorkOS、SendGrid 等共享基�
 **🔗 前置**：相当于一直开着的 `前置代理.js`。订阅节点（订阅里自带 `dialer-proxy` 的除外）和声明 `useFrontProxy: true` 的自定义节点 `dialer-proxy` 指向 `🔗 前置`；候选为 `DIRECT`（默认）、`_frontProxy` 节点（配置了就排第一并默认选中，等同旧脚本开启）以及本机可直连的全部节点：没挂前置的自定义节点（alivps、公司代理……）直接用原节点，订阅节点等挂了前置的节点生成不挂前置的副本 `⤴ 原名`，副本只出现在 `🔗 前置` 里，不进节点选择、地区组或自动选择，从而避免循环。`USER_OPTIONS.front` 控制候选：`excludePorts`（本机连不上的端口，如出口拦截 443）、`excludeKeywords`（如高倍率节点）、`prefer`（正则，排在 `DIRECT` 之后）。家宽IP 不挂前置，家宽链式仍经 `🔗 家宽跳板`（跳板节点本身挂前置时即 前置 → 跳板 → 家宽 三跳）。自定义节点可写 `via: "名称"` 指定专门的前置；`USER_OPTIONS.frontGroup: false` 退回旧的单节点前置。
 
 不要同时开启 Clash Party 独立的「DNS 覆写」作为第二个配置入口。它可能在主脚本之后覆盖 `respect-rules`、上游 DNS 与策略路由。
+
+前置副本只解除本次脚本自动绑定的 `🔗 前置`；用户显式填写的 `via` 和订阅原有 `dialer-proxy` 会保留，不生成绕过它们的直连副本。副本名称与已有节点或策略组冲突时自动追加编号。
 
 ### Tailscale
 

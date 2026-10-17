@@ -40,7 +40,7 @@ var USER_OPTIONS = {
   domesticExit: [], // 🇨🇳 国内 组的回国出口候选：_customProxies 名称、订阅节点或策略组名。overseas 默认选第一个；cn 默认 DIRECT
   // 🔗 前置：一级跳（相当于常驻的 前置代理.js 开关）。订阅节点和 useFrontProxy 的自定义节点 dialer-proxy 都指向它；
   // 候选 = DIRECT（默认，不走前置）+ _frontProxy 节点 + 本机可直连的全部节点：没挂前置的自定义节点直接用原节点，
-  // 其余（订阅节点等）生成不挂前置的副本「⤴ 原名」，副本只出现在 🔗 前置 里。节点可写 via: "名称" 指定专门的前置。false 时退回旧行为。
+  // 其余仅解除脚本自动绑定的前置，生成副本「⤴ 原名」；显式 via / 原有 dialer-proxy 不绕过。false 时退回旧行为。
   frontGroup: true,
   // 🔗 前置 候选过滤：excludePorts 端口的节点本机连不上（不生成副本）；excludeKeywords 不当前置；prefer 正则命中的排在 DIRECT 之后。
   front: { excludePorts: [], excludeKeywords: [], prefer: [] },
@@ -2982,10 +2982,6 @@ function isFullProtocolProxy(proxy, proxyLookup, groupLookup, visitedProxyNames,
 
   dialerProxyName = proxy["dialer-proxy"];
   if (!dialerProxyName) return true;
-  // 🔗 前置 默认 DIRECT：按它的默认候选判断，避免仅因可选的 HTTP 前置候选而丢掉全协议能力
-  if (dialerProxyName === BASE.nodeNames.frontGroup && groupLookup[dialerProxyName]) {
-    dialerProxyName = (groupLookup[dialerProxyName].proxies || [])[0] || BASE.ruleTargets.direct;
-  }
   visited = visitedProxyNames || {};
   if (visited[proxy.name]) return false;
   visited[proxy.name] = true;
@@ -3011,6 +3007,9 @@ function ensureFullProtocolFallbackGroup(config, candidateNames) {
   if (!isFullProtocolFallbackEnabled()) return null;
   var proxies = collectFullProtocolProxyNames(config, candidateNames);
   if (proxies.length === 0) return null;
+  if (hasProxyOrGroup(config, BASE.nodeNames.fullProtocolFallback)) {
+    throw createUserError("全协议回退组与已有节点或策略组重名：" + BASE.nodeNames.fullProtocolFallback);
+  }
   upsertNamedItem(config["proxy-groups"], {
     name: BASE.nodeNames.fullProtocolFallback,
     type: "url-test",
@@ -3206,13 +3205,16 @@ function injectFrontProxy(config, credentials, subscriptionNodeNames) {
 // keepExisting：订阅里已自带 dialer-proxy 的节点保持原链路（🔗 前置 组模式）。
 function bindFrontProxyToSubscriptionNodes(config, frontProxyName, subscriptionNodeNames, keepExisting) {
   var subscriptionLookup = buildStringLookup(subscriptionNodeNames);
+  var boundNames = [];
   for (var i = 0; i < config.proxies.length; i++) {
     var proxy = config.proxies[i];
     if (keepExisting && proxy["dialer-proxy"]) continue;
     if (subscriptionLookup[proxy.name]) {
       proxy["dialer-proxy"] = frontProxyName;
+      boundNames.push(proxy.name);
     }
   }
+  return boundNames;
 }
 
 // 🔗 前置（select）：订阅节点与 useFrontProxy 自定义节点的一级跳。
@@ -3278,11 +3280,12 @@ function isFrontEligibleProxy(proxy, opts, excludedLookup) {
 // 所有组建好之后，把本机可直连的节点补进 🔗 前置：
 // 没挂 dialer-proxy 的节点直接用原节点；挂了的生成「⤴ 原名」副本（不挂 dialer-proxy，只进 🔗 前置，不进其它组）。
 // 顺序：[_frontProxy?] DIRECT → prefer 命中 → 自定义节点 → 其余订阅节点。
-function addFrontCandidates(config, frontNodeName, subscriptionNodeNames, customProxyNames, excludedNames) {
+function addFrontCandidates(config, frontNodeName, subscriptionNodeNames, customProxyNames, excludedNames, boundNames) {
   var groupName = getFrontGroupName();
   var group = groupName ? findProxyGroupByName(config["proxy-groups"], groupName) : null;
   var opts = getFrontOptions();
   var excludedLookup = buildStringLookup(excludedNames || []);
+  var boundLookup = buildStringLookup(boundNames || []);
   var ordered = [];
   var preferred = [];
   var customNames = [];
@@ -3295,13 +3298,15 @@ function addFrontCandidates(config, frontNodeName, subscriptionNodeNames, custom
     var proxy = findProxyByName(config.proxies, name);
     if (!proxy || !isFrontEligibleProxy(proxy, opts, excludedLookup)) return null;
     if (!proxy["dialer-proxy"]) return proxy.name;
-    var copyName = BASE.nodeNames.frontCopyPrefix + proxy.name;
-    if (!findProxyByName(config.proxies, copyName)) {
-      var copy = JSON.parse(JSON.stringify(proxy));
-      copy.name = copyName;
-      delete copy["dialer-proxy"];
-      appendProxyNode(config, copy);
-    }
+    if (!boundLookup[name]) return null;
+    var baseName = BASE.nodeNames.frontCopyPrefix + proxy.name;
+    var copyName = baseName;
+    var suffix = 2;
+    while (hasProxyOrGroup(config, copyName)) copyName = baseName + " (" + suffix++ + ")";
+    var copy = JSON.parse(JSON.stringify(proxy));
+    copy.name = copyName;
+    delete copy["dialer-proxy"];
+    appendProxyNode(config, copy);
     return copyName;
   }
 
@@ -4550,6 +4555,7 @@ function main(config) {
     throw createUserError("未检测到订阅节点，也未配置 _customProxies 或 _homeProxy。请导入订阅，或使用 出口IP凭证.js 添加公司节点/固定 IP。");
   }
   var frontNodeName = null;
+  var frontBoundNames = [];
   if (frontProxy) {
     frontNodeName = injectFrontProxy(config, frontProxy, subscriptionNodeNames);
     frontProxyName = frontNodeName;
@@ -4557,10 +4563,15 @@ function main(config) {
   // 有 🔗 前置 组时，订阅节点和 useFrontProxy 节点都挂到组上；否则沿用旧的单节点前置。
   var frontDialer = getFrontGroupName() || frontNodeName;
   if (frontDialer && hasSubscriptionNodes) {
-    bindFrontProxyToSubscriptionNodes(config, frontDialer, subscriptionNodeNames, !!getFrontGroupName());
+    frontBoundNames = bindFrontProxyToSubscriptionNodes(config, frontDialer, subscriptionNodeNames, !!getFrontGroupName());
   }
   if (ordinaryCustomProxies.length > 0) {
     customProxyNames = injectCustomProxies(config, ordinaryCustomProxies, frontDialer);
+    for (var ci = 0; ci < ordinaryCustomProxies.length; ci++) {
+      if (ordinaryCustomProxies[ci].useFrontProxy && !ordinaryCustomProxies[ci].via) {
+        frontBoundNames.push(ordinaryCustomProxies[ci].name);
+      }
+    }
   }
   resetSubscriptionGroupsAndRules(config);
   ensureFrontGroup(config, frontNodeName, customProxyNames);
@@ -4575,10 +4586,6 @@ function main(config) {
   });
   regionGroupNames = anchorResult.regionGroupNames;
   ensureOverseasPolicyGroup(config, regionGroupNames);
-  fullProtocolTarget = ensureFullProtocolFallbackGroup(
-    config,
-    subscriptionNodeNames.concat(customProxyNames)
-  );
 
   // ③ GLOBAL（用户可见的第三个主入口）
   var nodeSelGroup = findProxyGroupByName(config["proxy-groups"], "节点选择");
@@ -4604,7 +4611,7 @@ function main(config) {
   }
   customGroupInsertionIndex = config["proxy-groups"].length;
   ensureDomesticGroup(config);
-  ensureFallbackPolicyGroup(config, fullProtocolTarget);
+  ensureFallbackPolicyGroup(config, null);
 
   // ⑤ 家宽出口 + 跳板组（有凭证时）
   var chainGroupName = null;
@@ -4634,12 +4641,14 @@ function main(config) {
 
   // ⑦ 地区 url-test 组（沉底）
   appendTailGroups(config, anchorResult.regionGroups);
-  // 🔗 前置 补全本机可直连节点（副本最后注入，不会进入任何其它组）
-  addFrontCandidates(config, frontNodeName, subscriptionNodeNames, customProxyNames,
-    collectProxyNames(dedicatedCustomProxies));
   if (customRuleGroups) {
     customRuleGroupRules = injectCustomRuleGroups(config, customRuleGroups, customGroupInsertionIndex);
   }
+  // 所有引用和前置候选就绪后，再判断每条完整链路的 UDP 能力。
+  addFrontCandidates(config, frontNodeName, subscriptionNodeNames, customProxyNames,
+    collectProxyNames(dedicatedCustomProxies), frontBoundNames);
+  fullProtocolTarget = ensureFullProtocolFallbackGroup(config, subscriptionNodeNames.concat(customProxyNames));
+  ensureFallbackPolicyGroup(config, fullProtocolTarget);
 
   // ⑧ DNS / Sniffer / 规则注入
   applyDnsAndSniffer(config);

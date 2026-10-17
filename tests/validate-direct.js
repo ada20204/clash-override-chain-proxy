@@ -843,7 +843,7 @@ function testFullProtocolFallbackRequiresExplicitUdp() {
   const { output } = runMain(function (config) {
     delete config.proxies[1].udp;
     config.proxies[2].udp = false;
-  });
+  }, function (sandbox) { sandbox.USER_OPTIONS.frontGroup = false; });
   const fallbackGroup = output["proxy-groups"].find(function (group) {
     return group.name === EXPECTED.fullProtocolFallbackGroupName;
   });
@@ -965,6 +965,8 @@ function testNoCredentialAiAgentIncludesCustomAndRawNodes() {
     config._customProxies = [
       { name: "公司代理", type: "http", server: "10.0.0.9", port: 8080 }
     ];
+  }, function (sandbox) {
+    sandbox.USER_OPTIONS.front = { excludeKeywords: ["公司代理"] };
   });
   const aiGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.aiGroupName; });
   assert(aiGroup, "无家宽时 AI Agent 组应存在");
@@ -1950,8 +1952,9 @@ function testFrontGroup() {
   });
   const byName = function (n) { return output.proxies.find(function (p) { return p.name === n; }); };
   const front = findGroup(output, "🔗 前置");
-  assert.deepStrictEqual(Array.from(front.proxies).slice(0, 4), ["DIRECT", "公司", "⤴ 经前置", "⤴ 指定"],
-    "候选：DIRECT → 自定义节点（未挂前置用原节点，挂了用副本）→ 订阅副本");
+  assert.deepStrictEqual(Array.from(front.proxies).slice(0, 3), ["DIRECT", "公司", "⤴ 经前置"],
+    "候选只解除脚本自动添加的前置，不绕过显式 via");
+  assert(front.proxies.indexOf("⤴ 指定") < 0, "显式 via 节点不能生成绕过上游的前置副本");
   assert(front.proxies.indexOf("⤴ 🇸🇬 SG Auto 01") >= 0);
   assert.strictEqual(byName("经前置")["dialer-proxy"], "🔗 前置");
   assert.strictEqual(byName("指定")["dialer-proxy"], "公司", "via 应覆盖默认前置");
@@ -1959,8 +1962,8 @@ function testFrontGroup() {
   assert.strictEqual(byName("公司")["dialer-proxy"], undefined, "前置候选自身不挂前置（防循环）");
   assert.strictEqual(byName(EXPECTED.homeNodeName)["dialer-proxy"], undefined, "家宽IP 不挂前置");
   assert.strictEqual(byName(EXPECTED.homeChainedNodeName)["dialer-proxy"], "🔗 家宽跳板", "家宽链式仍走家宽跳板");
-  assert(findGroup(output, EXPECTED.fullProtocolFallbackGroupName).proxies.indexOf("🇸🇬 SG Auto 01") >= 0,
-    "前置默认 DIRECT 时订阅节点仍保留全协议能力");
+  assert(!findGroup(output, EXPECTED.fullProtocolFallbackGroupName),
+    "可手动切换到 HTTP 前置的订阅节点不能保证完整链路的 UDP 能力");
 
   const { output: withFront } = runMain(function (config) {
     config._frontProxy = { name: "一级前置", type: "socks5", server: "198.51.100.50", port: 1080, udp: true };
@@ -1989,6 +1992,23 @@ function testFrontGroup() {
   const { output: noFront } = runMain(null, function (sandbox) { sandbox.USER_OPTIONS.frontGroup = false; });
   assertRuleExists(noFront.rules, "DOMAIN-SUFFIX,ipip.net,DIRECT");
   assertRuleExists(noFront.rules, "DOMAIN-SUFFIX,ip.sb,DIRECT");
+}
+
+function testFrontCopiesPreserveExplicitDialersAndAvoidNameCollisions() {
+  const { output } = runMain(function (config) {
+    config.proxies[0]["dialer-proxy"] = "🇭🇰 HK Auto 01";
+    config.proxies.push({ name: "⤴ 🇺🇸 US Auto 01", type: "ss", udp: true });
+    config._customRuleGroups = [{ name: "⤴ 🇯🇵 JP Auto 01", proxies: ["DIRECT"], rules: [] }];
+  });
+  const front = findGroup(output, "🔗 前置");
+  assert(front.proxies.indexOf("⤴ 🇸🇬 SG Auto 01") < 0, "订阅原有 dialer-proxy 不能被副本绕过");
+  assert.strictEqual(output.proxies.find(function (p) { return p.name === "🇸🇬 SG Auto 01"; })["dialer-proxy"], "🇭🇰 HK Auto 01");
+  ["⤴ 🇺🇸 US Auto 01 (2)", "⤴ 🇯🇵 JP Auto 01 (2)"].forEach(function (name) {
+    const copy = output.proxies.find(function (p) { return p.name === name; });
+    assert(copy && !copy["dialer-proxy"], "副本名称应避开已有节点和策略组：" + name);
+    assert(front.proxies.indexOf(name) >= 0);
+    assert(findGroup(output, "节点选择").proxies.indexOf(name) < 0);
+  });
 }
 
 function testProxyGraphRejectsCycles() {
@@ -2247,5 +2267,6 @@ testCommunityExactDomainsAndSharedServices();
 testCommunityQuicOptionCoversNewDomains();
 testOverseasPreservesIpv6AndCommunityDnsOptions();
 testFrontGroup();
+testFrontCopiesPreserveExplicitDialersAndAvoidNameCollisions();
 
 console.log("validate-direct.js: all checks passed");
