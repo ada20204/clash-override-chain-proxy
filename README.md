@@ -129,6 +129,8 @@ Sentry、Datadog、Intercom、Statsig、Stripe、WorkOS、SendGrid 等共享基�
 
 海外和未知域名的 DoH 默认通过 `🤖 AI Agent` 建立连接，国内域名、直连域名和代理服务器解析则使用国内 DNS。DNS 检测页显示的是递归 DNS 提供商的地址，不会等于家宽出口 IP；关键判断是海外解析是否仍显示中国大陆递归 DNS。
 
+电脑或云主机在境外时，把 `USER_OPTIONS.location` 改为 `overseas`：国内域名和 IP 改走 `🇨🇳 回国` 组（成员来自 `domesticExit`，例如一台国内 VPS），其余流量默认直连，DNS 也换成本机直连的境外 DoH。默认 `cn` 的输出保持不变，详见[配置教程](docs/配置教程.md#境外使用location)。
+
 不要同时开启 Clash Party 独立的「DNS 覆写」作为第二个配置入口。它可能在主脚本之后覆盖 `respect-rules`、上游 DNS 与策略路由。
 
 ### Tailscale

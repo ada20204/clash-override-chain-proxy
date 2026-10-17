@@ -1640,6 +1640,162 @@ function testAutoSelectFiltersSubscriptionInfoNodes() {
     "公司代理不应进入自动选择测速组");
 }
 
+
+// ─── location profiles ──────────────────────────────────────────────────────
+
+const DOMESTIC_GROUP = "🇨🇳 回国";
+const DOMESTIC_EXIT  = { name: "阿里云回国", scope: "dedicated", type: "socks5", server: "198.51.100.20", port: 1080, udp: true };
+
+function runOverseas(configMutator, optionMutator) {
+  return runMain(function (config) {
+    config._customProxies = [Object.assign({}, DOMESTIC_EXIT)];
+    if (typeof configMutator === "function") configMutator(config);
+  }, function (sandbox) {
+    sandbox.USER_OPTIONS.location = "overseas";
+    sandbox.USER_OPTIONS.domesticExit = [DOMESTIC_EXIT.name];
+    if (typeof optionMutator === "function") optionMutator(sandbox);
+  });
+}
+
+function findGroup(output, name) {
+  return output["proxy-groups"].find(function (g) { return g.name === name; });
+}
+
+function testLocationDefaultsToCn() {
+  const { sandbox, output } = runMain();
+  assert.strictEqual(sandbox.USER_OPTIONS.location, "cn");
+  assertRuleExists(output.rules, "GEOSITE,cn,DIRECT");
+  assertRuleExists(output.rules, "GEOIP,cn,DIRECT,no-resolve");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,feishu.net,DIRECT");
+  assert(!findGroup(output, DOMESTIC_GROUP), "cn 默认不创建回国组");
+  assert.deepStrictEqual(Array.from(output.dns["default-nameserver"]), ["223.5.5.5", "119.29.29.29"]);
+  assert.strictEqual(output.dns["fallback-filter"]["geoip-code"], "CN");
+  assert.strictEqual(findGroup(output, "🎯 直连").url, "http://connect.rom.miui.com/generate_204");
+  assert.deepStrictEqual(Array.from(findGroup(output, EXPECTED.chainGroupName).proxies),
+    [EXPECTED.homeChainedNodeName, EXPECTED.homeNodeName], "cn 下家宽组默认先选链式");
+  assertRuleExists(output.rules, "MATCH," + EXPECTED.fullProtocolFallbackGroupName);
+}
+
+function testCnIgnoresDomesticExit() {
+  // cn 下 domesticExit 不生效，未被引用的 dedicated 节点仍应被拒绝。
+  assert.throws(function () {
+    runMain(function (config) {
+      config._customProxies = [Object.assign({}, DOMESTIC_EXIT)];
+    }, function (sandbox) {
+      sandbox.USER_OPTIONS.domesticExit = [DOMESTIC_EXIT.name];
+    });
+  }, /未被 _customRuleGroups\.proxies 引用/);
+}
+
+function testOverseasRoutesDomesticTrafficToReturnGroup() {
+  const { output } = runOverseas();
+  const domesticGroup = findGroup(output, DOMESTIC_GROUP);
+  assert(domesticGroup, "overseas 应创建回国组");
+  assert.deepStrictEqual(Array.from(domesticGroup.proxies), [DOMESTIC_EXIT.name, "DIRECT"]);
+  assert.strictEqual(domesticGroup.url, "http://connect.rom.miui.com/generate_204", "回国组应使用国内测速地址");
+  assertRuleExists(output.rules, "GEOSITE,cn," + DOMESTIC_GROUP);
+  assertRuleExists(output.rules, "GEOIP,cn," + DOMESTIC_GROUP + ",no-resolve");
+  assertRulesMissing(output.rules, ["GEOSITE,cn,DIRECT", "GEOIP,cn,DIRECT,no-resolve"]);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,feishu.net," + DOMESTIC_GROUP);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,dingtalkapps.com," + DOMESTIC_GROUP);
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,typeless.com,DIRECT");
+  // 回国节点服务器本身必须直连，否则会自我代理。
+  assertRuleExists(output.rules, "IP-CIDR,198.51.100.20/32,DIRECT,no-resolve");
+  assert(output.rules.indexOf("IP-CIDR,198.51.100.20/32,DIRECT,no-resolve") <
+    output.rules.indexOf("GEOIP,cn," + DOMESTIC_GROUP + ",no-resolve"));
+  // dedicated 回国节点不能进入通用出口。
+  ["节点选择", "GLOBAL", EXPECTED.aiGroupName, "🔗 家宽跳板", EXPECTED.mediaGroupName].forEach(function (name) {
+    const group = findGroup(output, name);
+    if (!group) return;
+    assert(group.proxies.indexOf(DOMESTIC_EXIT.name) < 0, name + " 不应包含回国节点");
+  });
+  // AI 与 Tailscale 边界不变。
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,claude.ai," + EXPECTED.aiGroupName);
+  assertRuleExists(output.rules, "IP-CIDR,100.64.0.0/10," + EXPECTED.tailnetDirectGroupName + ",no-resolve");
+  assertRuleExists(output.rules, "DOMAIN-SUFFIX,tailscale.com," + EXPECTED.tailscaleControlGroupName);
+  assertNoDuplicateRuleIdentities(output.rules);
+}
+
+function testOverseasDefaultsPreferDirectEgress() {
+  const { output } = runOverseas();
+  assert.deepStrictEqual(Array.from(findGroup(output, EXPECTED.generalEgressGroupName).proxies), ["DIRECT", "节点选择"]);
+  assert.strictEqual(findGroup(output, EXPECTED.mediaGroupName).proxies[0], "DIRECT");
+  assert.strictEqual(findGroup(output, "🐙 GitHub").proxies[0], "DIRECT");
+  assert.notStrictEqual(findGroup(output, EXPECTED.japanServicesGroupName).proxies[0], "DIRECT",
+    "指定地区的功能组仍应优先地区节点");
+  assert.deepStrictEqual(Array.from(findGroup(output, EXPECTED.chainGroupName).proxies),
+    [EXPECTED.homeNodeName, EXPECTED.homeChainedNodeName], "overseas 下家宽组默认先选真直连");
+  assert(!findGroup(output, EXPECTED.fullProtocolFallbackGroupName), "overseas 默认关闭全协议回退");
+  assertRuleExists(output.rules, "MATCH," + EXPECTED.generalEgressGroupName);
+  assert.strictEqual(findGroup(output, "🎯 直连").url, "http://cp.cloudflare.com/generate_204");
+}
+
+function testOverseasDnsProfile() {
+  const { output } = runOverseas();
+  const dns = output.dns;
+  const policy = dns["nameserver-policy"];
+  assert.deepStrictEqual(Array.from(dns["default-nameserver"]), ["1.1.1.1", "8.8.8.8"]);
+  assert(!dns.fallback && !dns["fallback-filter"], "overseas 不需要 CN GeoIP fallback");
+  assert(dns.nameserver.every(function (s) { return /#DIRECT$/.test(s); }), "未知域名本机直连解析");
+  assert(policy["geosite:cn"].every(function (s) { return s.indexOf("#" + DOMESTIC_GROUP) > 0; }), "国内域名经回国组解析");
+  assert(policy["+.feishu.net"].every(function (s) { return s.indexOf("#" + DOMESTIC_GROUP) > 0; }));
+  assert(policy["+.apple.com"].every(function (s) { return /#DIRECT$/.test(s); }), "直连功能组用本地 DNS");
+  assert(policy["geosite:openai"].every(function (s) { return s.indexOf("#" + EXPECTED.aiGroupName) > 0; }), "AI DNS 仍随 AI Agent");
+  [].concat(dns["proxy-server-nameserver"], dns["direct-nameserver"]).forEach(function (s) {
+    assert(s.indexOf("alidns") < 0 && s.indexOf("doh.pub") < 0, "overseas 直连 DNS 不应使用国内 DoH: " + s);
+  });
+}
+
+function testOverseasWithoutDomesticExitFallsBackToDirect() {
+  const { output } = runMain(null, function (sandbox) {
+    sandbox.USER_OPTIONS.location = "overseas";
+  });
+  assert.deepStrictEqual(Array.from(findGroup(output, DOMESTIC_GROUP).proxies), ["DIRECT"]);
+  assertRuleExists(output.rules, "GEOSITE,cn," + DOMESTIC_GROUP);
+}
+
+function testOverseasStandaloneBoxProfile() {
+  // 美国云主机：无订阅，只有家宽 IP + 阿里云回国。
+  const config = createEmptyConfig();
+  config._homeProxy = { type: "http", server: "203.0.113.10", port: 8080, username: "u", password: "p" };
+  config._customProxies = [Object.assign({}, DOMESTIC_EXIT)];
+  const { output } = runMainWithConfig(config, function (sandbox) {
+    sandbox.USER_OPTIONS.location = "overseas";
+    sandbox.USER_OPTIONS.domesticExit = [DOMESTIC_EXIT.name];
+  });
+  assert.deepStrictEqual(Array.from(findGroup(output, EXPECTED.chainGroupName).proxies), [EXPECTED.homeNodeName]);
+  assert.strictEqual(findGroup(output, EXPECTED.aiGroupName).proxies[0], EXPECTED.chainGroupName);
+  assert.strictEqual(findGroup(output, EXPECTED.generalEgressGroupName).proxies[0], "DIRECT");
+  assertRuleExists(output.rules, "GEOSITE,cn," + DOMESTIC_GROUP);
+  assert.strictEqual(output.rules[output.rules.length - 1], "MATCH," + EXPECTED.generalEgressGroupName);
+}
+
+function testOverseasExplicitOptionsWin() {
+  const { output } = runOverseas(null, function (sandbox) {
+    sandbox.USER_OPTIONS.urlTestProbeUrl = "http://probe.example.test/generate_204";
+    sandbox.USER_OPTIONS.fullProtocolFallback = true;
+  });
+  assert.strictEqual(findGroup(output, "🎯 直连").url, "http://probe.example.test/generate_204");
+  assert(findGroup(output, EXPECTED.fullProtocolFallbackGroupName), "显式开启时应保留全协议回退");
+}
+
+function testLocationValidation() {
+  assert.throws(function () {
+    runMain(null, function (sandbox) { sandbox.USER_OPTIONS.location = "mars"; });
+  }, /location 无效/);
+  assert.throws(function () {
+    runMain(null, function (sandbox) {
+      sandbox.USER_OPTIONS.location = "overseas";
+      sandbox.USER_OPTIONS.domesticExit = ["不存在的回国节点"];
+    });
+  }, /domesticExit 引用的节点或策略组不存在/);
+  assert.throws(function () {
+    runOverseas(function (config) {
+      config._customRuleGroups = [{ name: "抢回国规则", proxies: ["DIRECT"], rules: ["DOMAIN-SUFFIX,tailscale.com"] }];
+    });
+  }, /受保护的基础路由/, "location 不应放松受保护规则检查");
+}
+
 // ─── run ─────────────────────────────────────────────────────────────────────
 
 testDefaultConfig();
@@ -1687,5 +1843,14 @@ testTailscaleMonitorGroupsCanBeDisabled();
 testTailscaleSubnetCidrsAreVisibleInTailnetGroup();
 testTailscaleMonitorGroupsCanBeShownForDebugging();
 testStandaloneEmptyConfigFailsLoudly();
+testLocationDefaultsToCn();
+testCnIgnoresDomesticExit();
+testOverseasRoutesDomesticTrafficToReturnGroup();
+testOverseasDefaultsPreferDirectEgress();
+testOverseasDnsProfile();
+testOverseasWithoutDomesticExitFallsBackToDirect();
+testOverseasStandaloneBoxProfile();
+testOverseasExplicitOptionsWin();
+testLocationValidation();
 
 console.log("validate-direct.js: all checks passed");

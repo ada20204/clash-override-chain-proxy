@@ -35,9 +35,11 @@
 // ---------------------------------------------------------------------------
 
 var USER_OPTIONS = {
+  location: "cn", // 本机所在位置："cn" 在中国大陆（默认，保持原有行为）；"overseas" 在境外（国内流量走 🇨🇳 回国，其余默认直连）
+  domesticExit: [], // 仅 overseas 生效：🇨🇳 回国 组候选，填 _customProxies 名称（推荐 scope: "dedicated"）、订阅节点或策略组名；DIRECT 自动追加在末尾
   autoSelectGroupName: "自动选择", // 订阅中的自动选择组名（url-test），Smart 内核会自动追加 "(Smart Group)" 后缀
   autoSelectExcludeKeywords: ["公司代理"], // 只过滤自动选择组；公司代理仍会保留在节点选择里供手动使用
-  urlTestProbeUrl: "http://connect.rom.miui.com/generate_204", // 直连/界面健康检查默认测速地址；单个分组可用 testUrl 覆盖
+  urlTestProbeUrl: "", // 直连/界面健康检查默认测速地址；留空按 location 选择（cn: connect.rom.miui.com，overseas: cp.cloudflare.com）；单个分组可用 testUrl 覆盖
   proxyProbeUrl: "https://www.gstatic.com/generate_204", // 代理/地区/出海能力默认测速地址
   overseasDnsTarget: "🤖 AI Agent", // 海外及未知域名的 DoH 连接出口；改为“节点选择”可使用普通出海线路
   googleTrafficConsistency: true, // 统一 Google 账号与 AI 出口；YouTube、Play 和 FCM 仍按协议能力分流
@@ -46,7 +48,7 @@ var USER_OPTIONS = {
   rejectAiQuic: true, // 拒绝 AI 域名 UDP/443，防止不支持 UDP 的出口被跳过后直连；浏览器会回退 HTTPS/TCP
   rejectAppStoreQuic: true, // 拒绝 App Store 启动接口 UDP/443，避免 QUIC 在 TUN 中超时；系统会回退 HTTPS/TCP
   rejectWebRtcUdp: true, // 拒绝常用 STUN UDP 端口，避免 HTTP 出口不支持 UDP 时 WebRTC 暴露本地公网 IP
-  fullProtocolFallback: true, // HTTP 出口保留给 TCP/443；其余流量回退到支持完整隧道的订阅节点
+  fullProtocolFallback: null, // HTTP 出口保留给 TCP/443；其余流量回退到支持完整隧道的订阅节点；null 按 location（cn 开启，overseas 关闭，非 443 流量直接走通用出海）
   enableChainRegionBrowserProcessProxy: false, // 是否让受管浏览器按应用名强制走家宽出口
   enableChainRegionAiCliProcessProxy: true,   // 是否让常见 AI CLI 按应用名强制走家宽出口
   tailscale: {
@@ -88,7 +90,8 @@ var BASE = {
     tailscaleControl: "🧩 Tailscale 控制面",
     tailscaleProcess: "🧩 Tailscale 进程",
     tailnetDirect: "🧩 Tailnet 内部直连",
-    tailscaleExit: "🧩 Tailscale Exit Node"
+    tailscaleExit: "🧩 Tailscale Exit Node",
+    domestic: "🇨🇳 回国"
   },
   ruleTargets: {
     direct: "DIRECT"
@@ -104,12 +107,57 @@ var BASE = {
     domestic: [
       "https://dns.alidns.com/dns-query",
       "https://doh.pub/dns-query"
-    ]
+    ],
+    domesticBootstrap: ["223.5.5.5", "119.29.29.29"],
+    overseasBootstrap: ["1.1.1.1", "8.8.8.8"]
+  },
+  // 按本机所在位置切换的默认值。cn 与引入 location 之前的行为完全一致。
+  locationProfiles: {
+    cn: {
+      directProbeUrl: "http://connect.rom.miui.com/generate_204",
+      domesticProbeUrl: "http://connect.rom.miui.com/generate_204",
+      fullProtocolFallback: true,
+      domesticGroup: false,      // 国内流量直接 DIRECT
+      localDnsIsDomestic: true,  // 本地直连 DNS 即国内 DoH
+      directFirstEgress: false,  // 通用出海 / 代理型功能组默认走节点选择
+      homeChainFirst: true       // 🏠 家宽IP 默认选链式节点（国内直连美国家宽不稳）
+    },
+    overseas: {
+      directProbeUrl: "http://cp.cloudflare.com/generate_204",
+      domesticProbeUrl: "http://connect.rom.miui.com/generate_204",
+      fullProtocolFallback: false,
+      domesticGroup: true,
+      localDnsIsDomestic: false,
+      directFirstEgress: true,
+      homeChainFirst: false
+    }
   }
 };
 
+function getLocationName() {
+  var location = USER_OPTIONS.location || "cn";
+  if (!BASE.locationProfiles[location]) {
+    throw createUserError("USER_OPTIONS.location 无效：" + location + "，仅支持 cn 或 overseas");
+  }
+  return location;
+}
+
+function getLocationProfile() {
+  return BASE.locationProfiles[getLocationName()];
+}
+
+function getDomesticTarget() {
+  return getLocationProfile().domesticGroup ? BASE.nodeNames.domestic : BASE.ruleTargets.direct;
+}
+
+function getDomesticExitNames() {
+  if (!getLocationProfile().domesticGroup) return [];
+  var names = USER_OPTIONS.domesticExit || [];
+  return Array.isArray(names) ? names : [names];
+}
+
 function getDefaultProbeUrl() {
-  return USER_OPTIONS.urlTestProbeUrl || BASE.urlTestProbeUrl;
+  return USER_OPTIONS.urlTestProbeUrl || getLocationProfile().directProbeUrl || BASE.urlTestProbeUrl;
 }
 
 function getProxyProbeUrl() {
@@ -125,7 +173,8 @@ function getGroupProbeUrl(groupConfig) {
 }
 
 function isFullProtocolFallbackEnabled() {
-  return USER_OPTIONS.fullProtocolFallback !== false;
+  if (typeof USER_OPTIONS.fullProtocolFallback === "boolean") return USER_OPTIONS.fullProtocolFallback;
+  return getLocationProfile().fullProtocolFallback !== false;
 }
 
 function isGoogleTrafficConsistencyEnabled() {
@@ -947,8 +996,7 @@ function buildDerived() {
       preference: "fixed",
       domains: [],
       dnsPolicy: null,
-      fixedProxies: ["DIRECT"],
-      testUrl: "http://connect.rom.miui.com/generate_204"
+      fixedProxies: ["DIRECT"]
     }
   ];
 
@@ -1105,12 +1153,34 @@ function getFallbackDnsServers() {
   return routeDnsServers(BASE.dns.fallback, getOverseasDnsTarget());
 }
 
+// 非 AI 的境外域名：cn 下与 AI 共用 overseasDnsTarget；overseas 下本机直连解析。
+function getForeignDnsServers() {
+  if (getLocationProfile().localDnsIsDomestic) return getOverseasDnsServers();
+  return routeDnsServers(BASE.dns.overseas, BASE.ruleTargets.direct);
+}
+
+// 国内域名（geosite:cn 与国内直连例外）：cn 下直连国内 DoH；overseas 下经 🇨🇳 回国 查询，拿到国内就近解析。
+function getCnDnsServers() {
+  if (!getLocationProfile().domesticGroup) return BASE.dns.domestic;
+  return routeDnsServers(BASE.dns.domestic, getDomesticTarget());
+}
+
+// 本机直连流量（direct-nameserver、dnsPolicy: "domestic" 的直连功能组）使用的本地 DNS。
+function getLocalDnsServers() {
+  // overseas 显式 #DIRECT：respect-rules 下 dns.google 会命中 GEOSITE,google → AI Agent。
+  if (getLocationProfile().localDnsIsDomestic) return BASE.dns.domestic;
+  return routeDnsServers(BASE.dns.overseas, BASE.ruleTargets.direct);
+}
+
 function buildNameserverPolicy() {
   var overseasDnsServers = getOverseasDnsServers();
+  var foreignDnsServers = getForeignDnsServers();
+  var cnDnsServers = getCnDnsServers();
+  var localDnsServers = getLocalDnsServers();
   var policy = {
-    "geosite:cn": BASE.dns.domestic,
-    "geosite:geolocation-!cn": overseasDnsServers,
-    "geosite:gfw": overseasDnsServers,
+    "geosite:cn": cnDnsServers,
+    "geosite:geolocation-!cn": foreignDnsServers,
+    "geosite:gfw": foreignDnsServers,
     "geosite:openai": overseasDnsServers
   };
   var i;
@@ -1119,9 +1189,9 @@ function buildNameserverPolicy() {
   assignNameserverPolicyDomains(policy, DERIVED.patterns.strict.ai,              overseasDnsServers);
   assignNameserverPolicyDomains(policy, DERIVED.patterns.strict.support,         overseasDnsServers);
   assignNameserverPolicyDomains(policy, DERIVED.patterns.strict.validation,      overseasDnsServers);
-  assignNameserverPolicyDomains(policy, DERIVED.patterns.generalEgress,           overseasDnsServers);
-  assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.overrides.domesticDns, BASE.dns.domestic);
-  assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.overrides.overseasDns, overseasDnsServers);
+  assignNameserverPolicyDomains(policy, DERIVED.patterns.generalEgress,           foreignDnsServers);
+  assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.overrides.domesticDns, cnDnsServers);
+  assignNameserverPolicyDomains(policy, DERIVED.patterns.direct.overrides.overseasDns, foreignDnsServers);
   if (isGoogleTrafficConsistencyEnabled()) {
     policy["geosite:google-deepmind"] = overseasDnsServers;
     policy["geosite:youtube"] = routeDnsServers(BASE.dns.overseas, "🌍 国际媒体");
@@ -1132,7 +1202,7 @@ function buildNameserverPolicy() {
   for (i = 0; i < DERIVED.specs.length; i++) {
     spec = DERIVED.specs[i];
     if (!spec.domains || spec.domains.length === 0 || !spec.dnsPolicy) continue;
-    dnsServers = spec.dnsPolicy === "overseas" ? overseasDnsServers : BASE.dns.domestic;
+    dnsServers = spec.dnsPolicy === "overseas" ? foreignDnsServers : localDnsServers;
     assignNameserverPolicyDomains(policy, spec.domains, dnsServers);
   }
   return policy;
@@ -1198,26 +1268,45 @@ function buildDnsFallbackFilter() {
 }
 
 function buildDnsBaseConfig() {
-  return {
+  var profile = getLocationProfile();
+  var config;
+  if (!profile.localDnsIsDomestic) {
+    // 境外：本机直连 DNS 已经干净，不需要 CN GeoIP fallback。
+    return {
+      enable: true,
+      listen: "0.0.0.0:1053",
+      ipv6: true,
+      "respect-rules": true,
+      "enhanced-mode": "fake-ip",
+      "fake-ip-range": "198.18.0.1/16",
+      "default-nameserver": BASE.dns.overseasBootstrap.slice(),
+      nameserver: getForeignDnsServers(),
+      "proxy-server-nameserver": BASE.dns.overseas.slice(),
+      "direct-nameserver": BASE.dns.overseas.slice(),
+      "direct-nameserver-follow-policy": true
+    };
+  }
+  config = {
     enable: true,
     listen: "0.0.0.0:1053",
     ipv6: true,
     "respect-rules": true,
     "enhanced-mode": "fake-ip",
     "fake-ip-range": "198.18.0.1/16",
-    "default-nameserver": ["223.5.5.5", "119.29.29.29"],
+    "default-nameserver": BASE.dns.domesticBootstrap.slice(),
     nameserver: getOverseasDnsServers(),
     "proxy-server-nameserver": BASE.dns.domestic,
     "direct-nameserver": BASE.dns.domestic.slice(),
     "direct-nameserver-follow-policy": true,
     fallback: getFallbackDnsServers()
   };
+  return config;
 }
 
 function buildDnsConfig() {
   var dnsConfig = buildDnsBaseConfig();
   dnsConfig["fake-ip-filter"] = buildDnsFakeIpFilter();
-  dnsConfig["fallback-filter"] = buildDnsFallbackFilter();
+  if (dnsConfig.fallback) dnsConfig["fallback-filter"] = buildDnsFallbackFilter();
   dnsConfig["nameserver-policy"] = buildNameserverPolicy();
   return dnsConfig;
 }
@@ -1430,7 +1519,7 @@ function ensureGeneralEgressGroup(config) {
   upsertNamedItem(config["proxy-groups"], {
     name: BASE.nodeNames.generalEgress,
     type: "select",
-    proxies: ["节点选择"],
+    proxies: getLocationProfile().directFirstEgress ? ["DIRECT", "节点选择"] : ["节点选择"],
     url: getProxyProbeUrl(),
     hidden: true
   });
@@ -1556,6 +1645,8 @@ function buildFunctionalGroups(config, regionGroupNames) {
       proxies = spec.fixedProxies;
     } else if (spec.preference === "proxy") {
       proxies = [];
+      // 境外本机已在海外：无指定地区的代理型组默认直连，节点选择保留为可选项。
+      if (getLocationProfile().directFirstEgress && !spec.preferredRegion) proxies.push("DIRECT");
       if (preferredRegionGroup) proxies.push(preferredRegionGroup);
       proxies = proxies
         .concat(["节点选择"])
@@ -1661,7 +1752,12 @@ function injectHomeProxies(config, credentials, relayGroupName) {
     upsertNamedItem(config.proxies, buildHomeProxy(credentials, BASE.nodeNames.homeChained, relayGroupName));
     chainProxies.push(BASE.nodeNames.homeChained);
   }
-  chainProxies.push(BASE.nodeNames.home);
+  // cn 默认先选链式；境外直连家宽更稳，真直连排第一。
+  if (getLocationProfile().homeChainFirst) {
+    chainProxies.push(BASE.nodeNames.home);
+  } else {
+    chainProxies.unshift(BASE.nodeNames.home);
+  }
   return chainProxies;
 }
 
@@ -1848,7 +1944,7 @@ function validateDedicatedProxyNameAvailability(config, proxyConfigs, groupConfi
 }
 
 function validateDedicatedProxyReferences(proxyConfigs, groupConfigs) {
-  var referencedNames = {};
+  var referencedNames = buildStringLookup(getDomesticExitNames());
   var groups = groupConfigs || [];
   var groupProxies;
   var i;
@@ -1863,7 +1959,7 @@ function validateDedicatedProxyReferences(proxyConfigs, groupConfigs) {
     if (!referencedNames[proxyConfigs[i].name]) {
       throw createUserError(
         "专用出口 " + proxyConfigs[i].name +
-        " 未被 _customRuleGroups.proxies 引用；dedicated 节点不能进入通用出口"
+        " 未被 _customRuleGroups.proxies 引用（overseas 下也可由 USER_OPTIONS.domesticExit 引用）；dedicated 节点不能进入通用出口"
       );
     }
   }
@@ -1905,6 +2001,31 @@ function injectCustomProxies(config, proxyConfigs, frontProxyName) {
     names.push(proxyConfig.name);
   }
   return names;
+}
+
+// overseas：创建 🇨🇳 回国 组，成员为 domesticExit 中已存在的节点/组，DIRECT 兜底。
+function ensureDomesticGroup(config) {
+  var names;
+  var proxies = [];
+  if (!getLocationProfile().domesticGroup) return null;
+  names = getDomesticExitNames();
+  for (var i = 0; i < names.length; i++) {
+    if (names[i] === BASE.nodeNames.domestic) {
+      throw createUserError("USER_OPTIONS.domesticExit 不能引用 " + BASE.nodeNames.domestic + " 自身");
+    }
+    if (names[i] !== BASE.ruleTargets.direct && !hasProxyOrGroup(config, names[i])) {
+      throw createUserError("USER_OPTIONS.domesticExit 引用的节点或策略组不存在：" + names[i]);
+    }
+    proxies.push(names[i]);
+  }
+  proxies.push(BASE.ruleTargets.direct);
+  upsertNamedItem(config["proxy-groups"], {
+    name: BASE.nodeNames.domestic,
+    type: "select",
+    proxies: uniqueStrings(proxies),
+    url: getLocationProfile().domesticProbeUrl
+  });
+  return BASE.nodeNames.domestic;
 }
 
 function takeCustomRuleGroups(config) {
@@ -2686,6 +2807,7 @@ function buildDirectRules(fullProtocolTarget) {
   var seenRuleIdentities = {};
   var directNetworkRules = [];
   var directPatternGroups = DERIVED.patterns.direct.groups;
+  var domesticTarget = getDomesticTarget();
   var i;
   for (i = 0; i < DERIVED.networkRules.direct.length; i++) {
     directNetworkRules.push({
@@ -2697,13 +2819,19 @@ function buildDirectRules(fullProtocolTarget) {
   }
   addRawRulesIfNotExists(ruleLines, seenRuleIdentities, directNetworkRules);
   addRawRulesIfNotExists(ruleLines, seenRuleIdentities, buildTailscaleRules(false));
+  // directPatternGroups = [国内 DNS 例外, 海外 DNS 例外]；国内例外跟随 domesticTarget。
   for (i = 0; i < directPatternGroups.length; i++) {
-    addSuffixRulesIfNotExists(ruleLines, seenRuleIdentities, directPatternGroups[i], BASE.ruleTargets.direct);
+    addSuffixRulesIfNotExists(
+      ruleLines,
+      seenRuleIdentities,
+      directPatternGroups[i],
+      i === 0 ? domesticTarget : BASE.ruleTargets.direct
+    );
   }
 
-  // GeoSite/GeoIP 兜底：国内域名和 IP 直连
-  ruleLines.push("GEOSITE,cn,DIRECT");
-  ruleLines.push("GEOIP,cn,DIRECT,no-resolve");
+  // GeoSite/GeoIP 兜底：国内域名和 IP；cn 直连，overseas 走 🇨🇳 回国
+  ruleLines.push("GEOSITE,cn," + domesticTarget);
+  ruleLines.push("GEOIP,cn," + domesticTarget + ",no-resolve");
 
   if (fullProtocolTarget) {
     ruleLines.push(
@@ -2730,6 +2858,22 @@ function haveSameStrings(values, expectedValues) {
     if (values[i] !== expectedValues[i]) return false;
   }
   return true;
+}
+
+// 校验 location 相关的国内兜底规则与 🇨🇳 回国 组。
+function validateLocationRouting(config) {
+  var domesticTarget = getDomesticTarget();
+  var group;
+  if (config.rules.indexOf("GEOSITE,cn," + domesticTarget) < 0 ||
+      config.rules.indexOf("GEOIP,cn," + domesticTarget + ",no-resolve") < 0) {
+    throw createUserError("国内兜底规则未指向 " + domesticTarget + "，请检查 USER_OPTIONS.location");
+  }
+  if (domesticTarget === BASE.ruleTargets.direct) return;
+  group = findProxyGroupByName(config["proxy-groups"], domesticTarget);
+  if (!group || group.type !== "select" ||
+      (group.proxies || []).indexOf(BASE.ruleTargets.direct) !== group.proxies.length - 1) {
+    throw createUserError(domesticTarget + " 组内容异常，请检查 USER_OPTIONS.domesticExit");
+  }
 }
 
 // 校验家宽IP出口组、dialer-proxy 绑定、AI Agent 组、媒体组和关键规则目标。
@@ -2823,6 +2967,7 @@ function main(config) {
   var subscriptionNodeNames = [];
   var hasSubscriptionNodes = false;
   var standaloneMode = false;
+  getLocationName(); // 尽早校验 location 取值
 
   var customProxyNames = [];
   var customRuleGroupRules = [];
@@ -2886,6 +3031,7 @@ function main(config) {
     injectCustomProxies(config, dedicatedCustomProxies, frontProxyName);
   }
   if (customRuleGroups) customRuleGroupRules = injectCustomRuleGroups(config, customRuleGroups);
+  ensureDomesticGroup(config);
 
   // ⑤ 家宽出口 + 跳板组（有凭证时）
   var chainGroupName = null;
@@ -2935,6 +3081,7 @@ function main(config) {
     }
   }
 
+  validateLocationRouting(config);
   delete config._frontProxyName;
   return config;
 }

@@ -64,6 +64,21 @@ function main(config) {
   //   // }
   // ];
 
+  // ── 境外回国出口（可选，配合 USER_OPTIONS.location = "overseas"）──────────
+  // 本机在境外时，国内流量走「🇨🇳 回国」组。把国内 VPS 写成 dedicated 节点，
+  // 再在完全覆写.js 的 USER_OPTIONS.domesticExit 填入同名，它就只会出现在回国组。
+
+  // config._customProxies = [
+  //   {
+  //     name: "阿里云回国",
+  //     scope: "dedicated",
+  //     type: "socks5",
+  //     server: "",
+  //     port: 1080,
+  //     udp: true
+  //   }
+  // ];
+
   // ── 公司内网专用代理（可选）──────────────────────────────────────────────
   // dedicated 节点不会进入节点选择、通用出海、AI、媒体、GitHub 或家宽跳板。
   // 它必须由 _customRuleGroups.proxies 显式引用，否则主脚本会拒绝生成配置。
