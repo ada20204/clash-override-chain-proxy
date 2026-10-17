@@ -107,7 +107,8 @@ var BASE = {
     fallback: "🐟 兜底"
   },
   ruleTargets: {
-    direct: "DIRECT"
+    direct: "DIRECT",
+    lan: "🎯 直连" // 局域网/私网段：面板上可见的直连组（出口 IP 防回环、ip.sb 仍写 DIRECT）
   },
   urlTestProbeUrl: "https://www.gstatic.com/generate_204",
   errorPrefix: "[家宽IP-直连] ",
@@ -2067,17 +2068,17 @@ var SOURCE_PROCESSES = {
 var SOURCE_NETWORK_RULES = {
   direct: [
     // 私有局域网网段（RFC 1918）
-    { type: "IP-CIDR",  value: "10.0.0.0/8",          target: BASE.ruleTargets.direct },
-    { type: "IP-CIDR",  value: "172.16.0.0/12",        target: BASE.ruleTargets.direct },
-    { type: "IP-CIDR",  value: "192.168.0.0/16",       target: BASE.ruleTargets.direct },
+    { type: "IP-CIDR",  value: "10.0.0.0/8",          target: BASE.ruleTargets.lan },
+    { type: "IP-CIDR",  value: "172.16.0.0/12",        target: BASE.ruleTargets.lan },
+    { type: "IP-CIDR",  value: "192.168.0.0/16",       target: BASE.ruleTargets.lan },
     // 链路本地地址（APIPA / mDNS）
-    { type: "IP-CIDR",  value: "169.254.0.0/16",       target: BASE.ruleTargets.direct },
+    { type: "IP-CIDR",  value: "169.254.0.0/16",       target: BASE.ruleTargets.lan },
     // 回环地址
-    { type: "IP-CIDR",  value: "127.0.0.0/8",          target: BASE.ruleTargets.direct },
+    { type: "IP-CIDR",  value: "127.0.0.0/8",          target: BASE.ruleTargets.lan },
     // IPv6 私有/特殊地址
-    { type: "IP-CIDR6", value: "::1/128",               target: BASE.ruleTargets.direct },
-    { type: "IP-CIDR6", value: "fc00::/7",              target: BASE.ruleTargets.direct },
-    { type: "IP-CIDR6", value: "fe80::/10",             target: BASE.ruleTargets.direct }
+    { type: "IP-CIDR6", value: "::1/128",               target: BASE.ruleTargets.lan },
+    { type: "IP-CIDR6", value: "fc00::/7",              target: BASE.ruleTargets.lan },
+    { type: "IP-CIDR6", value: "fe80::/10",             target: BASE.ruleTargets.lan }
   ]
 };
 
@@ -2266,6 +2267,7 @@ function buildDerived() {
     {
       name: "Ⓜ️ 微软服务",
       preference: "direct",
+      domesticOption: true, // 候选含 🇨🇳 国内（默认仍 DIRECT）
       domains: excludeStrings(microsoftDomains, directAll),
       dnsPolicy: "overseas"
     },
@@ -2286,11 +2288,12 @@ function buildDerived() {
     {
       name: "🍎 Apple",
       preference: "direct",
+      domesticOption: true,
       domains: flattenGroupedPatterns(SOURCE_PATTERNS.apple),
       dnsPolicy: "domestic"
     },
     {
-      name: "🎯 直连",
+      name: BASE.ruleTargets.lan,
       preference: "fixed",
       domains: [],
       dnsPolicy: null,
@@ -3060,7 +3063,7 @@ function buildFunctionalGroups(config, regionGroupNames) {
         .concat(extra)
         .concat(["DIRECT"]);
     } else {
-      proxies = ["DIRECT", "节点选择"].concat(extra);
+      proxies = (spec.domesticOption ? ["DIRECT", BASE.policyNames.domestic, "节点选择"] : ["DIRECT", "节点选择"]).concat(extra);
     }
     groupDef = {
       name: spec.name,
@@ -3241,6 +3244,15 @@ function ensureFrontGroup(config, frontNodeName, customProxyNames) {
     name: groupName, type: "select", proxies: uniqueStrings(proxies.concat(candidates)), url: getProxyProbeUrl()
   });
   return groupName;
+}
+
+function isBuiltinInfoNodeName(proxyName) {
+  var lowerName = String(proxyName || "").toLowerCase();
+  if (/https?:\/\//i.test(lowerName)) return true;
+  for (var i = 0; i < AUTO_SELECT_INFO_NODE_KEYWORDS.length; i++) {
+    if (lowerName.indexOf(String(AUTO_SELECT_INFO_NODE_KEYWORDS[i]).toLowerCase()) >= 0) return true;
+  }
+  return false;
 }
 
 function getFrontOptions() {
@@ -4152,8 +4164,17 @@ function collectProxyServerDirectRules(config) {
   var proxies = config.proxies || [];
   var server;
   var resolvedIps;
+  // 只被订阅信息节点（官网/剩余流量/套餐时间…）使用的 server 是假地址（如 www.baidu.com），不生成直连规则；
+  // 真实节点也在用的 server（哪怕信息节点也用）照常直连。
+  var realServers = {};
+  for (var k = 0; k < proxies.length; k++) {
+    if (proxies[k] && !isBuiltinInfoNodeName(proxies[k].name)) {
+      realServers[normalizeProxyServerValue(proxies[k].server)] = true;
+    }
+  }
   for (var i = 0; i < proxies.length; i++) {
     server = normalizeProxyServerValue(proxies[i] && proxies[i].server);
+    if (!realServers[server]) continue;
     addProxyServerDirectRule(rules, seen, server);
     if (isIpv4Literal(server) || server.indexOf(":") >= 0) continue;
     resolvedIps = getProxyServerResolvedIps(server);
@@ -4378,7 +4399,8 @@ function buildDirectRules(fullProtocolTarget) {
 
   // GeoSite/GeoIP：国内域名和 IP 一律进 🇨🇳 国内（cn 默认 DIRECT，overseas 默认回国出口）
   ruleLines.push("GEOSITE,cn," + domesticTarget);
-  ruleLines.push("GEOIP,cn," + domesticTarget + ",no-resolve");
+  // 不带 no-resolve：不在 GeoSite 里的国内站也会解析后按 IP 命中 🇨🇳 国内（解析走 mihomo DNS 的 nameserver）
+  ruleLines.push("GEOIP,cn," + domesticTarget);
 
   // 未命中任何规则：🐟 兜底（候选 🇨🇳 国内 / 🌐 国外，默认值按 location）
   ruleLines.push("MATCH," + BASE.policyNames.fallback);
@@ -4406,7 +4428,7 @@ function validateLocationRouting(config) {
   var domesticTarget = getDomesticTarget();
   var group;
   if (config.rules.indexOf("GEOSITE,cn," + domesticTarget) < 0 ||
-      config.rules.indexOf("GEOIP,cn," + domesticTarget + ",no-resolve") < 0) {
+      config.rules.indexOf("GEOIP,cn," + domesticTarget) < 0) {
     throw createUserError("国内兜底规则未指向 " + domesticTarget + "，请检查 USER_OPTIONS.location");
   }
   group = findProxyGroupByName(config["proxy-groups"], domesticTarget);

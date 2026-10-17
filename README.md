@@ -42,12 +42,13 @@
 
 脚本始终先处理明确且容易误路由的流量：
 
-1. 代理服务器地址直连，避免局域网内多层 Clash 再代理订阅节点。
+1. 代理服务器地址直连，避免局域网内多层 Clash 再代理订阅节点（只被订阅信息节点使用的假地址，如 `www.baidu.com`，不生成直连规则）。
 2. Tailnet 地址与 `*.ts.net` 保持 Tailscale 直连，MagicDNS 不进入 Fake-IP 或普通上游 DNS。
 3. AI 域名的 UDP/443 与常见 WebRTC STUN UDP 被拒绝，浏览器会回退到 TCP，不把本地 UDP 出口暴露出去。
 4. Claude、OpenAI、Gemini、AI Studio、Antigravity、Kiro、Perplexity、Mistral、xAI 及已覆盖的 AI 进程进入 `🤖 AI Agent`。
 5. 开发服务、通用 Google 服务和明确的境外域名再进入 `节点选择` 或 `🌐 国外`。
-6. 国内域名/IP（少量显式例外、GeoSite 与 GeoIP）进入 `🇨🇳 国内`；其余流量由最后一条 `MATCH,🐟 兜底` 决定走国内还是国外。
+6. 国内域名/IP（少量显式例外、GeoSite 与 GeoIP）进入 `🇨🇳 国内`；`GEOIP,cn` 不带 `no-resolve`，不在 GeoSite 里的国内站会经 mihomo DNS 解析后按 IP 命中国内；其余流量由最后一条 `MATCH,🐟 兜底` 决定走国内还是国外。
+7. 局域网/私网段（10/8、172.16/12、192.168/16、169.254/16、127/8、::1、fc00::/7、fe80::/10）进入 `🎯 直连`，面板可见；出口 IP 防回环的 IP-CIDR 与 `ip.sb` 仍直接写 `DIRECT`。
 
 国内直连以 Mihomo 的 `GEOSITE,cn` 和 `GEOIP,cn` 为主，不重复维护腾讯、阿里、WPS 等整套域名清单。脚本只显式保留 `rivotek.com`、`larksuite.com`、`larkoffice.com`、`dashscope.aliyuncs.com`、`feishu.net`、`feishucdn.com`、`dingtalkapps.com` 和 `typeless.com`，用于提前兜底或指定合适的 DNS；其中 `typeless.com` 使用海外 DNS，但业务流量仍保持直连。
 
@@ -98,7 +99,7 @@ fullProtocolFallback: false
 - `自动选择`默认过滤订阅状态信息和名称含“公司代理”的节点；被过滤节点仍保留在`节点选择`中供手动使用，可通过 `USER_OPTIONS.autoSelectExcludeKeywords` 调整。
 - `GLOBAL`：全局模式的选择入口；有前置代理时可在这里显式选择它。
 - `🤖 AI Agent`：AI 域名与 AI 应用的独立出口选择。
-- `🌍 国际媒体`、`📲 Telegram`、`🐙 GitHub`、`Ⓜ️ 微软服务`、`🎮 游戏平台`、`🍎 Apple`、`🎯 直连`：按业务拆分的策略组。
+- `🌍 国际媒体`、`📲 Telegram`、`🐙 GitHub`、`Ⓜ️ 微软服务`、`🎮 游戏平台`、`🍎 Apple`、`🎯 直连`：按业务拆分的策略组。`Ⓜ️ 微软服务`、`🍎 Apple` 候选为 `DIRECT`（默认）→ `🇨🇳 国内` → `节点选择` → 地区组。
 - `🇨🇳 国内`、`🌐 国外`、`🐟 兜底`：位置无关的三个策略组，规则对所有主机相同，只有默认选项随 `location` 变（见下文）。
 - 节点组段：`🏠 家宽IP`、`🔗 家宽跳板`（配置家宽 IP 时）、`🔗 前置`、地区 url-test 组。
 

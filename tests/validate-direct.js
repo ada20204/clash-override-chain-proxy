@@ -301,6 +301,14 @@ function testDefaultConfig() {
 
   // 微软服务默认直连，但保留手动切换到节点选择/地区组的能力
   const microsoftGroup = output["proxy-groups"].find(function (g) { return g.name === EXPECTED.microsoftGroupName; });
+  ["IP-CIDR,10.0.0.0/8", "IP-CIDR,192.168.0.0/16", "IP-CIDR6,fe80::/10"].forEach(function (r) {
+    assertRuleExists(output.rules, r + ",🎯 直连,no-resolve");
+  });
+  [EXPECTED.microsoftGroupName, "🍎 Apple"].forEach(function (n) {
+    const g = output["proxy-groups"].find(function (x) { return x.name === n; });
+    assert.strictEqual(g.proxies[0], "DIRECT", n + " 默认 DIRECT");
+    assert(g.proxies.indexOf("🇨🇳 国内") >= 0, n + " 候选应含 🇨🇳 国内");
+  });
   assert(microsoftGroup, "微软服务组应存在");
   assert.strictEqual(microsoftGroup.type, "select");
   assert.strictEqual(microsoftGroup.proxies[0], "DIRECT", "微软服务默认应走直连");
@@ -571,7 +579,7 @@ function testDefaultConfig() {
     assertRulesMissing(output.rules, ["DOMAIN-SUFFIX," + domain + ",DIRECT"]);
   });
   assertRuleExists(output.rules, "GEOSITE,cn,🇨🇳 国内");
-  assertRuleExists(output.rules, "GEOIP,cn,🇨🇳 国内,no-resolve");
+  assertRuleExists(output.rules, "GEOIP,cn,🇨🇳 国内");
 
   [
     "cloudflare.com",
@@ -1435,13 +1443,22 @@ function testTailnetCustomProxyServerBypassesTunRoute() {
 function testProxyServerAddressesUseDirectRules() {
   const config = createBaseConfig();
   config.proxies = config.proxies.concat([
-    { name: "订阅IP节点", type: "http", server: "203.0.113.10", port: 443 },
-    { name: "订阅域名节点", type: "http", server: "edge.example.com", port: 443 }
+    { name: "上游IP节点", type: "http", server: "203.0.113.10", port: 443 },
+    { name: "上游域名节点", type: "http", server: "edge.example.com", port: 443 }
   ]);
   const { output } = runMainWithConfig(config);
 
   assertRuleExists(output.rules, "IP-CIDR,203.0.113.10/32,DIRECT,no-resolve");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,edge.example.com,DIRECT");
+  const infoConfig = createBaseConfig();
+  infoConfig.proxies = infoConfig.proxies.concat([
+    { name: "官网地址 - https://example.test", type: "ss", server: "www.baidu.com", port: 80, cipher: "aes-128-gcm", password: "x" },
+    { name: "🇺🇸 Real", type: "ss", server: "entry.example.net", port: 8388, cipher: "aes-128-gcm", password: "x" },
+    { name: "剩余流量：10GB", type: "ss", server: "entry.example.net", port: 8389, cipher: "aes-128-gcm", password: "x" }
+  ]);
+  const info = runMainWithConfig(infoConfig).output;
+  assertRulesMissing(info.rules, ["DOMAIN-SUFFIX,www.baidu.com,DIRECT"]);
+  assertRuleExists(info.rules, "DOMAIN-SUFFIX,entry.example.net,DIRECT");
   assert(output.rules.indexOf("IP-CIDR,203.0.113.10/32,DIRECT,no-resolve") <
       output.rules.indexOf(FALLBACK_MATCH),
     "代理服务器直连规则应在兜底规则之前");
@@ -1449,7 +1466,7 @@ function testProxyServerAddressesUseDirectRules() {
 
 function testHostnameProxyServerResolvedIpsUseDirectRules() {
   const config = createBaseConfig();
-  config.proxies.push({ name: "订阅域名节点", type: "http", server: "edge.example.com", port: 443 });
+  config.proxies.push({ name: "上游域名节点", type: "http", server: "edge.example.com", port: 443 });
   const { output } = runMainWithConfig(config, function (sandbox) {
     sandbox.USER_OPTIONS.proxyServerResolvedIps = {
       "edge.example.com": ["203.0.113.11", "2001:db8::11"]
@@ -1489,7 +1506,7 @@ function testTailnetDestinationRulesTakePriorityOverFullProtocolFallback() {
 function testProxyServerDirectRulesCanBeDisabled() {
   const config = createBaseConfig();
   config.proxies = config.proxies.concat([
-    { name: "订阅IP节点", type: "http", server: "203.0.113.10", port: 443 }
+    { name: "上游IP节点", type: "http", server: "203.0.113.10", port: 443 }
   ]);
   const { output } = runMainWithConfig(config, function (sandbox) {
     sandbox.USER_OPTIONS.directProxyServerRules = false;
@@ -1740,7 +1757,7 @@ function testLocationDefaultsToCn() {
   const { sandbox, output } = runMain();
   assert.strictEqual(sandbox.USER_OPTIONS.location, "cn");
   assertRuleExists(output.rules, "GEOSITE,cn,🇨🇳 国内");
-  assertRuleExists(output.rules, "GEOIP,cn,🇨🇳 国内,no-resolve");
+  assertRuleExists(output.rules, "GEOIP,cn,🇨🇳 国内");
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,feishu.net,🇨🇳 国内");
   assert.deepStrictEqual(Array.from(findGroup(output, DOMESTIC_GROUP).proxies), ["DIRECT", "节点选择"], "cn 下 🇨🇳 国内 默认 DIRECT");
   assertRuleExists(output.rules, "GEOSITE,cn," + DOMESTIC_GROUP);
@@ -1771,7 +1788,7 @@ function testOverseasRoutesDomesticTrafficToReturnGroup() {
   assert.deepStrictEqual(Array.from(domesticGroup.proxies), [DOMESTIC_EXIT.name, "DIRECT", "节点选择"]);
   assert.strictEqual(domesticGroup.url, "http://connect.rom.miui.com/generate_204", "回国组应使用国内测速地址");
   assertRuleExists(output.rules, "GEOSITE,cn," + DOMESTIC_GROUP);
-  assertRuleExists(output.rules, "GEOIP,cn," + DOMESTIC_GROUP + ",no-resolve");
+  assertRuleExists(output.rules, "GEOIP,cn," + DOMESTIC_GROUP);
   assertRulesMissing(output.rules, ["GEOSITE,cn,DIRECT", "GEOIP,cn,DIRECT,no-resolve"]);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,feishu.net," + DOMESTIC_GROUP);
   assertRuleExists(output.rules, "DOMAIN-SUFFIX,dingtalkapps.com," + DOMESTIC_GROUP);
@@ -1779,7 +1796,7 @@ function testOverseasRoutesDomesticTrafficToReturnGroup() {
   // 回国节点服务器本身必须直连，否则会自我代理。
   assertRuleExists(output.rules, "IP-CIDR,198.51.100.20/32,DIRECT,no-resolve");
   assert(output.rules.indexOf("IP-CIDR,198.51.100.20/32,DIRECT,no-resolve") <
-    output.rules.indexOf("GEOIP,cn," + DOMESTIC_GROUP + ",no-resolve"));
+    output.rules.indexOf("GEOIP,cn," + DOMESTIC_GROUP));
   // dedicated 回国节点不能进入通用出口。
   ["节点选择", "GLOBAL", EXPECTED.aiGroupName, "🔗 家宽跳板", EXPECTED.mediaGroupName].forEach(function (name) {
     const group = findGroup(output, name);
