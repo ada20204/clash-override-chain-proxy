@@ -96,21 +96,15 @@ function resolveExit(spec, secrets, label) {
   if (!spec) return null;
   if (typeof spec === "string") spec = { secret: spec.replace(/^secret:/, "") };
   const { optional, secret, uri, ...rest } = spec;
-  let raw = uri;
-  if (secret) {
-    raw = secrets[secret];
-    if (!raw) {
-      if (optional) { console.log(`  ${label}: secret ${secret} 未设置，跳过（optional）`); return null; }
-      throw new Error(`${label}: 缺少 secret ${secret}`);
-    }
-  }
   const missing = [];
-  const node = raw ? Object.assign(parseProxyUri(raw, rest.name), rest) : resolveSecrets(rest, secrets, missing);
+  const raw = secret ? secrets[secret] : resolveSecrets(uri, secrets, missing);
+  if (secret && !raw) missing.push(secret);
+  const fields = resolveSecrets(rest, secrets, missing);
   if (missing.length) {
     if (optional) { console.log(`  ${label}: 缺少 secret ${missing.join(",")}，跳过（optional）`); return null; }
     throw new Error(`${label}: 缺少 secret ${missing.join(",")}`);
   }
-  return node;
+  return raw ? Object.assign(parseProxyUri(raw, fields.name), fields) : fields;
 }
 
 async function loadSubscription(sub, idx, secrets, args) {
@@ -227,7 +221,7 @@ async function renderHost(name, args, secrets) {
   const options = Object.assign({}, host.options || {});
   if (host.location) options.location = host.location;
   const home = resolveExit(roles.home, secrets, "roles.home");
-  if (home) { delete home.name; delete home.tls; config._homeProxy = home; }
+  if (home) { delete home.name; config._homeProxy = home; }
   const front = resolveExit(roles.front, secrets, "roles.front");
   if (front) config._frontProxy = front;
   const custom = [];
@@ -245,7 +239,11 @@ async function renderHost(name, args, secrets) {
     if (n) custom.push(n);
   }
   if (custom.length) config._customProxies = custom;
-  if (host.customRuleGroups) config._customRuleGroups = resolveSecrets(host.customRuleGroups, secrets, []);
+  if (host.customRuleGroups) {
+    const missing = [];
+    config._customRuleGroups = resolveSecrets(host.customRuleGroups, secrets, missing);
+    if (missing.length) throw new Error("customRuleGroups 缺少 secret " + missing.join(","));
+  }
   if (cnNames.length) options.domesticExit = cnNames;
 
   // 3) 主覆写

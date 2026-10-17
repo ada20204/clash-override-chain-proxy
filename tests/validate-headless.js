@@ -92,5 +92,45 @@ try { execFileSync("node", [path.join(ROOT, "scripts/render-config.js"), "--host
 catch (e) { failed = true; assert(/T_CN/.test(String(e.stderr))); }
 assert(failed);
 
+function renderFixture(name, spec, variables) {
+  fs.writeFileSync(path.join(hostsDir, name + ".js"), "module.exports = " + JSON.stringify(spec) + ";\n");
+  const log = execFileSync(process.execPath, [path.join(ROOT, "scripts/render-config.js"), "--host", name, "--hosts-dir", hostsDir, "--out", out, "--secrets", path.join(tmp, "none.env"), "--no-test"],
+    { env: Object.assign({}, env, variables), stdio: "pipe", encoding: "utf8" });
+  return { config: YAML.parse(fs.readFileSync(path.join(out, name + ".yaml"), "utf8")), log };
+}
+
+const tlsSpec = {
+  subscriptions: [{ url: sub }],
+  roles: { home: { uri: "https://hu:hp@203.0.113.5:443" } }
+};
+const tlsResult = renderFixture("tls", tlsSpec);
+const tlsNodes = tlsResult.config.proxies.filter(p => p.name === "家宽IP" || p.name === "家宽IP链式");
+assert.strictEqual(tlsNodes.length, 2);
+assert(tlsNodes.every(p => p.tls === true),
+  "家宽直连和链式节点必须保留 HTTPS 的 TLS 字段");
+
+const fields = renderFixture("fields", {
+  roles: { home: { uri: "secret:T_HOME", password: "secret:T_PASSWORD" } }
+}, { T_PASSWORD: "resolved-field-password" });
+assert.strictEqual(fields.config.proxies.find(p => p.name === "家宽IP").password, "resolved-field-password");
+assert(!fields.log.includes("resolved-field-password"), "字段凭证不应进入日志");
+
+const optional = renderFixture("optional-fields", {
+  roles: { home: { uri: "http://203.0.113.5:8080", password: "secret:T_PASSWORD", optional: true } },
+  customProxies: [{ name: "available", type: "http", server: "203.0.113.6", port: 8080 }]
+}, { T_PASSWORD: "" });
+assert(!optional.config.proxies.some(p => p.name === "家宽IP"), "optional 出口缺少附加字段凭证时应跳过");
+
+const requiredGroup = {
+  customRuleGroups: [{ name: "required-group", proxy: {
+    type: "http", server: "203.0.113.7", port: 8080, username: "user", password: "secret:T_PASSWORD"
+  }, rules: [] }]
+};
+renderFixture("required-group", requiredGroup, { T_PASSWORD: "group-password" });
+const groupFile = path.join(out, "required-group.yaml");
+const groupBefore = fs.readFileSync(groupFile, "utf8");
+assert.throws(() => renderFixture("required-group", requiredGroup, { T_PASSWORD: "" }), error => /T_PASSWORD/.test(String(error.stderr)));
+assert.strictEqual(fs.readFileSync(groupFile, "utf8"), groupBefore, "凭证缺失不能覆盖已生成的有效配置");
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("validate-headless: ok");
