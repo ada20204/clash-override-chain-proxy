@@ -150,7 +150,7 @@ async function loadSubscription(sub, idx, secrets, args, hostName) {
   return doc;
 }
 
-function runOverride(config, options) {
+function runOverride(config, options, finalize) {
   const ctx = { console: { log() {}, info() {}, warn: console.warn, error: console.error } };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(OVERRIDE, "utf8"), ctx, { filename: "完全覆写.js", timeout: 30000 });
@@ -161,17 +161,31 @@ function runOverride(config, options) {
       ? Object.assign({}, ctx.USER_OPTIONS[k], v) : v;
   }
   // 跨 vm 边界的对象转成普通 JSON，避免原型差异
-  return JSON.parse(JSON.stringify(ctx.main(JSON.parse(JSON.stringify(config)))));
+  const rendered = JSON.parse(JSON.stringify(ctx.main(JSON.parse(JSON.stringify(config)))));
+  if (finalize) finalize(rendered);
+  ctx.validateProxyGraph(rendered);
+  return rendered;
 }
 
 function applyRelayPrefs(config, relay) {
   if (!relay) return;
   const g = (config["proxy-groups"] || []).find(x => x.name === RELAY_GROUP);
   if (!g) return;
+  const eligible = new Set();
+  const visited = new Set();
+  const proxies = new Map(config.proxies.map(p => [p.name, p]));
+  const groups = new Map(config["proxy-groups"].map(group => [group.name, group]));
+  function visit(name) {
+    if (visited.has(name)) return;
+    visited.add(name);
+    if (proxies.has(name)) eligible.add(name);
+    else if (groups.has(name)) (groups.get(name).proxies || []).forEach(visit);
+  }
+  g.proxies.forEach(visit);
   const ex = new Set(relay.excludePorts || []);
   const ok = n => { const p = config.proxies.find(x => x.name === n); return !p || !ex.has(p.port); };
   const prefs = (relay.prefer || []).map(re => new RegExp(re))
-    .map(re => config.proxies.find(p => re.test(p.name) && !ex.has(p.port))).filter(Boolean).map(p => p.name);
+    .map(re => config.proxies.find(p => eligible.has(p.name) && re.test(p.name) && !ex.has(p.port))).filter(Boolean).map(p => p.name);
   let rest = g.proxies.filter(n => !prefs.includes(n));
   if (relay.dropExcluded) rest = rest.filter(ok);
   g.proxies = prefs.concat(rest);
@@ -254,11 +268,11 @@ async function renderHost(name, args, secrets) {
   if (cnNames.length) options.domesticExit = cnNames;
 
   // 3) 主覆写
-  config = runOverride(config, options);
-
-  // 4) 主机偏好 + runtime
-  applyRelayPrefs(config, roles.relay);
-  applyRuntime(config, host.runtime, secrets);
+  config = runOverride(config, options, rendered => {
+    // 主机偏好和 runtime 都必须在最终引用校验之前应用。
+    applyRelayPrefs(rendered, roles.relay);
+    applyRuntime(rendered, host.runtime, secrets);
+  });
 
   // 5) 输出（内容确定：同样输入 → 同样字节 → 同样 ETag）
   let rev = "";

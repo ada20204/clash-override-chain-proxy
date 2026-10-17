@@ -132,5 +132,21 @@ const groupBefore = fs.readFileSync(groupFile, "utf8");
 assert.throws(() => renderFixture("required-group", requiredGroup, { T_PASSWORD: "" }), error => /T_PASSWORD/.test(String(error.stderr)));
 assert.strictEqual(fs.readFileSync(groupFile, "utf8"), groupBefore, "凭证缺失不能覆盖已生成的有效配置");
 
+const relayResult = renderFixture("relay-safety", {
+  subscriptions: [{ url: sub }],
+  roles: {
+    home: { secret: "T_HOME" },
+    cnReturn: [{ name: "private-return", secret: "T_CN" }],
+    relay: { prefer: ["^家宽IP链式$", "^private-return$", "^🇺🇸 US B$"] }
+  }
+});
+const relayGroup = relayResult.config["proxy-groups"].find(g => g.name === "🔗 家宽跳板");
+assert.strictEqual(relayGroup.proxies[0], "🇺🇸 US B", "跳板偏好只可重排原候选及其叶节点");
+assert(!relayGroup.proxies.includes("家宽IP链式") && !relayGroup.proxies.includes("private-return"), "不能添加自循环或专用出口");
+assert.throws(() => renderFixture("runtime-cycle", {
+  roles: { home: { secret: "T_HOME" } },
+  runtime: { extra: { "proxy-groups": [{ name: "loop", type: "select", proxies: ["loop"] }] } }
+}), error => /循环引用/.test(String(error.stderr)), "runtime.extra 修改后的引用也应检查");
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("validate-headless: ok");
