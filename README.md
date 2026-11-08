@@ -186,6 +186,8 @@ Sentry、Datadog、Intercom、Statsig、Stripe、WorkOS、SendGrid 等共享基�
 
 ### Tailscale
 
+`+.ts.net`、`+.tailscale.com` 和 `+.tailscale.io` 均排除 Fake-IP，避免绕过 TUN 的守护进程拿到无法直连的假地址。仅配置 DIRECT 进程或域名规则不能代替 DNS 排除。此保护不依赖监控组和 Tailscale 分流开关，也不改变控制面出口选择。
+
 默认规则将 `100.64.0.0/10`、`100.100.100.100/32`、Tailnet IPv6 前缀和 `*.ts.net` 指向直连。TUN 默认排除的是前两个 IPv4 网段，以及节点服务器为私网/Tailnet IPv4 字面地址时的 `/32`，不是自动排除所有 IPv6 或子网路由。额外 TUN 排除需填写 `routeExcludeCidrs`。Tailscale 控制面和进程默认 `DIRECT`，可通过 `USER_OPTIONS.tailscale` 修改。
 
 Exit Node 转发流量默认继续使用正常分流规则。显式开启 `forceExitNodeTraffic` 后，先排除本地目的地，再把匹配的公网访问送往强制目标，这会优先于普通 AI、业务及检测站规则。

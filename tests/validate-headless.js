@@ -75,6 +75,9 @@ assert(fs.statSync(file).size > 0, "输出文件应可读取且非空");
 const text = fs.readFileSync(file, "utf8");
 assert(/^# cocp-selections: \{"🤖 AI Agent":"🏠 家宽IP"\}$/m.test(text));
 const cfg = YAML.parse(text);
+for (const suffix of ["+.ts.net", "+.tailscale.com", "+.tailscale.io"]) {
+  assert(cfg.dns["fake-ip-filter"].includes(suffix), "generated YAML must exclude Tailscale infrastructure from Fake-IP");
+}
 const cn = cfg.proxies.find(p => p.name === "回国SS");
 assert.deepStrictEqual([cn.type, cn.cipher, cn.password, cn.port], ["ss", "aes-256-gcm", "cnpw", 8443], "ss 字段应完整透传");
 assert(!("scope" in cn) && !("dedicated" in cn), "管理字段不应进入节点");

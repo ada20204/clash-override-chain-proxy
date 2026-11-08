@@ -2599,9 +2599,11 @@ function buildDnsFakeIpFilter() {
   var homeRouterDomains = [
     "+.router.asus.com", "+.linksys.com", "+.tplinkwifi.net", "*.xiaoqiang.net"
   ];
-  var magicDnsDomains = [];
-  for (var i = 0; i < SOURCE_TAILSCALE_RULES.magicDnsDomains.length; i++) {
-    magicDnsDomains.push("+." + SOURCE_TAILSCALE_RULES.magicDnsDomains[i]);
+  // The daemon can bypass TUN, so its control-plane connections need real IPs too.
+  var tailscaleDomains = SOURCE_TAILSCALE_RULES.magicDnsDomains.concat(SOURCE_TAILSCALE_RULES.controlPlaneDomains);
+  var tailscaleFakeIpExclusions = [];
+  for (var i = 0; i < tailscaleDomains.length; i++) {
+    tailscaleFakeIpExclusions.push("+." + tailscaleDomains[i]);
   }
   return localNetworkDomains
     .concat(timeSyncDomains)
@@ -2610,7 +2612,7 @@ function buildDnsFakeIpFilter() {
     .concat(gamingRealtimeDomains)
     .concat(stunRealtimeDomains)
     .concat(homeRouterDomains)
-    .concat(magicDnsDomains);
+    .concat(tailscaleFakeIpExclusions);
 }
 
 function buildDnsFallbackFilterDomains() {

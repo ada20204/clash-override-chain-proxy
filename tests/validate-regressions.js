@@ -52,6 +52,32 @@ function testInterfaceBindingAcrossRoles() {
 
 testInterfaceBindingAcrossRoles();
 
+function testTailscaleDnsDoesNotDependOnTunRouting() {
+  for (const location of ["cn", "overseas"]) for (const subscription of [true, false]) {
+    for (const enabled of [true, false]) for (const monitor of [true, false]) {
+      const config = generate(input => {
+        if (!subscription) { input.proxies = []; input["proxy-groups"] = []; }
+      }, options => {
+        options.location = location;
+        options.tailscale.enable = enabled;
+        options.tailscale.monitorGroups = monitor;
+      });
+      assert.strictEqual(config.dns["enhanced-mode"], "fake-ip");
+      assert.strictEqual(config.dns["fake-ip-filter-mode"] || "blacklist", "blacklist");
+      for (const suffix of ["+.ts.net", "+.tailscale.com", "+.tailscale.io"]) {
+        assert.strictEqual(config.dns["fake-ip-filter"].filter(item => item === suffix).length, 1,
+          suffix + " must return real DNS answers even when the daemon bypasses TUN");
+      }
+      if (enabled) for (const domain of ["controlplane.tailscale.com", "log.tailscale.com", "login.tailscale.com", "derp1.tailscale.io"]) {
+        assert.strictEqual(route(config.rules, { domain, network: "tcp", port: 443 }).target,
+          monitor ? "🧩 Tailscale 控制面" : "DIRECT");
+      }
+    }
+  }
+}
+
+testTailscaleDnsDoesNotDependOnTunRouting();
+
 function testSharedCdnIsNotAnAiService() {
   for (const location of ["cn", "overseas"]) {
     const config = generate(() => {}, options => { options.location = location; });
