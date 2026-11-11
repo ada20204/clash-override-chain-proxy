@@ -97,6 +97,34 @@ function testSharedCdnIsNotAnAiService() {
 
 testSharedCdnIsNotAnAiService();
 
+function testVercelUsesGeneralEgress() {
+  for (const location of ["cn", "overseas"]) for (const home of [true, false]) {
+    const config = generate(input => { if (!home) delete input._homeProxy; },
+      options => { options.location = location; });
+    for (const domain of ["vercel.app", "hami-neural-observatory.vercel.app", "other-project.vercel.app",
+      "vercel.com", "api.vercel.com"]) {
+      assert.strictEqual(route(config.rules, { domain, network: "tcp", port: 443 }).target, "🌐 国外", domain);
+      for (const [network, port] of [["tcp", 80], ["udp", 443]]) {
+        assert.strictEqual(route(config.rules, { domain, network, port }).target,
+          route(config.rules, { domain: "cloudflare.com", network, port }).target,
+          domain + " must follow the same transport policy as Cloudflare");
+      }
+    }
+    for (const suffix of ["+.vercel.app", "+.vercel.com"]) {
+      assert.deepStrictEqual(config.dns["nameserver-policy"][suffix],
+        config.dns["nameserver-policy"]["+.cloudflare.com"]);
+      assert(config.sniffer["force-domain"].includes(suffix));
+      if (location === "cn") assert(config.dns["fallback-filter"].domain.includes(suffix));
+    }
+    for (const domain of ["notvercel.app", "vercel.com.example.test"]) {
+      assert.strictEqual(route(config.rules, { domain, network: "tcp", port: 443 }).target, "🐟 兜底");
+    }
+    assert.strictEqual(route(config.rules, { domain: "claude.ai", network: "tcp", port: 443 }).target, "🤖 AI Agent");
+  }
+}
+
+testVercelUsesGeneralEgress();
+
 function testLocalDestinationsBeforeApplicationRules() {
   for (const location of ["cn", "overseas"]) for (const home of [true, false]) {
     for (const custom of [true, false]) for (const monitor of [true, false]) {

@@ -1966,7 +1966,9 @@ var SOURCE_PATTERNS = {
       infrastructure: [
         "+.cloudflare.com",
         "+.cloudflareinsights.com",
-        "+.workers.dev"
+        "+.workers.dev",
+        "+.vercel.app",
+        "+.vercel.com"
       ],
       globalSites: [
         "+.oracle.com",
@@ -2047,7 +2049,9 @@ var SOURCE_PATTERNS = {
   },
   policy: {
     snifferForceBase: [
-      "+.cloudflare.com"
+      "+.cloudflare.com",
+      "+.vercel.app",
+      "+.vercel.com"
     ],
     snifferSkipBase: [
       "+.push.apple.com",
