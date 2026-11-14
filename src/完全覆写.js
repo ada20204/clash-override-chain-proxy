@@ -1921,6 +1921,9 @@ var SOURCE_PATTERNS = {
       ],
       router_and_tools: [
         "+.mistral.com"
+      ],
+      verification_overrides: [
+        "+.inquiry.withpersona.com"
       ]
     },
     aiSharedInfrastructure: {

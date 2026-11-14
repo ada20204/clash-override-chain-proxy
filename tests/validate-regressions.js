@@ -125,6 +125,23 @@ function testVercelUsesGeneralEgress() {
 
 testVercelUsesGeneralEgress();
 
+function testPersonaInquiryUsesAiEgress() {
+  for (const location of ["cn", "overseas"]) {
+    const config = generate(() => {}, options => { options.location = location; });
+    const domain = "inquiry.withpersona.com";
+    assert.strictEqual(route(config.rules, { domain, network: "tcp", port: 443 }).target, "🤖 AI Agent");
+    assert.strictEqual(route(config.rules, { domain, network: "udp", port: 443 }).target, "REJECT");
+    assert(config.dns["nameserver-policy"]["+." + domain]);
+    assert(config.sniffer["force-domain"].includes("+." + domain));
+    if (location === "cn") assert(config.dns["fallback-filter"].domain.includes("+." + domain));
+    for (const other of ["withpersona.com", "api.withpersona.com", "inquiry.withpersona.com.example.test"]) {
+      assert.strictEqual(route(config.rules, { domain: other, network: "tcp", port: 443 }).target, "🐟 兜底");
+    }
+  }
+}
+
+testPersonaInquiryUsesAiEgress();
+
 function testLocalDestinationsBeforeApplicationRules() {
   for (const location of ["cn", "overseas"]) for (const home of [true, false]) {
     for (const custom of [true, false]) for (const monitor of [true, false]) {
